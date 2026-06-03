@@ -62,7 +62,9 @@ namespace signlang::audio_frontend {
         "capture-rate", "Requested ALSA capture sample rate in Hz", cxxopts::value<std::uint32_t>())(
         "capture-channels", "Requested ALSA capture channel count", cxxopts::value<std::uint32_t>())(
         "publish-rate", "Published audio sample rate in Hz", cxxopts::value<std::uint32_t>())(
-        "publish-channels", "Published audio channel count", cxxopts::value<std::uint32_t>())("h,help", "Print usage");
+        "publish-channels", "Published audio channel count", cxxopts::value<std::uint32_t>())(
+        "denoise", "Enable lightweight Wiener noise reduction",
+        cxxopts::value<bool>()->default_value("false")->implicit_value("true"))("h,help", "Print usage");
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
@@ -97,6 +99,7 @@ namespace signlang::audio_frontend {
         .audio_device_name = parsed_options["device"].as<std::string>(),
         .service_name = parsed_options["service"].as<std::string>(),
         .publish_period_ms = publish_period_ms,
+        .enable_denoise = parsed_options["denoise"].as<bool>(),
         .capture_format = capture_format,
         .publish_format = publish_format,
     }};

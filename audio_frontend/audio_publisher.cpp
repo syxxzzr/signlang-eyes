@@ -23,7 +23,7 @@ namespace signlang::audio_frontend {
   AudioPublisher::AudioPublisher(const std::string& service_name) :
       node_{create_node()}, publisher_{create_publisher(node_, service_name)} {}
 
-  void AudioPublisher::publish(const std::vector<std::int16_t>& input_samples, const AudioProcessor& audio_processor,
+  void AudioPublisher::publish(const std::vector<std::int16_t>& input_samples, AudioProcessor& audio_processor,
                                std::uint64_t sequence_number) {
     auto loan_result = publisher_.loan_uninit();
     if (!loan_result.has_value()) {

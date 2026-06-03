@@ -61,7 +61,7 @@ auto main(int argc, char** argv) -> int {
     };
     validate_publish_format(capture_format, publish_format);
 
-    AudioProcessor audio_processor{capture_format, publish_format, options.publish_period_ms};
+    AudioProcessor audio_processor{capture_format, publish_format, options.publish_period_ms, options.enable_denoise};
     AudioPublisher publisher{options.service_name};
 
     std::uint64_t sequence_number = 0;

@@ -13,6 +13,7 @@ namespace signlang::audio_frontend {
     std::string audio_device_name;
     std::string service_name;
     std::uint32_t publish_period_ms;
+    bool enable_denoise;
     AudioFormatRequest capture_format;
     AudioFormatRequest publish_format;
   };

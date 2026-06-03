@@ -22,7 +22,7 @@ namespace signlang::audio_frontend {
     AudioPublisher(AudioPublisher&&) = delete;
     auto operator=(AudioPublisher&&) -> AudioPublisher& = delete;
 
-    void publish(const std::vector<std::int16_t>& input_samples, const AudioProcessor& audio_processor,
+    void publish(const std::vector<std::int16_t>& input_samples, AudioProcessor& audio_processor,
                  std::uint64_t sequence_number);
 
   private:
