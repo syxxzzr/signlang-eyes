@@ -14,6 +14,36 @@
 namespace signlang::env_sound_det {
   namespace {
 
+    class RknnOutputReleaseGuard {
+    public:
+      RknnOutputReleaseGuard(rknn_context context, std::uint32_t output_count, rknn_output* outputs) :
+          context_{context}, output_count_{output_count}, outputs_{outputs}, active_{true} {}
+
+      RknnOutputReleaseGuard(const RknnOutputReleaseGuard&) = delete;
+      auto operator=(const RknnOutputReleaseGuard&) -> RknnOutputReleaseGuard& = delete;
+
+      RknnOutputReleaseGuard(RknnOutputReleaseGuard&&) = delete;
+      auto operator=(RknnOutputReleaseGuard&&) -> RknnOutputReleaseGuard& = delete;
+
+      ~RknnOutputReleaseGuard() {
+        if (active_) {
+          (void)rknn_outputs_release(context_, output_count_, outputs_);
+        }
+      }
+
+      auto release() -> int {
+        const auto result = rknn_outputs_release(context_, output_count_, outputs_);
+        active_ = false;
+        return result;
+      }
+
+    private:
+      rknn_context context_;
+      std::uint32_t output_count_;
+      rknn_output* outputs_;
+      bool active_;
+    };
+
     auto rknn_error(const std::string& context, int error_code) -> std::runtime_error {
       return std::runtime_error(context + ": ret=" + std::to_string(error_code));
     }
@@ -91,11 +121,12 @@ namespace signlang::env_sound_det {
     if (result < 0) {
       throw rknn_error("Failed to get RKNN YAMNet outputs", result);
     }
+    RknnOutputReleaseGuard output_release_guard{context_, io_num_.n_output, outputs_.data()};
 
     const auto* score_buffer = output_buffers_[scores_output_index_].data();
     const auto top_class_count = post_process_scores(score_buffer);
 
-    result = rknn_outputs_release(context_, io_num_.n_output, outputs_.data());
+    result = output_release_guard.release();
     if (result < 0) {
       throw rknn_error("Failed to release RKNN YAMNet outputs", result);
     }

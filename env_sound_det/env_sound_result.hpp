@@ -26,6 +26,11 @@ namespace signlang::env_sound_det {
     std::uint64_t audio_end_sample_index;
     std::uint64_t latest_audio_sequence_number;
     std::uint64_t latest_audio_timestamp_ns;
+    std::uint32_t latest_audio_sample_rate_hz;
+    std::uint32_t latest_audio_publish_period_ms;
+    std::uint32_t latest_audio_frame_count;
+    std::uint16_t latest_audio_channel_count;
+    std::uint16_t latest_audio_bits_per_sample;
     std::uint32_t audio_sample_rate_hz;
     std::uint32_t window_ms;
     std::uint32_t hop_ms;

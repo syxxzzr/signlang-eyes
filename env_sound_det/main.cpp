@@ -132,6 +132,11 @@ auto main(int argc, char** argv) -> int {
           result.audio_end_sample_index = audio_window.end_sample_index;
           result.latest_audio_sequence_number = audio_window.latest_audio_sequence_number;
           result.latest_audio_timestamp_ns = audio_window.latest_audio_timestamp_ns;
+          result.latest_audio_sample_rate_hz = audio_window.latest_audio_sample_rate_hz;
+          result.latest_audio_publish_period_ms = audio_window.latest_audio_publish_period_ms;
+          result.latest_audio_frame_count = audio_window.latest_audio_frame_count;
+          result.latest_audio_channel_count = audio_window.latest_audio_channel_count;
+          result.latest_audio_bits_per_sample = audio_window.latest_audio_bits_per_sample;
           result.audio_sample_rate_hz = kYamnetSampleRateHz;
           result.window_ms = options.window_ms;
           result.hop_ms = static_cast<std::uint32_t>((hop_sample_count * 1000) / kYamnetSampleRateHz);

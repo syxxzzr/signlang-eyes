@@ -16,7 +16,9 @@ namespace signlang::env_sound_det {
 
   AudioRingBuffer::AudioRingBuffer(std::uint64_t capacity_samples) :
       samples_(static_cast<std::size_t>(capacity_samples)), start_sample_index_{0}, next_sample_index_{0},
-      latest_audio_sequence_number_{0}, latest_audio_timestamp_ns_{0} {
+      latest_audio_sequence_number_{0}, latest_audio_timestamp_ns_{0}, latest_audio_sample_rate_hz_{0},
+      latest_audio_publish_period_ms_{0}, latest_audio_frame_count_{0}, latest_audio_channel_count_{0},
+      latest_audio_bits_per_sample_{0} {
     if (capacity_samples == 0) {
       throw std::runtime_error("Audio ring buffer capacity must be greater than 0");
     }
@@ -35,6 +37,11 @@ namespace signlang::env_sound_det {
 
       latest_audio_sequence_number_ = frame.sequence_number;
       latest_audio_timestamp_ns_ = frame.timestamp_ns;
+      latest_audio_sample_rate_hz_ = frame.sample_rate_hz;
+      latest_audio_publish_period_ms_ = frame.publish_period_ms;
+      latest_audio_frame_count_ = frame.frame_count;
+      latest_audio_channel_count_ = frame.channel_count;
+      latest_audio_bits_per_sample_ = frame.bits_per_sample;
     }
 
     samples_changed_.notify_all();
@@ -80,6 +87,11 @@ namespace signlang::env_sound_det {
     output_window.end_sample_index = window_start + window_sample_count;
     output_window.latest_audio_sequence_number = latest_audio_sequence_number_;
     output_window.latest_audio_timestamp_ns = latest_audio_timestamp_ns_;
+    output_window.latest_audio_sample_rate_hz = latest_audio_sample_rate_hz_;
+    output_window.latest_audio_publish_period_ms = latest_audio_publish_period_ms_;
+    output_window.latest_audio_frame_count = latest_audio_frame_count_;
+    output_window.latest_audio_channel_count = latest_audio_channel_count_;
+    output_window.latest_audio_bits_per_sample = latest_audio_bits_per_sample_;
     requested_start_sample_index = window_start;
     return true;
   }
