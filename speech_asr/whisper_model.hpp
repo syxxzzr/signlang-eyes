@@ -87,6 +87,7 @@ namespace signlang::speech_asr {
     std::vector<std::string> vocab_en_;
     std::vector<std::string> vocab_zh_;
     std::vector<float> hann_window_;
+    std::vector<float> audio_input_;
     std::vector<float> mel_input_;
     std::vector<float> frame_magnitudes_;
     std::vector<float> encoder_output_;

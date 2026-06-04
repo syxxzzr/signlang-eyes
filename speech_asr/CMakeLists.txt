@@ -39,15 +39,16 @@ foreach(required_file
     endif()
 endforeach()
 
-add_library(rknnrt SHARED IMPORTED GLOBAL)
-set_target_properties(rknnrt PROPERTIES
+add_library(speech_asr_rknnrt SHARED IMPORTED GLOBAL)
+set_target_properties(speech_asr_rknnrt PROPERTIES
         IMPORTED_LOCATION ${SPEECH_ASR_RKNN_LIBRARY}
         INTERFACE_INCLUDE_DIRECTORIES ${SPEECH_ASR_RKNN_INCLUDE_DIR})
 
-add_library(fftw3f STATIC IMPORTED GLOBAL)
-set_target_properties(fftw3f PROPERTIES
+add_library(speech_asr_fftw3f STATIC IMPORTED GLOBAL)
+set_target_properties(speech_asr_fftw3f PROPERTIES
         IMPORTED_LOCATION ${SPEECH_ASR_FFTW_LIBRARY}
-        INTERFACE_INCLUDE_DIRECTORIES ${SPEECH_ASR_FFTW_INCLUDE_DIR})
+        INTERFACE_INCLUDE_DIRECTORIES ${SPEECH_ASR_FFTW_INCLUDE_DIR}
+        INTERFACE_LINK_LIBRARIES m)
 
 find_package(Threads REQUIRED)
 
@@ -68,8 +69,8 @@ target_include_directories(signlang_eyes_edgeai_speech_asr PRIVATE
 target_link_libraries(signlang_eyes_edgeai_speech_asr PRIVATE
         cxxopts::cxxopts
         iceoryx2-cxx::static-lib-cxx
-        rknnrt
-        fftw3f
+        speech_asr_rknnrt
+        speech_asr_fftw3f
         Threads::Threads
         dl)
 

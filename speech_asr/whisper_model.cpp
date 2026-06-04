@@ -400,28 +400,42 @@ namespace signlang::speech_asr {
     fft_input_ = static_cast<float*>(fftwf_malloc(sizeof(float) * kNfft));
     fft_output_ = static_cast<fftwf_complex*>(fftwf_malloc(sizeof(fftwf_complex) * kStftBinCount));
     if (fft_input_ == nullptr || fft_output_ == nullptr) {
+      if (fft_output_ != nullptr) {
+        fftwf_free(fft_output_);
+        fft_output_ = nullptr;
+      }
+      if (fft_input_ != nullptr) {
+        fftwf_free(fft_input_);
+        fft_input_ = nullptr;
+      }
       throw std::runtime_error("Failed to allocate Whisper FFTW workspace");
     }
 
     fft_plan_ = fftwf_plan_dft_r2c_1d(static_cast<int>(kNfft), fft_input_, fft_output_, FFTW_MEASURE);
     if (fft_plan_ == nullptr) {
+      fftwf_free(fft_output_);
+      fft_output_ = nullptr;
+      fftwf_free(fft_input_);
+      fft_input_ = nullptr;
       throw std::runtime_error("Failed to create Whisper FFTW plan");
     }
   }
 
   void WhisperModel::prepare_mel_input(const AudioWindow& audio_window) {
+    if (audio_input_.size() != model_input_sample_count_) {
+      audio_input_.resize(model_input_sample_count_);
+    }
+    std::fill(audio_input_.begin(), audio_input_.end(), 0.0F);
     std::fill(mel_input_.begin(), mel_input_.end(), 0.0F);
 
-    const auto available_samples = static_cast<std::uint32_t>(
-        std::min<std::size_t>(audio_window.samples.size(), std::numeric_limits<std::uint32_t>::max()));
-    const auto audio_sample_count = std::min(available_samples, model_input_sample_count_);
-    const auto output_frame_count = std::min(audio_sample_count / kHopLength, mel_frame_count_);
-
-    if (audio_sample_count == 0 || output_frame_count == 0) {
+    if (audio_window.samples.empty()) {
       return;
     }
 
-    compute_log_mel(audio_window.samples.data(), audio_sample_count, output_frame_count);
+    const auto copy_count = std::min(audio_window.samples.size(), audio_input_.size());
+    std::copy_n(audio_window.samples.begin(), copy_count, audio_input_.begin());
+
+    compute_log_mel(audio_input_.data(), model_input_sample_count_, mel_frame_count_);
   }
 
   void WhisperModel::compute_log_mel(const float* audio, std::uint32_t audio_sample_count,
@@ -471,7 +485,7 @@ namespace signlang::speech_asr {
                                              std::uint32_t padded_index) const -> float {
     constexpr auto pad_width = kNfft / 2;
     if (padded_index < pad_width) {
-      return audio[pad_width - 1 - padded_index];
+      return audio[std::min<std::uint32_t>(pad_width - 1 - padded_index, audio_sample_count - 1)];
     }
 
     const auto centered_index = padded_index - pad_width;
@@ -480,7 +494,7 @@ namespace signlang::speech_asr {
     }
 
     const auto tail_index = centered_index - audio_sample_count;
-    return audio[audio_sample_count - 1 - tail_index];
+    return audio[audio_sample_count - 1 - std::min(tail_index, audio_sample_count - 1)];
   }
 
   auto WhisperModel::run_encoder() -> float {
