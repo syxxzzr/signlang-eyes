@@ -70,3 +70,6 @@ Testing/
 
 # .idea
 .idea/
+
+# codex
+AGENTS.md

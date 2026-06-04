@@ -41,3 +41,5 @@ if(NOT TARGET iceoryx2-cxx)
     FetchContent_MakeAvailable(iceoryx2)
 
 endif()
+
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/audio_frontend)
