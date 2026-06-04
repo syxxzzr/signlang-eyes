@@ -79,4 +79,4 @@ AGENTS.md
 *.onnx
 speech_asr/model/*.wav
 third_party/rknn_runtime/lib/
-third_party/fftw/lib/
+third_party/fftw/

@@ -9,9 +9,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(SPEECH_ASR_RUNTIME_ROOT ${CMAKE_SOURCE_DIR}/third_party/rknn_runtime)
 set(SPEECH_ASR_RKNN_INCLUDE_DIR ${SPEECH_ASR_RUNTIME_ROOT}/include)
 set(SPEECH_ASR_RKNN_LIBRARY ${SPEECH_ASR_RUNTIME_ROOT}/lib/aarch64/librknnrt.so)
-set(SPEECH_ASR_FFTW_ROOT ${CMAKE_SOURCE_DIR}/third_party/fftw)
-set(SPEECH_ASR_FFTW_INCLUDE_DIR ${SPEECH_ASR_FFTW_ROOT}/include)
-set(SPEECH_ASR_FFTW_LIBRARY ${SPEECH_ASR_FFTW_ROOT}/lib/aarch64/libfftw3f.a)
 set(SPEECH_ASR_MODEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/model)
 set(SPEECH_ASR_ENCODER_MODEL_FILE ${SPEECH_ASR_MODEL_DIR}/whisper_encoder_base_15s.rknn)
 set(SPEECH_ASR_DECODER_MODEL_FILE ${SPEECH_ASR_MODEL_DIR}/whisper_decoder_base_15s.rknn)
@@ -27,8 +24,6 @@ endif()
 foreach(required_file
         ${SPEECH_ASR_RKNN_INCLUDE_DIR}/rknn_api.h
         ${SPEECH_ASR_RKNN_LIBRARY}
-        ${SPEECH_ASR_FFTW_INCLUDE_DIR}/fftw3.h
-        ${SPEECH_ASR_FFTW_LIBRARY}
         ${SPEECH_ASR_ENCODER_MODEL_FILE}
         ${SPEECH_ASR_DECODER_MODEL_FILE}
         ${SPEECH_ASR_MEL_FILTERS_FILE}
@@ -44,11 +39,9 @@ set_target_properties(speech_asr_rknnrt PROPERTIES
         IMPORTED_LOCATION ${SPEECH_ASR_RKNN_LIBRARY}
         INTERFACE_INCLUDE_DIRECTORIES ${SPEECH_ASR_RKNN_INCLUDE_DIR})
 
-add_library(speech_asr_fftw3f STATIC IMPORTED GLOBAL)
-set_target_properties(speech_asr_fftw3f PROPERTIES
-        IMPORTED_LOCATION ${SPEECH_ASR_FFTW_LIBRARY}
-        INTERFACE_INCLUDE_DIRECTORIES ${SPEECH_ASR_FFTW_INCLUDE_DIR}
-        INTERFACE_LINK_LIBRARIES m)
+if(NOT TARGET signlang::fftw3f)
+    message(FATAL_ERROR "Missing signlang::fftw3f; configure FFTW from the root CMakeLists.txt")
+endif()
 
 find_package(Threads REQUIRED)
 
@@ -63,15 +56,15 @@ add_executable(signlang_eyes_edgeai_speech_asr
 target_include_directories(signlang_eyes_edgeai_speech_asr PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}
-        ${SPEECH_ASR_RKNN_INCLUDE_DIR}
-        ${SPEECH_ASR_FFTW_INCLUDE_DIR})
+        ${SPEECH_ASR_RKNN_INCLUDE_DIR})
 
 target_link_libraries(signlang_eyes_edgeai_speech_asr PRIVATE
         cxxopts::cxxopts
         iceoryx2-cxx::static-lib-cxx
         speech_asr_rknnrt
-        speech_asr_fftw3f
+        signlang::fftw3f
         Threads::Threads
+        m
         dl)
 
 set_target_properties(signlang_eyes_edgeai_speech_asr PROPERTIES
