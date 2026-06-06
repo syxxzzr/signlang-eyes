@@ -1,7 +1,7 @@
 #ifndef SIGNLANG_EYES_EDGEAI_HANDPOSE_DET_RKNN_RUNTIME_HPP
 #define SIGNLANG_EYES_EDGEAI_HANDPOSE_DET_RKNN_RUNTIME_HPP
 
-#include "rknn/include/rknn_api.h"
+#include "rknn_api.h"
 
 #include <cstdint>
 #include <string>

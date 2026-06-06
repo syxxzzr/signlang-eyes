@@ -1,11 +1,3 @@
-cmake_minimum_required(VERSION 3.20)
-
-project(signlang_eyes_edgeai_handpose_det LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
 set(SIGNLANG_HANDPOSE_MODEL_PATH
         "/mnt/f/temp/yolov8n-handpose/yolov8_handpose.rknn"
         CACHE FILEPATH "Path to the external RKNN handpose model used for install packaging")
@@ -20,21 +12,26 @@ add_executable(signlang_eyes_edgeai_handpose_det
 
 target_include_directories(signlang_eyes_edgeai_handpose_det PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/rknn/include
         ${CMAKE_SOURCE_DIR})
 
 target_link_libraries(signlang_eyes_edgeai_handpose_det PRIVATE
         cxxopts::cxxopts
         iceoryx2-cxx::static-lib-cxx
+        signlang::rknn_headers
         dl)
 
-add_executable(signlang_eyes_edgeai_handpose_preprocessor_test
-        handpose_preprocessor.cpp
-        handpose_preprocessor_test.cpp)
+if(SIGNLANG_ENABLE_TESTS)
+        add_executable(signlang_eyes_edgeai_handpose_preprocessor_test
+                handpose_preprocessor.cpp
+                handpose_preprocessor_test.cpp)
 
-target_include_directories(signlang_eyes_edgeai_handpose_preprocessor_test PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR})
+        target_include_directories(signlang_eyes_edgeai_handpose_preprocessor_test PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}
+                ${CMAKE_SOURCE_DIR})
+
+        add_test(NAME signlang_eyes_edgeai_handpose_preprocessor_test
+                COMMAND signlang_eyes_edgeai_handpose_preprocessor_test)
+endif()
 
 install(TARGETS signlang_eyes_edgeai_handpose_det DESTINATION .)
 

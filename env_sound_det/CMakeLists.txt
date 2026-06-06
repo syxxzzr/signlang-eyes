@@ -1,39 +1,23 @@
-cmake_minimum_required(VERSION 3.20)
-
-project(signlang_eyes_edgeai_env_sound_det LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-set(ENV_SOUND_DET_RUNTIME_ROOT ${CMAKE_SOURCE_DIR}/third_party/rknn_runtime)
-set(ENV_SOUND_DET_RKNN_INCLUDE_DIR ${ENV_SOUND_DET_RUNTIME_ROOT}/include)
-set(ENV_SOUND_DET_RKNN_LIBRARY ${ENV_SOUND_DET_RUNTIME_ROOT}/lib/aarch64/librknnrt.so)
 set(ENV_SOUND_DET_MODEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/model)
 set(ENV_SOUND_DET_MODEL_FILE ${ENV_SOUND_DET_MODEL_DIR}/yamnet_3s.rknn)
 set(ENV_SOUND_DET_CLASS_MAP_FILE ${ENV_SOUND_DET_MODEL_DIR}/yamnet_class_map.txt)
 
-if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+if(NOT SIGNLANG_IS_AARCH64)
     message(STATUS "Skipping signlang_eyes_edgeai_env_sound_det: RKNN runtime is project-local aarch64 only")
     return()
 endif()
 
+if(NOT TARGET signlang::rknn_runtime)
+    message(FATAL_ERROR "Missing project-local RKNN runtime: ${SIGNLANG_RKNN_LIBRARY}")
+endif()
+
 foreach(required_file
-        ${ENV_SOUND_DET_RKNN_INCLUDE_DIR}/rknn_api.h
-        ${ENV_SOUND_DET_RKNN_LIBRARY}
         ${ENV_SOUND_DET_MODEL_FILE}
         ${ENV_SOUND_DET_CLASS_MAP_FILE})
     if(NOT EXISTS ${required_file})
         message(FATAL_ERROR "Missing required environment sound detector asset: ${required_file}")
     endif()
 endforeach()
-
-add_library(rknnrt SHARED IMPORTED GLOBAL)
-set_target_properties(rknnrt PROPERTIES
-        IMPORTED_LOCATION ${ENV_SOUND_DET_RKNN_LIBRARY}
-        INTERFACE_INCLUDE_DIRECTORIES ${ENV_SOUND_DET_RKNN_INCLUDE_DIR})
-
-find_package(Threads REQUIRED)
 
 add_executable(signlang_eyes_edgeai_env_sound_det
         audio_ring_buffer.cpp
@@ -49,12 +33,12 @@ target_include_directories(signlang_eyes_edgeai_env_sound_det PRIVATE
 target_link_libraries(signlang_eyes_edgeai_env_sound_det PRIVATE
         cxxopts::cxxopts
         iceoryx2-cxx::static-lib-cxx
-        rknnrt
+        signlang::rknn_runtime
         Threads::Threads
         dl)
 
 set_target_properties(signlang_eyes_edgeai_env_sound_det PROPERTIES
-        BUILD_RPATH ${ENV_SOUND_DET_RUNTIME_ROOT}/lib/aarch64
+        BUILD_RPATH ${SIGNLANG_RKNN_RUNTIME_ROOT}/lib/aarch64
         INSTALL_RPATH "$ORIGIN/lib")
 
 add_custom_command(TARGET signlang_eyes_edgeai_env_sound_det POST_BUILD
@@ -67,7 +51,7 @@ add_custom_command(TARGET signlang_eyes_edgeai_env_sound_det POST_BUILD
         "$<TARGET_FILE_DIR:signlang_eyes_edgeai_env_sound_det>/model/yamnet_class_map.txt")
 
 install(TARGETS signlang_eyes_edgeai_env_sound_det DESTINATION .)
-install(FILES ${ENV_SOUND_DET_RKNN_LIBRARY} DESTINATION lib)
+install(FILES ${SIGNLANG_RKNN_LIBRARY} DESTINATION lib)
 install(FILES
         ${ENV_SOUND_DET_MODEL_FILE}
         ${ENV_SOUND_DET_CLASS_MAP_FILE}

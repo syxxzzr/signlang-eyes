@@ -4,7 +4,7 @@
 #include "handpose_frame.hpp"
 #include "handpose_preprocessor.hpp"
 #include "program_options.hpp"
-#include "rknn/include/rknn_api.h"
+#include "rknn_api.h"
 #include "rknn_runtime.hpp"
 #include "video_frontend/video_frame.hpp"
 
