@@ -11,11 +11,11 @@
 namespace signlang::speech_asr {
   namespace {
 
-    constexpr auto kDefaultEncoderModelPath = "./model/whisper_encoder_base_15s.rknn";
-    constexpr auto kDefaultDecoderModelPath = "./model/whisper_decoder_base_15s.rknn";
-    constexpr auto kDefaultVocabEnPath = "./model/vocab_en.txt";
-    constexpr auto kDefaultVocabZhPath = "./model/vocab_zh.txt";
-    constexpr auto kDefaultMelFiltersPath = "./model/mel_80_filters.txt";
+    constexpr auto kDefaultEncoderModelPath = "models/whisper/whisper_encoder_base_15s.rknn";
+    constexpr auto kDefaultDecoderModelPath = "models/whisper/whisper_decoder_base_15s.rknn";
+    constexpr auto kDefaultVocabEnPath = "models/whisper/vocab_en.txt";
+    constexpr auto kDefaultVocabZhPath = "models/whisper/vocab_zh.txt";
+    constexpr auto kDefaultMelFiltersPath = "models/whisper/mel_80_filters.txt";
     constexpr std::uint32_t kMinWindowMs = 1000;
     constexpr std::uint32_t kMaxWindowMs = 60000;
     constexpr std::uint32_t kDefaultPollPeriodMs = 2;

@@ -11,8 +11,8 @@
 namespace signlang::env_sound_det {
   namespace {
 
-    constexpr auto kDefaultModelPath = "./model/yamnet_3s.rknn";
-    constexpr auto kDefaultClassMapPath = "./model/yamnet_class_map.txt";
+    constexpr auto kDefaultModelPath = "models/yamnet/yamnet_3s.rknn";
+    constexpr auto kDefaultClassMapPath = "models/yamnet/yamnet_class_map.txt";
     constexpr std::uint32_t kMinWindowMs = 100;
     constexpr std::uint32_t kMaxWindowMs = 60000;
     constexpr std::uint32_t kDefaultPollPeriodMs = 2;

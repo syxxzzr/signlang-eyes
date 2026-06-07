@@ -12,6 +12,8 @@ target_link_libraries(signlang_eyes_edgeai_video_frontend PRIVATE
         cxxopts::cxxopts
         iceoryx2-cxx::static-lib-cxx)
 
+install(TARGETS signlang_eyes_edgeai_video_frontend DESTINATION bin)
+
 if(SIGNLANG_ENABLE_TESTS)
         add_executable(signlang_eyes_edgeai_video_processor_test
                 video_processor.cpp

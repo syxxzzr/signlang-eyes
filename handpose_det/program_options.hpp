@@ -9,7 +9,7 @@
 
 namespace signlang::handpose_det {
 
-  constexpr auto kDefaultModelPath = "model/yolov8_handpose.rknn";
+  constexpr auto kDefaultModelPath = "models/yolov8n-handpose/yolov8_handpose.rknn";
   constexpr auto kDefaultConfidenceThreshold = 0.5F;
   constexpr auto kDefaultNmsThreshold = 0.4F;
   constexpr auto kDefaultSubscriberBufferSize = std::uint64_t{1};

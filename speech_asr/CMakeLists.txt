@@ -6,6 +6,7 @@ set(SPEECH_ASR_DECODER_MODEL_FILE ${SPEECH_ASR_MODEL_DIR}/whisper_decoder_base_1
 set(SPEECH_ASR_MEL_FILTERS_FILE ${SPEECH_ASR_MODEL_DIR}/mel_80_filters.txt)
 set(SPEECH_ASR_VOCAB_EN_FILE ${SPEECH_ASR_MODEL_DIR}/vocab_en.txt)
 set(SPEECH_ASR_VOCAB_ZH_FILE ${SPEECH_ASR_MODEL_DIR}/vocab_zh.txt)
+set(SPEECH_ASR_INSTALL_MODEL_DIR models/whisper)
 
 if(NOT SIGNLANG_IS_AARCH64)
     message(STATUS "Skipping signlang_eyes_edgeai_speech_asr: RKNN runtime is project-local aarch64 only")
@@ -55,27 +56,28 @@ target_link_libraries(signlang_eyes_edgeai_speech_asr PRIVATE
 
 set_target_properties(signlang_eyes_edgeai_speech_asr PROPERTIES
         BUILD_RPATH ${SIGNLANG_RKNN_RUNTIME_ROOT}/lib/aarch64
-        INSTALL_RPATH "$ORIGIN/lib")
+        INSTALL_RPATH "$ORIGIN/../lib")
 
 add_custom_command(TARGET signlang_eyes_edgeai_speech_asr POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:signlang_eyes_edgeai_speech_asr>/model"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_speech_asr>/${SPEECH_ASR_INSTALL_MODEL_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${SPEECH_ASR_ENCODER_MODEL_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_speech_asr>/model/whisper_encoder_base_15s.rknn"
+        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_speech_asr>/${SPEECH_ASR_INSTALL_MODEL_DIR}/whisper_encoder_base_15s.rknn"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${SPEECH_ASR_DECODER_MODEL_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_speech_asr>/model/whisper_decoder_base_15s.rknn"
+        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_speech_asr>/${SPEECH_ASR_INSTALL_MODEL_DIR}/whisper_decoder_base_15s.rknn"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${SPEECH_ASR_MEL_FILTERS_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_speech_asr>/model/mel_80_filters.txt"
+        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_speech_asr>/${SPEECH_ASR_INSTALL_MODEL_DIR}/mel_80_filters.txt"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${SPEECH_ASR_VOCAB_EN_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_speech_asr>/model/vocab_en.txt"
+        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_speech_asr>/${SPEECH_ASR_INSTALL_MODEL_DIR}/vocab_en.txt"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${SPEECH_ASR_VOCAB_ZH_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_speech_asr>/model/vocab_zh.txt")
+        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_speech_asr>/${SPEECH_ASR_INSTALL_MODEL_DIR}/vocab_zh.txt")
 
-install(TARGETS signlang_eyes_edgeai_speech_asr DESTINATION .)
+install(TARGETS signlang_eyes_edgeai_speech_asr DESTINATION bin)
 install(FILES ${SIGNLANG_RKNN_LIBRARY} DESTINATION lib)
 install(FILES
         ${SPEECH_ASR_ENCODER_MODEL_FILE}
@@ -83,4 +85,4 @@ install(FILES
         ${SPEECH_ASR_MEL_FILTERS_FILE}
         ${SPEECH_ASR_VOCAB_EN_FILE}
         ${SPEECH_ASR_VOCAB_ZH_FILE}
-        DESTINATION model)
+        DESTINATION ${SPEECH_ASR_INSTALL_MODEL_DIR})

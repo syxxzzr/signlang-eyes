@@ -16,6 +16,8 @@ target_link_libraries(signlang_eyes_edgeai_audio_frontend PRIVATE
         fftw3f
         m)
 
+install(TARGETS signlang_eyes_edgeai_audio_frontend DESTINATION bin)
+
 if(SIGNLANG_ENABLE_TESTS)
         add_executable(signlang_eyes_edgeai_audio_processor_test
                 audio_processor.cpp

@@ -3,6 +3,7 @@ set(ENV_SOUND_DET_MODEL_DIR
         CACHE PATH "Directory containing YAMNet RKNN model assets")
 set(ENV_SOUND_DET_MODEL_FILE ${ENV_SOUND_DET_MODEL_DIR}/yamnet_3s.rknn)
 set(ENV_SOUND_DET_CLASS_MAP_FILE ${ENV_SOUND_DET_MODEL_DIR}/yamnet_class_map.txt)
+set(ENV_SOUND_DET_INSTALL_MODEL_DIR models/yamnet)
 
 if(NOT SIGNLANG_IS_AARCH64)
     message(STATUS "Skipping signlang_eyes_edgeai_env_sound_det: RKNN runtime is project-local aarch64 only")
@@ -41,20 +42,21 @@ target_link_libraries(signlang_eyes_edgeai_env_sound_det PRIVATE
 
 set_target_properties(signlang_eyes_edgeai_env_sound_det PROPERTIES
         BUILD_RPATH ${SIGNLANG_RKNN_RUNTIME_ROOT}/lib/aarch64
-        INSTALL_RPATH "$ORIGIN/lib")
+        INSTALL_RPATH "$ORIGIN/../lib")
 
 add_custom_command(TARGET signlang_eyes_edgeai_env_sound_det POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:signlang_eyes_edgeai_env_sound_det>/model"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_env_sound_det>/${ENV_SOUND_DET_INSTALL_MODEL_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${ENV_SOUND_DET_MODEL_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_env_sound_det>/model/yamnet_3s.rknn"
+        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_env_sound_det>/${ENV_SOUND_DET_INSTALL_MODEL_DIR}/yamnet_3s.rknn"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${ENV_SOUND_DET_CLASS_MAP_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_env_sound_det>/model/yamnet_class_map.txt")
+        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_env_sound_det>/${ENV_SOUND_DET_INSTALL_MODEL_DIR}/yamnet_class_map.txt")
 
-install(TARGETS signlang_eyes_edgeai_env_sound_det DESTINATION .)
+install(TARGETS signlang_eyes_edgeai_env_sound_det DESTINATION bin)
 install(FILES ${SIGNLANG_RKNN_LIBRARY} DESTINATION lib)
 install(FILES
         ${ENV_SOUND_DET_MODEL_FILE}
         ${ENV_SOUND_DET_CLASS_MAP_FILE}
-        DESTINATION model)
+        DESTINATION ${ENV_SOUND_DET_INSTALL_MODEL_DIR})
