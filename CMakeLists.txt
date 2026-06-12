@@ -54,7 +54,7 @@ add_library(signlang_rknn_headers INTERFACE)
 target_include_directories(signlang_rknn_headers INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/rknn_runtime/include)
 add_library(signlang::rknn_headers ALIAS signlang_rknn_headers)
 
-# RKNN Runtime library (prebuilt shared library)
+# RKNN Runtime library
 add_library(signlang_rknn_runtime SHARED IMPORTED GLOBAL)
 set_target_properties(signlang_rknn_runtime PROPERTIES
     IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/third_party/rknn_runtime/lib/aarch64/librknnrt.so
