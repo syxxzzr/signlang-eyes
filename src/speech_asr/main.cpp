@@ -74,7 +74,7 @@ auto main(int argc, char** argv) -> int {
   using signlang::speech_asr::AudioWindow;
   using signlang::speech_asr::hop_samples_for_overlap;
   using signlang::speech_asr::IpcAudioSubscriber;
-  using signlang::speech_asr::IpcEnableClient;
+  using signlang::speech_asr::IpcAsrStateMonitor;
   using signlang::speech_asr::IpcResultPublisher;
   using signlang::speech_asr::kWhisperSampleRateHz;
   using signlang::speech_asr::parse_program_options;
@@ -136,18 +136,17 @@ auto main(int argc, char** argv) -> int {
       try {
         WhisperModel model{options};
         IpcResultPublisher result_publisher{options.result_service_name};
-        IpcEnableClient enable_client{options.enable_service_name,
-                                      std::chrono::milliseconds(options.enable_request_timeout_ms)};
+        IpcAsrStateMonitor state_monitor{options.state_event_service_name, options.state_blackboard_service_name};
         AudioWindow audio_window;
         std::optional<std::uint64_t> next_window_start_sample;
         std::uint64_t result_sequence_number = 0;
-        std::uint64_t enable_request_sequence_number = 0;
 
         while (audio_buffer.wait_for_window(next_window_start_sample, window_sample_count, hop_sample_count,
                                             should_stop, audio_window)) {
-          const auto enable_response = enable_client.query_enabled(enable_request_sequence_number++);
-          if (enable_response.enabled) {
-            const auto inference_result = model.infer(audio_window, enable_response.language);
+          state_monitor.try_wait_for_state_change();
+
+          if (state_monitor.is_enabled()) {
+            const auto inference_result = model.infer(audio_window, options.language);
 
             SpeechAsrResult result{};
             result.sequence_number = result_sequence_number++;
@@ -164,12 +163,15 @@ auto main(int argc, char** argv) -> int {
             result.audio_sample_rate_hz = kWhisperSampleRateHz;
             result.window_ms = options.window_ms;
             result.hop_ms = static_cast<std::uint32_t>((hop_sample_count * 1000) / kWhisperSampleRateHz);
-            result.language = enable_response.language;
+            result.language = options.language;
             result.overlap_ratio = static_cast<float>(options.overlap_ratio);
-            copy_language_code(enable_response.language, result.language_code);
+            copy_language_code(options.language, result.language_code);
             copy_inference_result(inference_result, result);
 
             result_publisher.publish(result);
+          } else {
+            constexpr auto kDisableWaitTimeout = std::chrono::milliseconds(100);
+            state_monitor.wait_for_state_change(kDisableWaitTimeout);
           }
 
           next_window_start_sample = audio_window.start_sample_index + hop_sample_count;

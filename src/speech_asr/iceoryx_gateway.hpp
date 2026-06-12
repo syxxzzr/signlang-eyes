@@ -59,28 +59,37 @@ namespace signlang::speech_asr {
     iox2::Publisher<iox2::ServiceType::Ipc, SpeechAsrResult, void> publisher_;
   };
 
-  class IpcEnableClient {
+  /// Event-driven ASR state monitor
+  class IpcAsrStateMonitor {
   public:
-    IpcEnableClient(const std::string& service_name, std::chrono::milliseconds response_timeout);
+    IpcAsrStateMonitor(const std::string& event_service_name, const std::string& blackboard_service_name);
 
-    IpcEnableClient(const IpcEnableClient&) = delete;
-    auto operator=(const IpcEnableClient&) -> IpcEnableClient& = delete;
-    IpcEnableClient(IpcEnableClient&&) = delete;
-    auto operator=(IpcEnableClient&&) -> IpcEnableClient& = delete;
+    IpcAsrStateMonitor(const IpcAsrStateMonitor&) = delete;
+    auto operator=(const IpcAsrStateMonitor&) -> IpcAsrStateMonitor& = delete;
+    IpcAsrStateMonitor(IpcAsrStateMonitor&&) = delete;
+    auto operator=(IpcAsrStateMonitor&&) -> IpcAsrStateMonitor& = delete;
 
-    auto query_enabled(std::uint64_t sequence_number) -> AsrEnableResponse;
+    auto is_enabled() const -> bool;
+
+    auto wait_for_state_change(std::chrono::milliseconds timeout) -> bool;
+
+    auto try_wait_for_state_change() -> bool;
 
   private:
-    using EnableClient =
-        iox2::Client<iox2::ServiceType::Ipc, AsrEnableRequest, void, AsrEnableResponse, void>;
-
     static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
-    static auto create_client(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
-        -> EnableClient;
+    static auto create_listener(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+        -> iox2::Listener<iox2::ServiceType::Ipc>;
+    static auto open_blackboard_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                       const std::string& service_name)
+        -> iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, AsrStateKey>;
+
+    auto read_state_from_blackboard() -> AsrState;
 
     iox2::Node<iox2::ServiceType::Ipc> node_;
-    EnableClient client_;
-    std::chrono::milliseconds response_timeout_;
+    iox2::Listener<iox2::ServiceType::Ipc> listener_;
+    iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, AsrStateKey> blackboard_service_;
+    iox2::Reader<iox2::ServiceType::Ipc, AsrStateKey> reader_;
+    AsrState cached_state_;
   };
 
 } // namespace signlang::speech_asr
