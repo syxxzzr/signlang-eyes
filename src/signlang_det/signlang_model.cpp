@@ -395,39 +395,45 @@ namespace signlang::signlang_det {
   }
   // DTW matching and inference
   
+  auto SignlangModel::infer(const std::vector<FeatureVector>& sequence) -> InferenceResult {
   auto SignlangModel::dtw_match(const std::vector<std::vector<float>>& query_frames) -> InferenceResult {
-    auto best_gesture_id = std::uint32_t{0};
-    auto best_distance = std::numeric_limits<float>::infinity();
+    auto scores = std::vector<std::pair<std::uint32_t, float>>{};
 
     for (const auto& [gesture_id, prototype] : prototypes_) {
       auto min_distance = std::numeric_limits<float>::infinity();
-      
-      // For now, treat all encoded_frames as one sample
-      // In Python, each gesture has multiple samples
-      // Here we'll assume the prototype contains concatenated samples
-      // A proper implementation would need to know sample boundaries
       
       const auto distance = compute_dtw_distance(query_frames, prototype.encoded_frames);
       if (distance < min_distance) {
         min_distance = distance;
       }
 
-      if (min_distance < best_distance) {
-        best_distance = min_distance;
-        best_gesture_id = gesture_id;
-      }
+      const auto confidence = 1.0F / (1.0F + min_distance);
+      scores.emplace_back(gesture_id, confidence);
     }
 
-    const auto confidence = 1.0F / (1.0F + best_distance);
+    if (scores.empty()) {
+      return InferenceResult{
+        .gesture_id = 0,
+        .inference_time_ms = 0.0F,
+        .confidence = 0.0F,
+        .second_confidence = 0.0F
+      };
+    }
+
+    std::sort(scores.begin(), scores.end(),
+              [](const auto& a, const auto& b) { return a.second > b.second; });
+
+    const auto best_gesture_id = scores[0].first;
+    const auto best_confidence = scores[0].second;
+    const auto second_confidence = (scores.size() > 1) ? scores[1].second : 0.0F;
 
     return InferenceResult{
       .gesture_id = best_gesture_id,
       .inference_time_ms = 0.0F,
-      .confidence = confidence
+      .confidence = best_confidence,
+      .second_confidence = second_confidence
     };
   }
-
-  auto SignlangModel::infer(const std::vector<FeatureVector>& sequence) -> InferenceResult {
     const auto start_time = std::chrono::steady_clock::now();
 
     flatten_features(sequence);

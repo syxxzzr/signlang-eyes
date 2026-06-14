@@ -30,6 +30,7 @@ namespace signlang::signlang_det {
       std::uint32_t gesture_id;
       float inference_time_ms;
       float confidence;
+      float second_confidence;  // For margin check
     };
 
     SignlangModel(const std::string& model_path,

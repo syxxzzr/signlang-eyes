@@ -18,6 +18,8 @@ constexpr auto kDefaultMinConfidence = float{0.3F};
 constexpr auto kDefaultSubscriberBufferSize = std::uint64_t{2};
 constexpr auto kDefaultMotionWeight = float{0.0F};
 constexpr auto kDefaultDtwWindowRatio = float{0.5F};
+constexpr auto kDefaultConfidenceThreshold = float{0.6F};
+constexpr auto kDefaultConfidenceMargin = float{0.1F};
 
 struct ProgramOptions {
   std::string input_service_name;
@@ -32,6 +34,8 @@ struct ProgramOptions {
   rknn_core_mask npu_core_mask;
   float motion_weight;
   float dtw_window_ratio;
+  float confidence_threshold;
+  float confidence_margin;
 };
 
 struct ProgramUsage {

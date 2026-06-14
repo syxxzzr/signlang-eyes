@@ -130,6 +130,20 @@ namespace {
 
       try {
         const auto inference_result = model.infer(*window);
+
+        // Apply confidence threshold
+        if (inference_result.confidence < options.confidence_threshold) {
+          last_processed_seq = window_end_seq;
+          continue;
+        }
+
+        // Apply confidence margin check (reject if top1 and top2 are too close)
+        const auto margin = inference_result.confidence - inference_result.second_confidence;
+        if (margin < options.confidence_margin) {
+          last_processed_seq = window_end_seq;
+          continue;
+        }
+
         const auto result = build_result(*window, inference_result, options, model);
         publisher.publish(result);
 

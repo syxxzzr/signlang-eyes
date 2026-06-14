@@ -1,7 +1,7 @@
 set(SIGNLANG_DET_MODEL_DIR
         ${SIGNLANG_MODEL_ROOT}/signlang
         CACHE PATH "Directory containing sign language LSTM RKNN model assets")
-set(SIGNLANG_DET_MODEL_FILE ${SIGNLANG_DET_MODEL_DIR}/gesture_lstm.rknn)
+set(SIGNLANG_DET_MODEL_FILE ${SIGNLANG_DET_MODEL_DIR}/signlang.rknn)
 set(SIGNLANG_DET_LABEL_MAP_FILE ${SIGNLANG_DET_MODEL_DIR}/labels.txt)
 set(SIGNLANG_DET_INSTALL_MODEL_DIR models/signlang)
 
@@ -44,7 +44,7 @@ add_custom_command(TARGET signlang_eyes_edgeai_signlang_det POST_BUILD
         "$<TARGET_FILE_DIR:signlang_eyes_edgeai_signlang_det>/${SIGNLANG_DET_INSTALL_MODEL_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${SIGNLANG_DET_MODEL_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_signlang_det>/${SIGNLANG_DET_INSTALL_MODEL_DIR}/gesture_lstm.rknn"
+        "$<TARGET_FILE_DIR:signlang_eyes_edgeai_signlang_det>/${SIGNLANG_DET_INSTALL_MODEL_DIR}/signlang.rknn"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${SIGNLANG_DET_LABEL_MAP_FILE}
         "$<TARGET_FILE_DIR:signlang_eyes_edgeai_signlang_det>/${SIGNLANG_DET_INSTALL_MODEL_DIR}/labels.txt")
