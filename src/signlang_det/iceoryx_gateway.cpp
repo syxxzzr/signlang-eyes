@@ -4,6 +4,17 @@
 #include <utility>
 
 namespace signlang::signlang_det {
+  namespace {
+
+    auto service_name_from_string(const std::string& name) -> iox2::ServiceName {
+      auto result = iox2::ServiceName::create(name.c_str());
+      if (!result.has_value()) {
+        throw std::runtime_error("Invalid iceoryx2 service name: " + name);
+      }
+      return std::move(result.value());
+    }
+
+  } // namespace
 
   auto IpcHandposeSubscriber::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     auto node_result = iox2::NodeBuilder()
@@ -22,7 +33,7 @@ namespace signlang::signlang_det {
                         iox2::bb::Slice<handpose_det::HandPoseDetection>,
                         handpose_det::HandPoseFrameMetadata>
   {
-    auto service_result = node.service_builder(service_name.c_str())
+    auto service_result = node.service_builder(service_name_from_string(service_name))
       .publish_subscribe<iox2::bb::Slice<handpose_det::HandPoseDetection>>()
       .user_header<handpose_det::HandPoseFrameMetadata>()
       .open_or_create();
@@ -33,7 +44,7 @@ namespace signlang::signlang_det {
 
     auto subscriber_result = service_result.value()
       .subscriber_builder()
-      .queue_capacity(buffer_size)
+      .buffer_size(buffer_size)
       .create();
 
     if (!subscriber_result.has_value()) {
@@ -63,7 +74,7 @@ namespace signlang::signlang_det {
     const std::string& service_name)
     -> iox2::Publisher<iox2::ServiceType::Ipc, SignlangResult, void>
   {
-    auto service_result = node.service_builder(SignlangResult::IOX2_TYPE_NAME)
+    auto service_result = node.service_builder(service_name_from_string(SignlangResult::IOX2_TYPE_NAME))
       .publish_subscribe<SignlangResult>()
       .open_or_create();
 
@@ -95,11 +106,11 @@ namespace signlang::signlang_det {
     }
 
     auto loaned_sample = std::move(loan_result.value());
-    *loaned_sample.payload_mut() = result;
-    loaned_sample.payload_mut()->sequence_number = sequence_number_++;
+    auto result_copy = result;
+    result_copy.sequence_number = sequence_number_++;
 
-    auto initialized_sample = iox2::assume_init(std::move(loaned_sample));
-    auto send_result = iox2::send(std::move(initialized_sample));
+    auto initialized_sample = loaned_sample.write_payload(result_copy);
+    const auto send_result = iox2::send(std::move(initialized_sample));
     if (!send_result.has_value()) {
       throw std::runtime_error("Failed to publish signlang result through iceoryx2");
     }

@@ -395,7 +395,6 @@ namespace signlang::signlang_det {
   }
   // DTW matching and inference
   
-  auto SignlangModel::infer(const std::vector<FeatureVector>& sequence) -> InferenceResult {
   auto SignlangModel::dtw_match(const std::vector<std::vector<float>>& query_frames) -> InferenceResult {
     auto scores = std::vector<std::pair<std::uint32_t, float>>{};
 
@@ -434,6 +433,8 @@ namespace signlang::signlang_det {
       .second_confidence = second_confidence
     };
   }
+
+  auto SignlangModel::infer(const std::vector<FeatureVector>& sequence) -> InferenceResult {
     const auto start_time = std::chrono::steady_clock::now();
 
     flatten_features(sequence);

@@ -60,14 +60,11 @@ auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult {
     ("motion-weight", "Motion feature weight (0.0=ignore speed)",
      cxxopts::value<float>()->default_value(std::to_string(kDefaultMotionWeight)))
     ("dtw-window-ratio", "DTW window ratio (0.0-1.0, larger=more tolerant)",
-
-
-
+     cxxopts::value<float>()->default_value(std::to_string(kDefaultDtwWindowRatio)))
     ("confidence-threshold", "Minimum confidence for recognition (0.0-1.0)",
      cxxopts::value<float>()->default_value(std::to_string(kDefaultConfidenceThreshold)))
     ("confidence-margin", "Minimum margin between top1 and top2 (0.0-1.0)",
      cxxopts::value<float>()->default_value(std::to_string(kDefaultConfidenceMargin)))
-     cxxopts::value<float>()->default_value(std::to_string(kDefaultDtwWindowRatio)))
     ("npu-core", "NPU core selection: auto,0,1,2,0_1,0_1_2,all",
      cxxopts::value<std::string>()->default_value("auto"))
     ("h,help", "Print usage");
@@ -110,6 +107,8 @@ auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult {
 
   const auto dtw_window_ratio = parsed_options["dtw-window-ratio"].as<float>();
   if (dtw_window_ratio < 0.0F || dtw_window_ratio > 1.0F) {
+    throw std::runtime_error("--dtw-window-ratio must be in [0.0, 1.0]");
+  }
 
   const auto confidence_threshold = parsed_options["confidence-threshold"].as<float>();
   if (confidence_threshold < 0.0F || confidence_threshold > 1.0F) {
@@ -119,8 +118,6 @@ auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult {
   const auto confidence_margin = parsed_options["confidence-margin"].as<float>();
   if (confidence_margin < 0.0F || confidence_margin > 1.0F) {
     throw std::runtime_error("--confidence-margin must be in [0.0, 1.0]");
-  }
-    throw std::runtime_error("--dtw-window-ratio must be in [0.0, 1.0]");
   }
 
   const auto npu_core_str = parsed_options["npu-core"].as<std::string>();
