@@ -14,6 +14,8 @@ namespace signlang::signlang_det {
       return std::move(result.value());
     }
 
+    constexpr SignlangDetStateKey kDefaultStateKey{.id = 0};
+
   } // namespace
 
   auto IpcHandposeSubscriber::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
@@ -114,6 +116,104 @@ namespace signlang::signlang_det {
     if (!send_result.has_value()) {
       throw std::runtime_error("Failed to publish signlang result through iceoryx2");
     }
+  }
+
+  IpcSignlangDetStateMonitor::IpcSignlangDetStateMonitor(
+    const std::string& event_service_name,
+    const std::string& blackboard_service_name)
+    : node_{create_node()},
+      listener_{create_listener(node_, event_service_name)},
+      blackboard_service_{open_blackboard_service(node_, blackboard_service_name)},
+      reader_{blackboard_service_.reader_builder().create().value()},
+      cached_state_{SignlangDetState::Disabled} {
+    cached_state_ = read_state_from_blackboard();
+  }
+
+  auto IpcSignlangDetStateMonitor::is_enabled() const -> bool {
+    return cached_state_ == SignlangDetState::Enabled;
+  }
+
+  void IpcSignlangDetStateMonitor::wait_for_state_change_blocking() {
+    auto result = listener_.blocking_wait([](iox2::EventActivation /* event */) {});
+
+    if (!result.has_value()) {
+      throw std::runtime_error("Failed to wait for sign language detection state change event");
+    }
+
+    cached_state_ = read_state_from_blackboard();
+  }
+
+  auto IpcSignlangDetStateMonitor::try_wait_for_state_change() -> bool {
+    bool event_received = false;
+
+    auto result = listener_.try_wait([&event_received](iox2::EventActivation /* event */) {
+      event_received = true;
+    });
+
+    if (!result.has_value()) {
+      throw std::runtime_error("Failed to check for sign language detection state change event");
+    }
+
+    if (event_received) {
+      cached_state_ = read_state_from_blackboard();
+    }
+
+    return event_received;
+  }
+
+  auto IpcSignlangDetStateMonitor::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
+    iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
+
+    auto node = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+    if (!node.has_value()) {
+      throw std::runtime_error("Failed to create iceoryx2 IPC sign language detection state monitor node");
+    }
+
+    return std::move(node.value());
+  }
+
+  auto IpcSignlangDetStateMonitor::create_listener(
+    const iox2::Node<iox2::ServiceType::Ipc>& node,
+    const std::string& service_name)
+    -> iox2::Listener<iox2::ServiceType::Ipc> {
+    auto service = node.service_builder(service_name_from_string(service_name))
+                       .event()
+                       .open_or_create();
+    if (!service.has_value()) {
+      throw std::runtime_error("Failed to open or create iceoryx2 sign language detection state change event service: " + service_name);
+    }
+
+    auto listener = service.value().listener_builder().create();
+    if (!listener.has_value()) {
+      throw std::runtime_error("Failed to create iceoryx2 sign language detection state change listener for service: " + service_name);
+    }
+
+    return std::move(listener.value());
+  }
+
+  auto IpcSignlangDetStateMonitor::open_blackboard_service(
+    const iox2::Node<iox2::ServiceType::Ipc>& node,
+    const std::string& service_name)
+    -> iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, SignlangDetStateKey> {
+    auto service = node.service_builder(service_name_from_string(service_name))
+                       .blackboard_opener<SignlangDetStateKey>()
+                       .open();
+    if (!service.has_value()) {
+      throw std::runtime_error("Failed to open iceoryx2 sign language detection state blackboard service: " + service_name);
+    }
+
+    return std::move(service.value());
+  }
+
+  auto IpcSignlangDetStateMonitor::read_state_from_blackboard() -> SignlangDetState {
+    auto entry_result = reader_.entry<SignlangDetState>(kDefaultStateKey);
+    if (!entry_result.has_value()) {
+      return SignlangDetState::Disabled;
+    }
+
+    auto entry = std::move(entry_result.value());
+    auto blackboard_value = entry.get();
+    return *blackboard_value;
   }
 
 } // namespace signlang::signlang_det

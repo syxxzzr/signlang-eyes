@@ -61,6 +61,41 @@ private:
   std::uint64_t sequence_number_{0};
 };
 
+/// Event-driven sign language detection state monitor
+class IpcSignlangDetStateMonitor {
+public:
+  IpcSignlangDetStateMonitor(const std::string& event_service_name,
+                              const std::string& blackboard_service_name);
+
+  IpcSignlangDetStateMonitor(const IpcSignlangDetStateMonitor&) = delete;
+  auto operator=(const IpcSignlangDetStateMonitor&) -> IpcSignlangDetStateMonitor& = delete;
+  IpcSignlangDetStateMonitor(IpcSignlangDetStateMonitor&&) = delete;
+  auto operator=(IpcSignlangDetStateMonitor&&) -> IpcSignlangDetStateMonitor& = delete;
+
+  auto is_enabled() const -> bool;
+
+  void wait_for_state_change_blocking();
+
+  auto try_wait_for_state_change() -> bool;
+
+private:
+  static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
+  static auto create_listener(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                               const std::string& service_name)
+    -> iox2::Listener<iox2::ServiceType::Ipc>;
+  static auto open_blackboard_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                      const std::string& service_name)
+    -> iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, SignlangDetStateKey>;
+
+  auto read_state_from_blackboard() -> SignlangDetState;
+
+  iox2::Node<iox2::ServiceType::Ipc> node_;
+  iox2::Listener<iox2::ServiceType::Ipc> listener_;
+  iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, SignlangDetStateKey> blackboard_service_;
+  iox2::Reader<iox2::ServiceType::Ipc, SignlangDetStateKey> reader_;
+  SignlangDetState cached_state_;
+};
+
 template <typename Handler>
 auto IpcHandposeSubscriber::receive_latest(Handler&& handler) -> bool {
   auto latest_sample = subscriber_.receive();

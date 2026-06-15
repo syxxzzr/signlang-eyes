@@ -95,18 +95,30 @@ namespace {
   {
     using signlang::signlang_det::SignlangModel;
     using signlang::signlang_det::IpcSignlangPublisher;
+    using signlang::signlang_det::IpcSignlangDetStateMonitor;
 
     auto model = SignlangModel{options.model_path, options.label_map_path,
                                options.prototypes_path,
                                options.npu_core_mask,
                                options.motion_weight, options.dtw_window_ratio};
     auto publisher = IpcSignlangPublisher{options.output_service_name};
+    auto state_monitor = IpcSignlangDetStateMonitor{options.state_event_service_name,
+                                                     options.state_blackboard_service_name};
 
     const auto hop_frames = static_cast<std::uint32_t>(
       options.sequence_length * (1.0f - options.overlap_ratio));
     auto last_processed_seq = std::uint64_t{0};
 
     while (!should_stop) {
+      // Check for state changes before waiting for buffer
+      state_monitor.try_wait_for_state_change();
+
+      if (!state_monitor.is_enabled()) {
+        // When disabled, block until state changes
+        state_monitor.wait_for_state_change_blocking();
+        continue;
+      }
+
       auto lock = std::unique_lock{buffer_mutex};
       buffer_cv.wait(lock, [&] {
         return should_stop.load() || ring_buffer.size() >= options.sequence_length;

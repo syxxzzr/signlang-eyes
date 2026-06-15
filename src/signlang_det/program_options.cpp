@@ -43,6 +43,10 @@ auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult {
      cxxopts::value<std::string>())
     ("o,output-service", "Output signlang result iceoryx2 service name",
      cxxopts::value<std::string>())
+    ("state-event-service", "iceoryx2 event service name for state change notifications",
+     cxxopts::value<std::string>())
+    ("state-blackboard-service", "iceoryx2 blackboard service name for state storage",
+     cxxopts::value<std::string>())
     ("m,model", "RKNN BiLSTM encoder model path",
      cxxopts::value<std::string>()->default_value(kDefaultModelPath))
     ("label-map", "Gesture label map file",
@@ -75,9 +79,12 @@ auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult {
   }
 
   if (parsed_options.count("input-service") == 0 ||
-      parsed_options.count("output-service") == 0) {
+      parsed_options.count("output-service") == 0 ||
+      parsed_options.count("state-event-service") == 0 ||
+      parsed_options.count("state-blackboard-service") == 0) {
     throw std::runtime_error(
-      "Both --input-service and --output-service are required.\n\n" + options.help());
+      "Options --input-service, --output-service, --state-event-service, and "
+      "--state-blackboard-service are required.\n\n" + options.help());
   }
 
   const auto sequence_length = parsed_options["sequence-length"].as<std::uint32_t>();
@@ -126,6 +133,8 @@ auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult {
   return ProgramOptions{
     .input_service_name = parsed_options["input-service"].as<std::string>(),
     .output_service_name = parsed_options["output-service"].as<std::string>(),
+    .state_event_service_name = parsed_options["state-event-service"].as<std::string>(),
+    .state_blackboard_service_name = parsed_options["state-blackboard-service"].as<std::string>(),
     .model_path = parsed_options["model"].as<std::string>(),
     .label_map_path = parsed_options["label-map"].as<std::string>(),
     .prototypes_path = parsed_options["prototypes"].as<std::string>(),
