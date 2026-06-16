@@ -70,3 +70,12 @@ Testing/
 
 # .idea
 .idea/
+
+# claude code
+CLAUDE.md
+
+# codex
+AGENTS.md
+
+# Proprietary or generated inference assets
+models/
