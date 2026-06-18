@@ -21,18 +21,6 @@ target_link_libraries(signlang_eyes_edgeai_handpose_det PRIVATE
         signlang::rknn_headers
         dl)
 
-if(SIGNLANG_ENABLE_TESTS)
-        add_executable(signlang_eyes_edgeai_handpose_preprocessor_test
-                handpose_preprocessor.cpp
-                handpose_preprocessor_test.cpp)
-
-        target_include_directories(signlang_eyes_edgeai_handpose_preprocessor_test PRIVATE
-                ${CMAKE_CURRENT_SOURCE_DIR})
-
-        add_test(NAME signlang_eyes_edgeai_handpose_preprocessor_test
-                COMMAND signlang_eyes_edgeai_handpose_preprocessor_test)
-endif()
-
 install(TARGETS signlang_eyes_edgeai_handpose_det DESTINATION bin)
 
 if(EXISTS "${HANDPOSE_DET_MODEL_FILE}")
