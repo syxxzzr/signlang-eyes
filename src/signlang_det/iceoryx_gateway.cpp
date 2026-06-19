@@ -14,40 +14,30 @@ namespace signlang::signlang_det {
       return std::move(result.value());
     }
 
-    constexpr SignlangDetStateKey kDefaultStateKey{.id = 0};
-
   } // namespace
 
   auto IpcHandposeSubscriber::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
-    auto node_result = iox2::NodeBuilder()
-      .create<iox2::ServiceType::Ipc>();
+    auto node_result = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
     if (!node_result.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 node for handpose subscriber");
     }
     return std::move(node_result.value());
   }
 
-  auto IpcHandposeSubscriber::create_subscriber(
-    const iox2::Node<iox2::ServiceType::Ipc>& node,
-    const std::string& service_name,
-    std::uint64_t buffer_size)
-    -> iox2::Subscriber<iox2::ServiceType::Ipc,
-                        iox2::bb::Slice<handpose_det::HandPoseDetection>,
-                        handpose_det::HandPoseFrameMetadata>
-  {
+  auto IpcHandposeSubscriber::create_subscriber(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                                const std::string& service_name, std::uint64_t buffer_size)
+      -> iox2::Subscriber<iox2::ServiceType::Ipc, iox2::bb::Slice<handpose_det::HandPoseDetection>,
+                          handpose_det::HandPoseFrameMetadata> {
     auto service_result = node.service_builder(service_name_from_string(service_name))
-      .publish_subscribe<iox2::bb::Slice<handpose_det::HandPoseDetection>>()
-      .user_header<handpose_det::HandPoseFrameMetadata>()
-      .open_or_create();
+                              .publish_subscribe<iox2::bb::Slice<handpose_det::HandPoseDetection>>()
+                              .user_header<handpose_det::HandPoseFrameMetadata>()
+                              .open_or_create();
 
     if (!service_result.has_value()) {
       throw std::runtime_error("Failed to open handpose service: " + service_name);
     }
 
-    auto subscriber_result = service_result.value()
-      .subscriber_builder()
-      .buffer_size(buffer_size)
-      .create();
+    auto subscriber_result = service_result.value().subscriber_builder().buffer_size(buffer_size).create();
 
     if (!subscriber_result.has_value()) {
       throw std::runtime_error("Failed to create handpose subscriber");
@@ -56,37 +46,29 @@ namespace signlang::signlang_det {
     return std::move(subscriber_result.value());
   }
 
-  IpcHandposeSubscriber::IpcHandposeSubscriber(
-    const std::string& service_name,
-    std::uint64_t subscriber_buffer_size)
-    : node_(create_node()),
-      subscriber_(create_subscriber(node_, service_name, subscriber_buffer_size)) {}
+  IpcHandposeSubscriber::IpcHandposeSubscriber(const std::string& service_name, std::uint64_t subscriber_buffer_size) :
+      node_(create_node()), subscriber_(create_subscriber(node_, service_name, subscriber_buffer_size)) {}
 
   auto IpcSignlangPublisher::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
-    auto node_result = iox2::NodeBuilder()
-      .create<iox2::ServiceType::Ipc>();
+    auto node_result = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
     if (!node_result.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 node for signlang publisher");
     }
     return std::move(node_result.value());
   }
 
-  auto IpcSignlangPublisher::create_publisher(
-    const iox2::Node<iox2::ServiceType::Ipc>& node,
-    const std::string& service_name)
-    -> iox2::Publisher<iox2::ServiceType::Ipc, SignlangResult, void>
-  {
+  auto IpcSignlangPublisher::create_publisher(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                              const std::string& service_name)
+      -> iox2::Publisher<iox2::ServiceType::Ipc, SignlangResult, void> {
     auto service_result = node.service_builder(service_name_from_string(SignlangResult::IOX2_TYPE_NAME))
-      .publish_subscribe<SignlangResult>()
-      .open_or_create();
+                              .publish_subscribe<SignlangResult>()
+                              .open_or_create();
 
     if (!service_result.has_value()) {
       throw std::runtime_error("Failed to open signlang result service: " + service_name);
     }
 
-    auto publisher_result = service_result.value()
-      .publisher_builder()
-      .create();
+    auto publisher_result = service_result.value().publisher_builder().create();
 
     if (!publisher_result.has_value()) {
       throw std::runtime_error("Failed to create signlang result publisher");
@@ -95,9 +77,8 @@ namespace signlang::signlang_det {
     return std::move(publisher_result.value());
   }
 
-  IpcSignlangPublisher::IpcSignlangPublisher(const std::string& service_name)
-    : node_(create_node()),
-      publisher_(create_publisher(node_, service_name)) {
+  IpcSignlangPublisher::IpcSignlangPublisher(const std::string& service_name) :
+      node_(create_node()), publisher_(create_publisher(node_, service_name)) {
     static_cast<void>(service_name);
   }
 
@@ -118,26 +99,25 @@ namespace signlang::signlang_det {
     }
   }
 
-  IpcSignlangDetStateMonitor::IpcSignlangDetStateMonitor(
-    const std::string& event_service_name,
-    const std::string& blackboard_service_name)
-    : node_{create_node()},
-      listener_{create_listener(node_, event_service_name)},
-      blackboard_service_{open_blackboard_service(node_, blackboard_service_name)},
-      reader_{blackboard_service_.reader_builder().create().value()},
-      cached_state_{SignlangDetState::Disabled} {
+  IpcSignlangDetStateMonitor::IpcSignlangDetStateMonitor(const std::string& event_service_name,
+                                                         const std::string& blackboard_service_name) :
+      node_{create_node()},
+      listener_{create_listener(node_, event_service_name)}, blackboard_service_{open_blackboard_service(
+                                                                 node_, blackboard_service_name)},
+      reader_{create_reader(blackboard_service_)}, cached_state_{signlang::state_machine::AppState::Normal} {
     cached_state_ = read_state_from_blackboard();
   }
 
   auto IpcSignlangDetStateMonitor::is_enabled() const -> bool {
-    return cached_state_ == SignlangDetState::Enabled;
+    return cached_state_ == signlang::state_machine::AppState::SignLanguageChat ||
+        cached_state_ == signlang::state_machine::AppState::SignLanguageAi;
   }
 
   void IpcSignlangDetStateMonitor::wait_for_state_change_blocking() {
     auto result = listener_.blocking_wait([](iox2::EventActivation /* event */) {});
 
     if (!result.has_value()) {
-      throw std::runtime_error("Failed to wait for sign language detection state change event");
+      throw std::runtime_error("Failed to wait for global app state change event in sign language detection");
     }
 
     cached_state_ = read_state_from_blackboard();
@@ -146,12 +126,10 @@ namespace signlang::signlang_det {
   auto IpcSignlangDetStateMonitor::try_wait_for_state_change() -> bool {
     bool event_received = false;
 
-    auto result = listener_.try_wait([&event_received](iox2::EventActivation /* event */) {
-      event_received = true;
-    });
+    auto result = listener_.try_wait([&event_received](iox2::EventActivation /* event */) { event_received = true; });
 
     if (!result.has_value()) {
-      throw std::runtime_error("Failed to check for sign language detection state change event");
+      throw std::runtime_error("Failed to check for global app state change event in sign language detection");
     }
 
     if (event_received) {
@@ -172,43 +150,54 @@ namespace signlang::signlang_det {
     return std::move(node.value());
   }
 
-  auto IpcSignlangDetStateMonitor::create_listener(
-    const iox2::Node<iox2::ServiceType::Ipc>& node,
-    const std::string& service_name)
-    -> iox2::Listener<iox2::ServiceType::Ipc> {
-    auto service = node.service_builder(service_name_from_string(service_name))
-                       .event()
-                       .open_or_create();
+  auto IpcSignlangDetStateMonitor::create_listener(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                                   const std::string& service_name)
+      -> iox2::Listener<iox2::ServiceType::Ipc> {
+    auto service = node.service_builder(service_name_from_string(service_name)).event().open_or_create();
     if (!service.has_value()) {
-      throw std::runtime_error("Failed to open or create iceoryx2 sign language detection state change event service: " + service_name);
+      throw std::runtime_error(
+          "Failed to open or create iceoryx2 app state event service for sign language detection: " + service_name);
     }
 
     auto listener = service.value().listener_builder().create();
     if (!listener.has_value()) {
-      throw std::runtime_error("Failed to create iceoryx2 sign language detection state change listener for service: " + service_name);
+      throw std::runtime_error("Failed to create iceoryx2 app state listener for sign language detection service: " +
+                               service_name);
     }
 
     return std::move(listener.value());
   }
 
-  auto IpcSignlangDetStateMonitor::open_blackboard_service(
-    const iox2::Node<iox2::ServiceType::Ipc>& node,
-    const std::string& service_name)
-    -> iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, SignlangDetStateKey> {
+  auto IpcSignlangDetStateMonitor::open_blackboard_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                                           const std::string& service_name)
+      -> iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey> {
     auto service = node.service_builder(service_name_from_string(service_name))
-                       .blackboard_opener<SignlangDetStateKey>()
+                       .blackboard_opener<signlang::state_machine::AppStateKey>()
                        .open();
     if (!service.has_value()) {
-      throw std::runtime_error("Failed to open iceoryx2 sign language detection state blackboard service: " + service_name);
+      throw std::runtime_error("Failed to open iceoryx2 app state blackboard service for sign language detection: " +
+                               service_name);
     }
 
     return std::move(service.value());
   }
 
-  auto IpcSignlangDetStateMonitor::read_state_from_blackboard() -> SignlangDetState {
-    auto entry_result = reader_.entry<SignlangDetState>(kDefaultStateKey);
+  auto IpcSignlangDetStateMonitor::create_reader(
+      const iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey>& service)
+      -> iox2::Reader<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey> {
+    auto reader = service.reader_builder().create();
+    if (!reader.has_value()) {
+      throw std::runtime_error("Failed to create iceoryx2 app state blackboard reader for sign language detection");
+    }
+
+    return std::move(reader.value());
+  }
+
+  auto IpcSignlangDetStateMonitor::read_state_from_blackboard() -> signlang::state_machine::AppState {
+    auto entry_result =
+        reader_.entry<signlang::state_machine::AppState>(signlang::state_machine::default_app_state_key());
     if (!entry_result.has_value()) {
-      return SignlangDetState::Disabled;
+      return signlang::state_machine::AppState::Normal;
     }
 
     auto entry = std::move(entry_result.value());

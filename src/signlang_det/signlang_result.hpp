@@ -10,22 +10,8 @@ namespace signlang::signlang_det {
   constexpr auto kKeypointCount = std::uint32_t{21};
   constexpr auto kMaxHandCount = std::uint32_t{2};
   constexpr auto kFeatureDimPerHand = std::uint32_t{63};
-  constexpr auto kFeatureDim = std::uint32_t{126};  // 2 hands * 63
+  constexpr auto kFeatureDim = std::uint32_t{126}; // 2 hands * 63
   constexpr auto kMaxGestureNameLength = std::uint32_t{64};
-
-  // Sign language detection enable/disable state stored in Blackboard
-  enum class SignlangDetState : std::uint32_t {
-    Enabled = 0,   // Sign language detection enabled
-    Disabled = 1,  // Sign language detection disabled
-  };
-
-  struct SignlangDetStateKey {
-    static constexpr const char* IOX2_TYPE_NAME = "signlang_det_state_key";
-    std::uint32_t id;
-
-    auto operator==(const SignlangDetStateKey& other) const -> bool { return id == other.id; }
-    auto operator!=(const SignlangDetStateKey& other) const -> bool { return id != other.id; }
-  };
 
   struct KeypointFeature {
     float normalized_x;
@@ -35,11 +21,11 @@ namespace signlang::signlang_det {
 
   struct HandFeatures {
     std::array<KeypointFeature, kKeypointCount> features;
-    bool present;  // Whether this hand slot has valid data
+    bool present; // Whether this hand slot has valid data
   };
 
   struct FeatureVector {
-    std::array<HandFeatures, kMaxHandCount> hands;  // hands[0]=left, hands[1]=right
+    std::array<HandFeatures, kMaxHandCount> hands; // hands[0]=left, hands[1]=right
     std::uint64_t source_sequence_number;
     std::uint64_t timestamp_ns;
   };
@@ -58,8 +44,6 @@ namespace signlang::signlang_det {
     std::array<char, kMaxGestureNameLength> gesture_name;
   };
 
-  static_assert(std::is_trivially_copyable_v<SignlangDetStateKey>);
-  static_assert(std::is_trivially_copyable_v<SignlangDetState>);
   static_assert(std::is_trivially_copyable_v<KeypointFeature>);
   static_assert(std::is_trivially_copyable_v<HandFeatures>);
   static_assert(std::is_trivially_copyable_v<FeatureVector>);

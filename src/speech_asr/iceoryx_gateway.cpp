@@ -19,8 +19,6 @@ namespace signlang::speech_asr {
       return parsed_service_name.value();
     }
 
-    constexpr AsrStateKey kDefaultStateKey{.id = 0};
-
   } // namespace
 
   IpcAudioSubscriber::IpcAudioSubscriber(const std::string& service_name, std::uint64_t subscriber_buffer_size) :
@@ -64,13 +62,11 @@ namespace signlang::speech_asr {
   }
 
   auto IpcAudioSubscriber::create_subscriber(const iox2::Node<iox2::ServiceType::Ipc>& node,
-                                             const std::string& service_name,
-                                             std::uint64_t subscriber_buffer_size)
+                                             const std::string& service_name, std::uint64_t subscriber_buffer_size)
       -> iox2::Subscriber<iox2::ServiceType::Ipc, signlang::audio_frontend::AudioFrame, void> {
-    auto service =
-        node.service_builder(service_name_from_string(service_name))
-            .publish_subscribe<signlang::audio_frontend::AudioFrame>()
-            .open_or_create();
+    auto service = node.service_builder(service_name_from_string(service_name))
+                       .publish_subscribe<signlang::audio_frontend::AudioFrame>()
+                       .open_or_create();
     if (!service.has_value()) {
       throw std::runtime_error("Failed to open or create iceoryx2 audio service: " + service_name);
     }
@@ -132,22 +128,21 @@ namespace signlang::speech_asr {
   IpcAsrStateMonitor::IpcAsrStateMonitor(const std::string& event_service_name,
                                          const std::string& blackboard_service_name) :
       node_{create_node()},
-      listener_{create_listener(node_, event_service_name)},
-      blackboard_service_{open_blackboard_service(node_, blackboard_service_name)},
-      reader_{blackboard_service_.reader_builder().create().value()},
-      cached_state_{AsrState::Disabled} {
+      listener_{create_listener(node_, event_service_name)}, blackboard_service_{open_blackboard_service(
+                                                                 node_, blackboard_service_name)},
+      reader_{create_reader(blackboard_service_)}, cached_state_{signlang::state_machine::AppState::Normal} {
     cached_state_ = read_state_from_blackboard();
   }
 
   auto IpcAsrStateMonitor::is_enabled() const -> bool {
-    return cached_state_ == AsrState::Enabled;
+    return cached_state_ == signlang::state_machine::AppState::Asr;
   }
 
   void IpcAsrStateMonitor::wait_for_state_change_blocking() {
     auto result = listener_.blocking_wait([](iox2::EventActivation /* event */) {});
 
     if (!result.has_value()) {
-      throw std::runtime_error("Failed to wait for ASR state change event");
+      throw std::runtime_error("Failed to wait for global app state change event in ASR");
     }
 
     cached_state_ = read_state_from_blackboard();
@@ -156,12 +151,10 @@ namespace signlang::speech_asr {
   auto IpcAsrStateMonitor::try_wait_for_state_change() -> bool {
     bool event_received = false;
 
-    auto result = listener_.try_wait([&event_received](iox2::EventActivation /* event */) {
-      event_received = true;
-    });
+    auto result = listener_.try_wait([&event_received](iox2::EventActivation /* event */) { event_received = true; });
 
     if (!result.has_value()) {
-      throw std::runtime_error("Failed to check for ASR state change event");
+      throw std::runtime_error("Failed to check for global app state change event in ASR");
     }
 
     if (event_received) {
@@ -183,18 +176,15 @@ namespace signlang::speech_asr {
   }
 
   auto IpcAsrStateMonitor::create_listener(const iox2::Node<iox2::ServiceType::Ipc>& node,
-                                           const std::string& service_name)
-      -> iox2::Listener<iox2::ServiceType::Ipc> {
-    auto service = node.service_builder(service_name_from_string(service_name))
-                       .event()
-                       .open_or_create();
+                                           const std::string& service_name) -> iox2::Listener<iox2::ServiceType::Ipc> {
+    auto service = node.service_builder(service_name_from_string(service_name)).event().open_or_create();
     if (!service.has_value()) {
-      throw std::runtime_error("Failed to open or create iceoryx2 ASR state change event service: " + service_name);
+      throw std::runtime_error("Failed to open or create iceoryx2 app state event service for ASR: " + service_name);
     }
 
     auto listener = service.value().listener_builder().create();
     if (!listener.has_value()) {
-      throw std::runtime_error("Failed to create iceoryx2 ASR state change listener for service: " + service_name);
+      throw std::runtime_error("Failed to create iceoryx2 app state listener for ASR service: " + service_name);
     }
 
     return std::move(listener.value());
@@ -202,21 +192,33 @@ namespace signlang::speech_asr {
 
   auto IpcAsrStateMonitor::open_blackboard_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
                                                    const std::string& service_name)
-      -> iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, AsrStateKey> {
+      -> iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey> {
     auto service = node.service_builder(service_name_from_string(service_name))
-                       .blackboard_opener<AsrStateKey>()
+                       .blackboard_opener<signlang::state_machine::AppStateKey>()
                        .open();
     if (!service.has_value()) {
-      throw std::runtime_error("Failed to open iceoryx2 ASR state blackboard service: " + service_name);
+      throw std::runtime_error("Failed to open iceoryx2 app state blackboard service for ASR: " + service_name);
     }
 
     return std::move(service.value());
   }
 
-  auto IpcAsrStateMonitor::read_state_from_blackboard() -> AsrState {
-    auto entry_result = reader_.entry<AsrState>(kDefaultStateKey);
+  auto IpcAsrStateMonitor::create_reader(
+      const iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey>& service)
+      -> iox2::Reader<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey> {
+    auto reader = service.reader_builder().create();
+    if (!reader.has_value()) {
+      throw std::runtime_error("Failed to create iceoryx2 app state blackboard reader for ASR");
+    }
+
+    return std::move(reader.value());
+  }
+
+  auto IpcAsrStateMonitor::read_state_from_blackboard() -> signlang::state_machine::AppState {
+    auto entry_result =
+        reader_.entry<signlang::state_machine::AppState>(signlang::state_machine::default_app_state_key());
     if (!entry_result.has_value()) {
-      return AsrState::Disabled;
+      return signlang::state_machine::AppState::Normal;
     }
 
     auto entry = std::move(entry_result.value());

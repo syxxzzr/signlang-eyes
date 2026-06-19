@@ -21,9 +21,12 @@ namespace signlang::handpose_det {
         "signlang_eyes_handpose_det",
         "Subscribe video frames from iceoryx2, run YOLOv8 hand pose on RKNN NPU, and publish hand keypoints."};
 
-    options.add_options()("i,input-service", "Upstream video iceoryx2 service name",
-                          cxxopts::value<std::string>())(
+    options.add_options()("i,input-service", "Upstream video iceoryx2 service name", cxxopts::value<std::string>())(
         "o,output-service", "Output handpose iceoryx2 service name", cxxopts::value<std::string>())(
+        "state-event-service", "iceoryx2 event service name for global app state change notifications",
+        cxxopts::value<std::string>())("state-blackboard-service",
+                                       "iceoryx2 blackboard service name for global app state storage",
+                                       cxxopts::value<std::string>())(
         "m,model", "RKNN model path", cxxopts::value<std::string>()->default_value(kDefaultModelPath))(
         "rknn-runtime", "RKNN runtime library path, empty means librknnrt.so from system loader",
         cxxopts::value<std::string>()->default_value(""))(
@@ -45,8 +48,11 @@ namespace signlang::handpose_det {
       return ProgramUsage{.text = options.help()};
     }
 
-    if (parsed_options.count("input-service") == 0 || parsed_options.count("output-service") == 0) {
-      throw std::runtime_error("Both --input-service and --output-service are required.\n\n" + options.help());
+    if (parsed_options.count("input-service") == 0 || parsed_options.count("output-service") == 0 ||
+        parsed_options.count("state-event-service") == 0 || parsed_options.count("state-blackboard-service") == 0) {
+      throw std::runtime_error("Options --input-service, --output-service, --state-event-service, and "
+                               "--state-blackboard-service are required.\n\n" +
+                               options.help());
     }
 
     const auto confidence_threshold = parsed_options["confidence"].as<float>();
@@ -72,6 +78,8 @@ namespace signlang::handpose_det {
     return ProgramOptionsParseResult{ProgramOptions{
         .input_service_name = parsed_options["input-service"].as<std::string>(),
         .output_service_name = parsed_options["output-service"].as<std::string>(),
+        .state_event_service_name = parsed_options["state-event-service"].as<std::string>(),
+        .state_blackboard_service_name = parsed_options["state-blackboard-service"].as<std::string>(),
         .model_path = parsed_options["model"].as<std::string>(),
         .rknn_runtime_library_path = parsed_options["rknn-runtime"].as<std::string>(),
         .confidence_threshold = confidence_threshold,

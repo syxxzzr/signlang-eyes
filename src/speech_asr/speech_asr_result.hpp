@@ -18,24 +18,6 @@ namespace signlang::speech_asr {
     Chinese = 1,
   };
 
-  // ASR enable/disable state stored in Blackboard
-  // TODO: Replace placeholder value 0 with actual enabled state identifier
-  enum class AsrState : std::uint32_t {
-    Enabled = 0,   // ASR enabled (currently using 0 as placeholder)
-    Disabled = 1,  // ASR disabled
-  };
-
-  struct AsrStateKey {
-    static constexpr const char* IOX2_TYPE_NAME = "signlang_speech_asr_state_key";
-    std::uint32_t id;
-
-    auto operator==(const AsrStateKey& other) const -> bool { return id == other.id; }
-    auto operator!=(const AsrStateKey& other) const -> bool { return id != other.id; }
-  };
-
-  static_assert(std::is_trivially_copyable_v<AsrStateKey>);
-  static_assert(std::is_trivially_copyable_v<AsrState>);
-
   struct SpeechAsrResult {
     static constexpr const char* IOX2_TYPE_NAME = "signlang_speech_asr_result";
 
@@ -65,8 +47,6 @@ namespace signlang::speech_asr {
     std::array<char, kMaxTranscriptLength> transcript;
   };
 
-  static_assert(std::is_trivially_copyable_v<AsrStateKey>);
-  static_assert(std::is_trivially_copyable_v<AsrState>);
   static_assert(std::is_trivially_copyable_v<SpeechAsrResult>);
 
   auto language_code(AsrLanguage language) -> const char*;
