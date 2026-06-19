@@ -23,9 +23,8 @@ public:
 
   void push(const FeatureVector& feature);
 
-  auto wait_for_size(std::uint32_t min_size, const std::atomic_bool& should_stop) -> bool;
-
-  auto get_window(std::uint32_t window_size)
+  auto wait_for_window(std::uint32_t window_size, std::uint64_t min_end_sequence,
+                       const std::atomic_bool& should_stop)
     -> std::optional<std::vector<FeatureVector>>;
 
   void clear();
@@ -41,6 +40,9 @@ private:
   std::uint32_t capacity_;
   mutable std::mutex mutex_;
   std::condition_variable changed_;
+
+  auto latest_window_end_sequence_locked(std::uint32_t window_size) const -> std::optional<std::uint64_t>;
+  auto copy_latest_window_locked(std::uint32_t window_size) const -> std::vector<FeatureVector>;
 };
 
 auto compute_buffer_capacity(std::uint32_t sequence_length, float overlap_ratio)

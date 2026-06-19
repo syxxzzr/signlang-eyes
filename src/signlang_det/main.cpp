@@ -6,6 +6,7 @@
 #include "signlang_result.hpp"
 
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <csignal>
 #include <exception>
@@ -95,9 +96,9 @@ namespace {
     auto state_monitor = IpcSignlangDetStateMonitor{options.state_event_service_name,
                                                      options.state_blackboard_service_name};
 
-    const auto hop_frames = static_cast<std::uint32_t>(
-      options.sequence_length * (1.0f - options.overlap_ratio));
-    auto last_processed_seq = std::uint64_t{0};
+    const auto hop_frames = std::max<std::uint32_t>(
+      1, static_cast<std::uint32_t>(options.sequence_length * (1.0f - options.overlap_ratio)));
+    auto next_window_end_seq = std::uint64_t{hop_frames};
 
     while (!should_stop) {
       // Check for state changes before waiting for buffer
@@ -116,46 +117,39 @@ namespace {
         }
         // Discard stale data accumulated during disabled period
         ring_buffer.clear();
-        last_processed_seq = 0;
+        next_window_end_seq = hop_frames;
         continue;
       }
 
-      if (!ring_buffer.wait_for_size(options.sequence_length, should_stop)) {
+      auto window = ring_buffer.wait_for_window(options.sequence_length, next_window_end_seq, should_stop);
+      if (!window.has_value()) {
         break;
       }
 
-      auto window = ring_buffer.get_window(options.sequence_length);
-      if (!window.has_value()) {
-        continue;
-      }
-
       const auto window_end_seq = window->back().source_sequence_number;
-      if (window_end_seq < last_processed_seq + hop_frames) {
-        continue;
-      }
-
       try {
         const auto inference_result = model.infer(*window);
 
         // Apply confidence threshold
         if (inference_result.confidence < options.confidence_threshold) {
-          last_processed_seq = window_end_seq;
+          next_window_end_seq = window_end_seq + hop_frames;
           continue;
         }
 
         // Apply confidence margin check (reject if top1 and top2 are too close)
         const auto margin = inference_result.confidence - inference_result.second_confidence;
         if (margin < options.confidence_margin) {
-          last_processed_seq = window_end_seq;
+          next_window_end_seq = window_end_seq + hop_frames;
           continue;
         }
 
         const auto result = build_result(*window, inference_result, options, model);
         publisher.publish(result);
 
-        last_processed_seq = window_end_seq;
+        next_window_end_seq = window_end_seq + hop_frames;
       } catch (const std::exception& e) {
         std::cerr << "Inference error: " << e.what() << '\n';
+        next_window_end_seq = window_end_seq + hop_frames;
       }
     }
   }
