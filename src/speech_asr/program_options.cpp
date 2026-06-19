@@ -73,14 +73,12 @@ namespace signlang::speech_asr {
 
     options.add_options()("i,input-service", "iceoryx2 audio input publish-subscribe service name",
                           cxxopts::value<std::string>())(
-        "o,output-service", "iceoryx2 ASR result publish-subscribe service name",
-        cxxopts::value<std::string>())(
-        "state-event-service", "iceoryx2 event service name for ASR state change notifications",
-        cxxopts::value<std::string>())(
-        "state-blackboard-service", "iceoryx2 blackboard service name for ASR state storage",
-        cxxopts::value<std::string>())(
-        "language", "ASR recognition language: en or zh",
-        cxxopts::value<std::string>()->default_value("en"))(
+        "o,output-service", "iceoryx2 ASR result publish-subscribe service name", cxxopts::value<std::string>())(
+        "state-event-service", "iceoryx2 event service name for global app state change notifications",
+        cxxopts::value<std::string>())("state-blackboard-service",
+                                       "iceoryx2 blackboard service name for global app state storage",
+                                       cxxopts::value<std::string>())(
+        "language", "ASR recognition language: en or zh", cxxopts::value<std::string>()->default_value("en"))(
         "encoder-model", "Whisper encoder RKNN model path",
         cxxopts::value<std::string>()->default_value(kDefaultEncoderModelPath))(
         "decoder-model", "Whisper decoder RKNN model path",
@@ -101,11 +99,10 @@ namespace signlang::speech_asr {
         cxxopts::value<std::uint64_t>()->default_value(std::to_string(kDefaultSubscriberBufferSize)))(
         "npu-core", "Default RK3588 NPU core mask for both encoder and decoder: auto, all, 0, 1, 2, 0_1, 0_1_2",
         cxxopts::value<std::string>()->default_value("auto"))(
-        "encoder-npu-core", "RK3588 NPU core mask for encoder; overrides --npu-core",
-        cxxopts::value<std::string>())("decoder-npu-core", "RK3588 NPU core mask for decoder; overrides --npu-core",
-                                       cxxopts::value<std::string>())(
-        "rknn-priority", "RKNN context priority: high, medium, low",
-        cxxopts::value<std::string>()->default_value("medium"))("h,help", "Print usage");
+        "encoder-npu-core", "RK3588 NPU core mask for encoder; overrides --npu-core", cxxopts::value<std::string>())(
+        "decoder-npu-core", "RK3588 NPU core mask for decoder; overrides --npu-core",
+        cxxopts::value<std::string>())("rknn-priority", "RKNN context priority: high, medium, low",
+                                       cxxopts::value<std::string>()->default_value("medium"))("h,help", "Print usage");
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
@@ -156,12 +153,12 @@ namespace signlang::speech_asr {
     }
 
     const auto default_npu_core = parsed_options["npu-core"].as<std::string>();
-    const auto encoder_npu_core =
-        parsed_options.count("encoder-npu-core") != 0 ? parsed_options["encoder-npu-core"].as<std::string>()
-                                                      : default_npu_core;
-    const auto decoder_npu_core =
-        parsed_options.count("decoder-npu-core") != 0 ? parsed_options["decoder-npu-core"].as<std::string>()
-                                                      : default_npu_core;
+    const auto encoder_npu_core = parsed_options.count("encoder-npu-core") != 0
+        ? parsed_options["encoder-npu-core"].as<std::string>()
+        : default_npu_core;
+    const auto decoder_npu_core = parsed_options.count("decoder-npu-core") != 0
+        ? parsed_options["decoder-npu-core"].as<std::string>()
+        : default_npu_core;
 
     return ProgramOptionsParseResult{ProgramOptions{
         .audio_service_name = parsed_options["input-service"].as<std::string>(),

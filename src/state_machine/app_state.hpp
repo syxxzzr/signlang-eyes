@@ -24,7 +24,7 @@ namespace signlang::state_machine {
   static_assert(std::is_trivially_copyable_v<AppState>);
   static_assert(std::is_trivially_copyable_v<AppStateKey>);
 
-  auto default_app_state_key() -> AppStateKey;
+  constexpr auto default_app_state_key() -> AppStateKey { return AppStateKey{.id = 0}; }
   auto app_state_name(AppState state) -> const char*;
 
 } // namespace signlang::state_machine

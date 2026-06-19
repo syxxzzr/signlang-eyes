@@ -2,8 +2,6 @@
 
 namespace signlang::state_machine {
 
-  auto default_app_state_key() -> AppStateKey { return AppStateKey{.id = 0}; }
-
   auto app_state_name(AppState state) -> const char* {
     switch (state) {
     case AppState::Normal:
