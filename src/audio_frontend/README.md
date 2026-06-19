@@ -4,7 +4,7 @@
 
 The **audio_frontend** module captures raw PCM audio from an ALSA audio device (e.g., microphone) and publishes it as `AudioFrame` messages over an iceoryx2 publish-subscribe service. It supports optional single-channel Wiener (spectral subtraction) denoising, channel downmixing, and sample-rate conversion.
 
-- **Executable**: `signlang_eyes_edgeai_audio_frontend`
+- **Executable**: `audio_frontend` (installed under `bin/`)
 - **IPC Pattern**: Publish-Subscribe (producer)
 - **Input**: ALSA capture device (PCM, 16-bit signed integer)
 - **Output**: `signlang::audio_frontend::AudioFrame` on iceoryx2
@@ -76,7 +76,7 @@ Each published `AudioFrame` carries:
 - Sample rate, channel count, bits per sample
 - Timestamp (nanoseconds) and sequence number
 - Publish period and frame sample count
-- Raw PCM sample data as a slice
+- Raw PCM sample data in the fixed-size `samples` array
 
 ## Dependencies
 
@@ -88,12 +88,12 @@ Each published `AudioFrame` carries:
 
 ```bash
 # Basic usage — capture from default mic, publish at 16 kHz mono
-./signlang_eyes_edgeai_audio_frontend \
+./audio_frontend \
     --device hw:0,0 \
     --service audio_capture
 
 # With custom format and denoising
-./signlang_eyes_edgeai_audio_frontend \
+./audio_frontend \
     --device hw:0,0 \
     --service audio_capture \
     --capture-rate 48000 \

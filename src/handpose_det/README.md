@@ -4,10 +4,10 @@
 
 The **handpose_det** module performs real-time hand detection and 21-keypoint localization using a YOLOv8 nano model running on the RKNN NPU. It subscribes to video frames, runs inference with letterbox preprocessing and NMS post-processing, and publishes hand detection results. Supports dual-hand detection with configurable confidence and IoU thresholds.
 
-- **Executable**: `signlang_eyes_edgeai_handpose_det`
+- **Executable**: `handpose_det` (installed under `bin/`)
 - **IPC Pattern**: Publish-Subscribe (subscriber + publisher) + Event/Blackboard (state control)
-- **Input**: `signlang::video_frontend::VideoFrame` from iceoryx2
-- **Output**: `signlang::handpose_det::HandPoseDetection` on iceoryx2
+- **Input**: video byte slice with `signlang::video_frontend::VideoFrameMetadata` user header from iceoryx2
+- **Output**: `iox2::bb::Slice<signlang::handpose_det::HandPoseDetection>` with `HandPoseFrameMetadata` user header on iceoryx2
 - **Model**: YOLOv8 nano hand-pose (anchor-free, RKNN-accelerated)
 
 ## File Inventory
@@ -103,11 +103,11 @@ Uses the standard MediaPipe-compatible hand landmark layout:
 ## Usage Example
 
 ```bash
-./signlang_eyes_edgeai_handpose_det \
+./handpose_det \
     --input-service video_capture \
     --output-service handpose_result \
-    --state-event-service handpose_state_event \
-    --state-blackboard-service handpose_state_blackboard \
+    --state-event-service app_state_event \
+    --state-blackboard-service app_state_blackboard \
     --confidence 0.5 \
     --nms 0.4 \
     --max-detections 2 \

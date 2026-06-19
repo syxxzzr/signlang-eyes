@@ -4,9 +4,9 @@
 
 The **signlang_det** module performs real-time dual-hand sign language recognition using a hybrid BiLSTM + DTW (Dynamic Time Warping) architecture. It subscribes to hand pose detection results, extracts 126-dimensional spatial-temporal features, encodes them with a BiLSTM on the RKNN NPU, and matches the resulting embeddings against pre-recorded gesture prototypes using DTW for speed-invariant recognition.
 
-- **Executable**: `signlang_eyes_edgeai_signlang_det`
+- **Executable**: `signlang_det` (installed under `bin/`)
 - **IPC Pattern**: Publish-Subscribe (subscriber + publisher) + Event/Blackboard (state control)
-- **Input**: `signlang::handpose_det::HandPoseDetection` from iceoryx2
+- **Input**: `iox2::bb::Slice<signlang::handpose_det::HandPoseDetection>` with `HandPoseFrameMetadata` user header from iceoryx2
 - **Output**: `signlang::signlang_det::SignlangResult` on iceoryx2
 - **Model**: BiLSTM encoder (RKNN NPU) + DTW matching (CPU)
 
@@ -78,8 +78,8 @@ Each frame produces a 126-dim feature vector (2 hands × 21 keypoints × 3 chann
 
 | Channel | Formula | Description |
 |---------|---------|-------------|
-| `normalized_x` | `(kp.x − wrist.x) / bbox_width` | X-coordinate relative to wrist, normalized by hand bounding box |
-| `normalized_y` | `(kp.y − wrist.y) / bbox_height` | Y-coordinate relative to wrist, normalized by hand bounding box |
+| `normalized_x` | `(kp.x − wrist.x) / scale` | X-coordinate relative to wrist, normalized by the maximum wrist-relative keypoint distance |
+| `normalized_y` | `(kp.y − wrist.y) / scale` | Y-coordinate relative to wrist, normalized by the same scale as X |
 | `velocity_magnitude` | `‖(x_t, y_t) − (x_{t−1}, y_{t−1})‖ × motion_weight` | Frame-to-frame motion speed, scaled by motion weight |
 
 ### Hand Tracking
@@ -114,11 +114,11 @@ Each frame produces a 126-dim feature vector (2 hands × 21 keypoints × 3 chann
 ## Usage Example
 
 ```bash
-./signlang_eyes_edgeai_signlang_det \
+./signlang_det \
     --input-service handpose_result \
     --output-service signlang_result \
-    --state-event-service signlang_state_event \
-    --state-blackboard-service signlang_state_blackboard \
+    --state-event-service app_state_event \
+    --state-blackboard-service app_state_blackboard \
     --model models/signlang/signlang.rknn \
     --label-map models/signlang/labels.txt \
     --prototypes models/signlang/prototypes.bin \

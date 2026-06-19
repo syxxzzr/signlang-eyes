@@ -4,7 +4,7 @@
 
 The **speech_asr** module performs real-time speech-to-text recognition using an OpenAI Whisper base model running on the RKNN NPU. It subscribes to audio frames, processes them through a sliding-window log-Mel spectrogram pipeline, runs encoder-decoder inference, and publishes transcription results. Supports English and Chinese languages with configurable state-based enable/disable control.
 
-- **Executable**: `signlang_eyes_edgeai_speech_asr`
+- **Executable**: `speech_asr` (installed under `bin/`)
 - **IPC Pattern**: Publish-Subscribe (subscriber + publisher) + Event/Blackboard (state control)
 - **Input**: `signlang::audio_frontend::AudioFrame` from iceoryx2
 - **Output**: `signlang::speech_asr::SpeechAsrResult` on iceoryx2
@@ -81,18 +81,18 @@ The **speech_asr** module performs real-time speech-to-text recognition using an
 ### State Control
 
 The module uses iceoryx2 Event + Blackboard pattern for enable/disable control:
-- When **disabled**: Blocks indefinitely on event FD (zero CPU)
+- When **disabled**: Polls for state changes and sleeps briefly between checks
 - When **enabled**: Non-blocking event check before each inference cycle
 - Language is set at startup via `--language` flag
 
 ## Usage Example
 
 ```bash
-./signlang_eyes_edgeai_speech_asr \
+./speech_asr \
     --input-service audio_capture \
     --output-service speech_asr_result \
-    --state-event-service asr_state_event \
-    --state-blackboard-service asr_state_blackboard \
+    --state-event-service app_state_event \
+    --state-blackboard-service app_state_blackboard \
     --language en \
     --window-ms 15000 \
     --overlap 0.2 \

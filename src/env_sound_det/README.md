@@ -4,7 +4,7 @@
 
 The **env_sound_det** module performs real-time environmental sound classification using Google's YAMNet (MobileNetV1-based) model running on the RKNN NPU. It subscribes to audio frames, processes them through a sliding window, runs inference, and publishes the top-K class scores. It uses iceoryx2 Request-Response for state control, including special support for horn/dangerous-sound state reporting.
 
-- **Executable**: `signlang_eyes_edgeai_env_sound_det`
+- **Executable**: `env_sound_det` (installed under `bin/`)
 - **IPC Pattern**: Publish-Subscribe (subscriber + publisher) + Request-Response (state control)
 - **Input**: `signlang::audio_frontend::AudioFrame` from iceoryx2
 - **Output**: `signlang::env_sound_det::EnvSoundDetectionResult` on iceoryx2
@@ -74,7 +74,7 @@ The **env_sound_det** module performs real-time environmental sound classificati
 
 ### State Control (Dangerous Sound Detection)
 
-When the module detects specific high-priority sounds (e.g., car horn, emergency vehicle), it can request a `DangerousSound` state change via the iceoryx2 Request-Response control service. Horn detections trigger a special state request to notify other modules.
+When the module detects one of the configured horn labels (`Air horn, truck horn`, `Vehicle horn, car horn, honking`, or `Train horn`), it requests a `DangerousSound` state change via the iceoryx2 Request-Response control service.
 
 ### Class Examples
 
@@ -82,17 +82,20 @@ When the module detects specific high-priority sounds (e.g., car horn, emergency
 |----|-------|
 | 0 | Speech |
 | 6 | Shout |
-| 132 | Fire |
-| 137 | Emergency vehicle |
-| 407 | Car alarm |
-| 420 | Gunshot, gunfire |
+| 292 | Fire |
+| 302 | Vehicle horn, car horn, honking |
+| 304 | Car alarm |
+| 312 | Air horn, truck horn |
+| 316 | Emergency vehicle |
+| 325 | Train horn |
+| 421 | Gunshot, gunfire |
 
 See `models/yamnet/yamnet_class_map.txt` for all 521 classes.
 
 ## Usage Example
 
 ```bash
-./signlang_eyes_edgeai_env_sound_det \
+./env_sound_det \
     --input-service audio_capture \
     --output-service env_sound_result \
     --state-control-service app_state_control \

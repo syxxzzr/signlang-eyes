@@ -4,7 +4,7 @@
 
 The **state_machine** module is the central application state controller for the sign language edge AI system. It manages the global application state (Normal, ASR, SignLanguageChat, SignLanguageAi, DangerousSound) and distributes state changes to all other modules via iceoryx2 Event + Blackboard notification. It also accepts state change requests from other modules via a Request-Response service, with special-state timeout handling.
 
-- **Executable**: `signlang_eyes_state_machine`
+- **Executable**: `state_machine` (installed under `bin/`)
 - **IPC Pattern**: Event (state change notification) + Blackboard (state storage) + Request-Response (state control)
 - **Input**: `StateControlRequest` via iceoryx2 Request-Response
 - **Output**: `AppState` on Event + Blackboard services
@@ -23,7 +23,7 @@ The **state_machine** module is the central application state controller for the
 
 | State | Value | Type | Description |
 |-------|-------|------|-------------|
-| `Normal` | `0` | Base | Default idle state; all modules active with normal priority |
+| `Normal` | `0` | Base | Default idle state; ASR and sign-language inference modules remain disabled until their active states are selected |
 | `Asr` | `1` | Base | Speech recognition mode; ASR module prioritized |
 | `SignLanguageChat` | `2` | Base | Sign language chat mode; sign language recognition active |
 | `SignLanguageAi` | `3` | Base | Sign language AI interaction mode |
@@ -92,7 +92,7 @@ state_machine                              other modules
 
 ```bash
 # Start the state machine (typically first in the startup sequence)
-./signlang_eyes_state_machine \
+./state_machine \
     --state-event-service app_state_event \
     --state-blackboard-service app_state_blackboard \
     --state-control-service app_state_control
@@ -104,29 +104,29 @@ The state_machine should be started before other modules that depend on it:
 
 ```bash
 # 1. Start state machine
-./signlang_eyes_state_machine \
+./state_machine \
     --state-event-service app_state_event \
     --state-blackboard-service app_state_blackboard \
     --state-control-service app_state_control &
 
 # 2. Start audio/video frontends
-./signlang_eyes_edgeai_audio_frontend --device hw:0,0 --service audio_capture &
-./signlang_eyes_edgeai_video_frontend --device /dev/video0 --service video_capture &
+./audio_frontend --device hw:0,0 --service audio_capture &
+./video_frontend --device /dev/video0 --service video_capture &
 
 # 3. Start inference modules (each references the same state services)
-./signlang_eyes_edgeai_speech_asr \
+./speech_asr \
     --input-service audio_capture --output-service speech_asr_result \
     --state-event-service app_state_event --state-blackboard-service app_state_blackboard &
 
-./signlang_eyes_edgeai_env_sound_det \
+./env_sound_det \
     --input-service audio_capture --output-service env_sound_result \
     --state-control-service app_state_control &
 
-./signlang_eyes_edgeai_handpose_det \
+./handpose_det \
     --input-service video_capture --output-service handpose_result \
     --state-event-service app_state_event --state-blackboard-service app_state_blackboard &
 
-./signlang_eyes_edgeai_signlang_det \
+./signlang_det \
     --input-service handpose_result --output-service signlang_result \
     --state-event-service app_state_event --state-blackboard-service app_state_blackboard &
 ```
