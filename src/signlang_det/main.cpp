@@ -7,11 +7,9 @@
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <csignal>
 #include <exception>
 #include <iostream>
-#include <mutex>
 #include <thread>
 #include <variant>
 
@@ -57,8 +55,6 @@ namespace {
   void receiver_loop(
     const signlang::signlang_det::ProgramOptions& options,
     signlang::signlang_det::KeypointRingBuffer& ring_buffer,
-    std::mutex& buffer_mutex,
-    std::condition_variable& buffer_cv,
     const std::atomic<bool>& should_stop)
   {
     using signlang::signlang_det::IpcHandposeSubscriber;
@@ -72,11 +68,7 @@ namespace {
       const auto received = subscriber.receive_latest(
         [&](const auto& metadata, const auto* detections, auto count) {
           if (auto feature = extractor.extract(metadata, detections, count)) {
-            {
-              const auto lock = std::lock_guard{buffer_mutex};
-              ring_buffer.push(*feature);
-            }
-            buffer_cv.notify_one();
+            ring_buffer.push(*feature);
           }
         });
 
@@ -89,8 +81,6 @@ namespace {
   void inference_loop(
     const signlang::signlang_det::ProgramOptions& options,
     signlang::signlang_det::KeypointRingBuffer& ring_buffer,
-    std::mutex& buffer_mutex,
-    std::condition_variable& buffer_cv,
     const std::atomic<bool>& should_stop)
   {
     using signlang::signlang_det::SignlangModel;
@@ -130,12 +120,7 @@ namespace {
         continue;
       }
 
-      auto lock = std::unique_lock{buffer_mutex};
-      buffer_cv.wait(lock, [&] {
-        return should_stop.load() || ring_buffer.size() >= options.sequence_length;
-      });
-
-      if (should_stop) {
+      if (!ring_buffer.wait_for_size(options.sequence_length, should_stop)) {
         break;
       }
 
@@ -148,8 +133,6 @@ namespace {
       if (window_end_seq < last_processed_seq + hop_frames) {
         continue;
       }
-
-      lock.unlock();
 
       try {
         const auto inference_result = model.infer(*window);
@@ -199,16 +182,14 @@ auto main(int argc, char** argv) -> int {
     const auto buffer_capacity = compute_buffer_capacity(
       options.sequence_length, options.overlap_ratio);
     auto ring_buffer = KeypointRingBuffer{buffer_capacity};
-    auto buffer_mutex = std::mutex{};
-    auto buffer_cv = std::condition_variable{};
     auto should_stop = std::atomic<bool>{false};
 
     auto receiver_thread = std::thread{[&]() {
-      receiver_loop(options, ring_buffer, buffer_mutex, buffer_cv, should_stop);
+      receiver_loop(options, ring_buffer, should_stop);
     }};
 
     auto inference_thread = std::thread{[&]() {
-      inference_loop(options, ring_buffer, buffer_mutex, buffer_cv, should_stop);
+      inference_loop(options, ring_buffer, should_stop);
     }};
 
     while (g_should_stop == 0) {
@@ -216,7 +197,7 @@ auto main(int argc, char** argv) -> int {
     }
 
     should_stop = true;
-    buffer_cv.notify_all();
+    ring_buffer.notify_stop();
 
     receiver_thread.join();
     inference_thread.join();

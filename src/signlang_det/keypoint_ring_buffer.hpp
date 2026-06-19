@@ -3,6 +3,8 @@
 
 #include "signlang_result.hpp"
 
+#include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <mutex>
 #include <optional>
@@ -21,10 +23,13 @@ public:
 
   void push(const FeatureVector& feature);
 
+  auto wait_for_size(std::uint32_t min_size, const std::atomic_bool& should_stop) -> bool;
+
   auto get_window(std::uint32_t window_size)
     -> std::optional<std::vector<FeatureVector>>;
 
   void clear();
+  void notify_stop();
 
   auto size() const -> std::uint32_t;
   auto capacity() const -> std::uint32_t;
@@ -35,6 +40,7 @@ private:
   std::uint32_t count_{0};
   std::uint32_t capacity_;
   mutable std::mutex mutex_;
+  std::condition_variable changed_;
 };
 
 auto compute_buffer_capacity(std::uint32_t sequence_length, float overlap_ratio)
