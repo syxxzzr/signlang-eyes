@@ -4,9 +4,7 @@
 #include "audio_frontend/audio_frame.hpp"
 
 #include <atomic>
-#include <condition_variable>
 #include <cstdint>
-#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -43,22 +41,22 @@ namespace signlang::speech_asr {
 
   private:
     static auto accepts_metadata(const signlang::audio_frontend::AudioFrame& frame) -> bool;
-    void append_sample(float sample);
-    auto align_to_available_window(std::uint64_t requested_start_sample_index, std::uint64_t hop_sample_count) const
-        -> std::uint64_t;
+    static auto align_to_available_window(std::uint64_t requested_start_sample_index,
+                                          std::uint64_t available_start_sample_index,
+                                          std::uint64_t hop_sample_count) -> std::uint64_t;
+    void wait_for_samples(std::uint64_t observed_wake_sequence, const std::atomic_bool& should_stop) const;
 
-    std::vector<float> samples_;
-    mutable std::mutex mutex_;
-    std::condition_variable samples_changed_;
-    std::uint64_t start_sample_index_;
-    std::uint64_t next_sample_index_;
-    std::uint64_t latest_audio_sequence_number_;
-    std::uint64_t latest_audio_timestamp_ns_;
-    std::uint32_t latest_audio_sample_rate_hz_;
-    std::uint32_t latest_audio_publish_period_ms_;
-    std::uint32_t latest_audio_frame_count_;
-    std::uint16_t latest_audio_channel_count_;
-    std::uint16_t latest_audio_bits_per_sample_;
+    std::vector<std::atomic<float>> samples_;
+    std::atomic_uint64_t start_sample_index_;
+    std::atomic_uint64_t next_sample_index_;
+    mutable std::atomic_uint64_t wake_sequence_;
+    std::atomic_uint64_t latest_audio_sequence_number_;
+    std::atomic_uint64_t latest_audio_timestamp_ns_;
+    std::atomic_uint32_t latest_audio_sample_rate_hz_;
+    std::atomic_uint32_t latest_audio_publish_period_ms_;
+    std::atomic_uint32_t latest_audio_frame_count_;
+    std::atomic<std::uint16_t> latest_audio_channel_count_;
+    std::atomic<std::uint16_t> latest_audio_bits_per_sample_;
   };
 
   auto samples_for_window_ms(std::uint32_t sample_rate_hz, std::uint32_t window_ms) -> std::uint64_t;
