@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(signlang_eyes_edgeai LANGUAGES CXX C)
+project(signlang_eyes LANGUAGES CXX C)
 
 # This project ONLY supports aarch64 target platform
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
@@ -26,11 +26,7 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -no-pie")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-pie")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-pie")
 
-option(SIGNLANG_ENABLE_TESTS "Build signlang-eyes-edgeai test executables" ON)
-
-if(SIGNLANG_ENABLE_TESTS)
-    enable_testing()
-endif()
+option(SIGNLANG_ENABLE_TESTS "Build signlang-eyes manual integration test executables" ON)
 
 set(SIGNLANG_MODEL_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/models CACHE PATH "Local root directory for model assets")
 
@@ -41,6 +37,11 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 add_library(cxxopts INTERFACE)
 target_include_directories(cxxopts INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/cxxopts/include)
 add_library(cxxopts::cxxopts ALIAS cxxopts)
+
+# toml++
+add_library(tomlplusplus INTERFACE)
+target_include_directories(tomlplusplus INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tomlplusplus/include)
+add_library(tomlplusplus::tomlplusplus ALIAS tomlplusplus)
 
 # iceoryx2
 list(APPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/third_party/iceoryx2)
@@ -83,3 +84,8 @@ install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/iceoryx2/lib/libiceoryx2_ffi_c.so
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/rknn_runtime/lib/aarch64/librknnrt.so
     DESTINATION lib)
+
+# Install default launcher configuration
+install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/conf/conf.toml
+    DESTINATION conf)

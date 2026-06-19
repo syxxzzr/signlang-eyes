@@ -1,5 +1,5 @@
-#ifndef SIGNLANG_EYES_EDGEAI_SIGNLANG_DET_PROGRAM_OPTIONS_HPP
-#define SIGNLANG_EYES_EDGEAI_SIGNLANG_DET_PROGRAM_OPTIONS_HPP
+#ifndef SIGNLANG_EYES_SIGNLANG_DET_PROGRAM_OPTIONS_HPP
+#define SIGNLANG_EYES_SIGNLANG_DET_PROGRAM_OPTIONS_HPP
 
 #include "rknn_api.h"
 
@@ -51,4 +51,4 @@ auto parse_npu_core_mask(const std::string& core_str) -> rknn_core_mask;
 
 } // namespace signlang::signlang_det
 
-#endif // SIGNLANG_EYES_EDGEAI_SIGNLANG_DET_PROGRAM_OPTIONS_HPP
+#endif // SIGNLANG_EYES_SIGNLANG_DET_PROGRAM_OPTIONS_HPP

@@ -1,5 +1,5 @@
-#ifndef SIGNLANG_EYES_EDGEAI_SPEECH_ASR_AUDIO_RING_BUFFER_HPP
-#define SIGNLANG_EYES_EDGEAI_SPEECH_ASR_AUDIO_RING_BUFFER_HPP
+#ifndef SIGNLANG_EYES_SPEECH_ASR_AUDIO_RING_BUFFER_HPP
+#define SIGNLANG_EYES_SPEECH_ASR_AUDIO_RING_BUFFER_HPP
 
 #include "audio_frontend/audio_frame.hpp"
 
@@ -38,6 +38,7 @@ namespace signlang::speech_asr {
     auto wait_for_window(std::optional<std::uint64_t>& requested_start_sample_index,
                          std::uint64_t window_sample_count, std::uint64_t hop_sample_count,
                          const std::atomic_bool& should_stop, AudioWindow& output_window) -> bool;
+    void clear();
     void notify_stop();
 
   private:
@@ -65,4 +66,4 @@ namespace signlang::speech_asr {
 
 } // namespace signlang::speech_asr
 
-#endif // SIGNLANG_EYES_EDGEAI_SPEECH_ASR_AUDIO_RING_BUFFER_HPP
+#endif // SIGNLANG_EYES_SPEECH_ASR_AUDIO_RING_BUFFER_HPP

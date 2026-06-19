@@ -96,6 +96,15 @@ namespace signlang::speech_asr {
     return true;
   }
 
+  void AudioRingBuffer::clear() {
+    {
+      const std::lock_guard<std::mutex> lock{mutex_};
+      start_sample_index_ = next_sample_index_;
+    }
+
+    samples_changed_.notify_all();
+  }
+
   void AudioRingBuffer::notify_stop() { samples_changed_.notify_all(); }
 
   auto AudioRingBuffer::accepts_metadata(const signlang::audio_frontend::AudioFrame& frame) -> bool {

@@ -1,5 +1,5 @@
-#ifndef SIGNLANG_EYES_EDGEAI_ENV_SOUND_DET_YAMNET_MODEL_HPP
-#define SIGNLANG_EYES_EDGEAI_ENV_SOUND_DET_YAMNET_MODEL_HPP
+#ifndef SIGNLANG_EYES_ENV_SOUND_DET_YAMNET_MODEL_HPP
+#define SIGNLANG_EYES_ENV_SOUND_DET_YAMNET_MODEL_HPP
 
 #include "audio_ring_buffer.hpp"
 #include "env_sound_result.hpp"
@@ -60,4 +60,4 @@ namespace signlang::env_sound_det {
 
 } // namespace signlang::env_sound_det
 
-#endif // SIGNLANG_EYES_EDGEAI_ENV_SOUND_DET_YAMNET_MODEL_HPP
+#endif // SIGNLANG_EYES_ENV_SOUND_DET_YAMNET_MODEL_HPP

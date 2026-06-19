@@ -169,11 +169,19 @@ auto main(int argc, char** argv) -> int {
             copy_inference_result(inference_result, result);
 
             result_publisher.publish(result);
+            next_window_start_sample = audio_window.start_sample_index + hop_sample_count;
           } else {
-            state_monitor.wait_for_state_change_blocking();
+            // Poll for state change with stop check to avoid hang on shutdown
+            while (!should_stop.load() && !state_monitor.is_enabled()) {
+              state_monitor.try_wait_for_state_change();
+	              if (!state_monitor.is_enabled()) {
+	                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	              }
+            }
+            // Discard stale audio accumulated during disabled period
+            audio_buffer.clear();
+            next_window_start_sample = std::nullopt;
           }
-
-          next_window_start_sample = audio_window.start_sample_index + hop_sample_count;
         }
       } catch (...) {
         record_worker_error(std::current_exception());

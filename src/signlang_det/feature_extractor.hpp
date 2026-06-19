@@ -1,5 +1,5 @@
-#ifndef SIGNLANG_EYES_EDGEAI_SIGNLANG_DET_FEATURE_EXTRACTOR_HPP
-#define SIGNLANG_EYES_EDGEAI_SIGNLANG_DET_FEATURE_EXTRACTOR_HPP
+#ifndef SIGNLANG_EYES_SIGNLANG_DET_FEATURE_EXTRACTOR_HPP
+#define SIGNLANG_EYES_SIGNLANG_DET_FEATURE_EXTRACTOR_HPP
 
 #include "signlang_result.hpp"
 #include "handpose_det/handpose_frame.hpp"
@@ -56,4 +56,4 @@ namespace signlang::signlang_det {
 
 } // namespace signlang::signlang_det
 
-#endif // SIGNLANG_EYES_EDGEAI_SIGNLANG_DET_FEATURE_EXTRACTOR_HPP
+#endif // SIGNLANG_EYES_SIGNLANG_DET_FEATURE_EXTRACTOR_HPP

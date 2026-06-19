@@ -37,14 +37,27 @@ KeypointRingBuffer::KeypointRingBuffer(std::uint32_t capacity)
 }
 
 void KeypointRingBuffer::push(const FeatureVector& feature) {
-  std::lock_guard lock(mutex_);
+  {
+    std::lock_guard lock(mutex_);
 
-  buffer_[head_] = feature;
-  head_ = (head_ + 1) % capacity_;
+    buffer_[head_] = feature;
+    head_ = (head_ + 1) % capacity_;
 
-  if (count_ < capacity_) {
-    ++count_;
+    if (count_ < capacity_) {
+      ++count_;
+    }
   }
+
+  changed_.notify_all();
+}
+
+auto KeypointRingBuffer::wait_for_size(std::uint32_t min_size, const std::atomic_bool& should_stop) -> bool {
+  std::unique_lock lock(mutex_);
+  changed_.wait(lock, [&] {
+    return should_stop.load() || count_ >= min_size;
+  });
+
+  return !should_stop.load() && count_ >= min_size;
 }
 
   auto KeypointRingBuffer::get_window(std::uint32_t window_size)
@@ -71,6 +84,20 @@ void KeypointRingBuffer::push(const FeatureVector& feature) {
 auto KeypointRingBuffer::size() const -> std::uint32_t {
   std::lock_guard lock(mutex_);
   return count_;
+}
+
+void KeypointRingBuffer::clear() {
+  {
+    std::lock_guard lock(mutex_);
+    head_ = 0;
+    count_ = 0;
+  }
+
+  changed_.notify_all();
+}
+
+void KeypointRingBuffer::notify_stop() {
+  changed_.notify_all();
 }
 
 auto KeypointRingBuffer::capacity() const -> std::uint32_t {

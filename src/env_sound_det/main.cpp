@@ -5,6 +5,7 @@
 #include "yamnet_model.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -14,6 +15,7 @@
 #include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <string_view>
 #include <thread>
 #include <variant>
 
@@ -40,6 +42,22 @@ namespace {
     }
   }
 
+  auto is_dangerous_sound_label(const std::array<char, signlang::env_sound_det::kMaxClassLabelLength>& label) -> bool {
+    const std::string_view label_view{label.data()};
+    return label_view == "Air horn, truck horn" || label_view == "Vehicle horn, car horn, honking" ||
+           label_view == "Train horn";
+  }
+
+  auto has_dangerous_sound(const signlang::env_sound_det::EnvSoundDetectionResult& result) -> bool {
+    for (std::uint32_t index = 0; index < result.top_class_count; ++index) {
+      if (is_dangerous_sound_label(result.top_classes[index].label)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   auto ring_capacity_samples(std::uint64_t window_sample_count, std::uint64_t hop_sample_count) -> std::uint64_t {
     const auto minimum_capacity = window_sample_count + std::max(window_sample_count, hop_sample_count);
     const auto one_second = static_cast<std::uint64_t>(signlang::env_sound_det::kYamnetSampleRateHz);
@@ -55,6 +73,7 @@ auto main(int argc, char** argv) -> int {
   using signlang::env_sound_det::hop_samples_for_overlap;
   using signlang::env_sound_det::IpcAudioSubscriber;
   using signlang::env_sound_det::IpcResultPublisher;
+  using signlang::env_sound_det::IpcStateControlClient;
   using signlang::env_sound_det::kYamnetSampleRateHz;
   using signlang::env_sound_det::parse_program_options;
   using signlang::env_sound_det::ProgramOptions;
@@ -115,6 +134,7 @@ auto main(int argc, char** argv) -> int {
         YamnetModel model{options.model_path, options.class_map_path, options.npu_core_mask, options.rknn_priority_flag,
                           options.top_k};
         IpcResultPublisher result_publisher{options.result_service_name};
+        IpcStateControlClient state_control_client{options.state_control_service_name};
         AudioWindow audio_window;
         std::optional<std::uint64_t> next_window_start_sample;
         std::uint64_t result_sequence_number = 0;
@@ -144,6 +164,9 @@ auto main(int argc, char** argv) -> int {
           copy_inference_result(inference_result, result);
 
           result_publisher.publish(result);
+          if (has_dangerous_sound(result)) {
+            state_control_client.enter_dangerous_sound_state();
+          }
           next_window_start_sample = audio_window.start_sample_index + hop_sample_count;
         }
       } catch (...) {

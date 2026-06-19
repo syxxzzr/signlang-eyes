@@ -2,10 +2,14 @@
 #include "audio_processor.hpp"
 #include "audio_publisher.hpp"
 #include "program_options.hpp"
+#include "sound_source_blackboard.hpp"
+#include "sound_source_localization.hpp"
 
+#include <chrono>
 #include <csignal>
 #include <exception>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <variant>
 
@@ -18,6 +22,11 @@ namespace {
   void install_signal_handlers() {
     std::signal(SIGINT, handle_shutdown_signal);
     std::signal(SIGTERM, handle_shutdown_signal);
+  }
+
+  auto steady_timestamp_ns() -> std::uint64_t {
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
   }
 
   void validate_publish_format(const signlang::audio_frontend::AudioFormat& capture_format,
@@ -41,6 +50,8 @@ auto main(int argc, char** argv) -> int {
   using signlang::audio_frontend::parse_program_options;
   using signlang::audio_frontend::ProgramOptions;
   using signlang::audio_frontend::ProgramUsage;
+  using signlang::audio_frontend::SoundSourceBlackboardPublisher;
+  using signlang::audio_frontend::SoundSourceLocalizer;
 
   try {
     const auto parse_result = parse_program_options(argc, argv);
@@ -63,11 +74,23 @@ auto main(int argc, char** argv) -> int {
 
     AudioProcessor audio_processor{capture_format, publish_format, options.publish_period_ms, options.enable_denoise};
     AudioPublisher publisher{options.service_name};
+    SoundSourceLocalizer sound_source_localizer{options.localization_tdoa_weight, options.localization_rms_weight};
+    std::unique_ptr<SoundSourceBlackboardPublisher> sound_source_blackboard;
+    if (options.localization_blackboard_service_name.has_value()) {
+      sound_source_blackboard =
+          std::make_unique<SoundSourceBlackboardPublisher>(options.localization_blackboard_service_name.value());
+    }
 
     std::uint64_t sequence_number = 0;
     while (g_should_stop == 0) {
       const auto& input_samples = capture_device.capture_samples();
-      publisher.publish(input_samples, audio_processor, sequence_number++);
+      const auto current_sequence_number = sequence_number++;
+      if (sound_source_blackboard != nullptr) {
+        const auto localization = sound_source_localizer.estimate(input_samples, capture_format, current_sequence_number,
+                                                                  steady_timestamp_ns());
+        sound_source_blackboard->publish(localization);
+      }
+      publisher.publish(input_samples, audio_processor, current_sequence_number);
     }
 
     return 0;

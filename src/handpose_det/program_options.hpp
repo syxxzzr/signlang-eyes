@@ -1,5 +1,5 @@
-#ifndef SIGNLANG_EYES_EDGEAI_HANDPOSE_DET_PROGRAM_OPTIONS_HPP
-#define SIGNLANG_EYES_EDGEAI_HANDPOSE_DET_PROGRAM_OPTIONS_HPP
+#ifndef SIGNLANG_EYES_HANDPOSE_DET_PROGRAM_OPTIONS_HPP
+#define SIGNLANG_EYES_HANDPOSE_DET_PROGRAM_OPTIONS_HPP
 
 #include "handpose_frame.hpp"
 
@@ -19,6 +19,8 @@ namespace signlang::handpose_det {
   struct ProgramOptions {
     std::string input_service_name;
     std::string output_service_name;
+    std::string state_event_service_name;
+    std::string state_blackboard_service_name;
     std::string model_path;
     std::string rknn_runtime_library_path;
     float confidence_threshold;
@@ -40,4 +42,4 @@ namespace signlang::handpose_det {
 
 } // namespace signlang::handpose_det
 
-#endif // SIGNLANG_EYES_EDGEAI_HANDPOSE_DET_PROGRAM_OPTIONS_HPP
+#endif // SIGNLANG_EYES_HANDPOSE_DET_PROGRAM_OPTIONS_HPP

@@ -1,11 +1,12 @@
-#ifndef SIGNLANG_EYES_EDGEAI_ENV_SOUND_DET_ICEORYX_GATEWAY_HPP
-#define SIGNLANG_EYES_EDGEAI_ENV_SOUND_DET_ICEORYX_GATEWAY_HPP
+#ifndef SIGNLANG_EYES_ENV_SOUND_DET_ICEORYX_GATEWAY_HPP
+#define SIGNLANG_EYES_ENV_SOUND_DET_ICEORYX_GATEWAY_HPP
 
 #include "audio_ring_buffer.hpp"
 #include "env_sound_result.hpp"
 
 #include "audio_frontend/audio_frame.hpp"
 #include "iox2/iceoryx2.hpp"
+#include "state_machine/state_control.hpp"
 
 #include <cstdint>
 #include <string>
@@ -58,6 +59,35 @@ namespace signlang::env_sound_det {
     iox2::Publisher<iox2::ServiceType::Ipc, EnvSoundDetectionResult, void> publisher_;
   };
 
+  class IpcStateControlClient {
+  public:
+    explicit IpcStateControlClient(const std::string& service_name);
+
+    IpcStateControlClient(const IpcStateControlClient&) = delete;
+    auto operator=(const IpcStateControlClient&) -> IpcStateControlClient& = delete;
+    IpcStateControlClient(IpcStateControlClient&&) = delete;
+    auto operator=(IpcStateControlClient&&) -> IpcStateControlClient& = delete;
+
+    void enter_dangerous_sound_state() const;
+
+  private:
+    using StateControlService =
+        iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, signlang::state_machine::StateControlRequest, void,
+                                         signlang::state_machine::StateControlResponse, void>;
+    using StateControlClient =
+        iox2::Client<iox2::ServiceType::Ipc, signlang::state_machine::StateControlRequest, void,
+                     signlang::state_machine::StateControlResponse, void>;
+
+    static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
+    static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+        -> StateControlService;
+    static auto create_client(const StateControlService& service) -> StateControlClient;
+
+    iox2::Node<iox2::ServiceType::Ipc> node_;
+    StateControlService service_;
+    StateControlClient client_;
+  };
+
 } // namespace signlang::env_sound_det
 
-#endif // SIGNLANG_EYES_EDGEAI_ENV_SOUND_DET_ICEORYX_GATEWAY_HPP
+#endif // SIGNLANG_EYES_ENV_SOUND_DET_ICEORYX_GATEWAY_HPP

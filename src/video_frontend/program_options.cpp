@@ -36,7 +36,7 @@ namespace signlang::video_frontend {
 
   auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult {
     cxxopts::Options options{
-        "signlang_eyes_edgeai_video_frontend",
+        "signlang_eyes_video_frontend",
         "Capture video frames from a V4L2 camera and publish them through an iceoryx2 publish-subscribe service."};
 
     options.add_options()("d,device", "V4L2 camera device name", cxxopts::value<std::string>())(

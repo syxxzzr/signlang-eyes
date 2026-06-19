@@ -1,5 +1,5 @@
-#ifndef SIGNLANG_EYES_EDGEAI_HANDPOSE_DET_HANDPOSE_MODEL_HPP
-#define SIGNLANG_EYES_EDGEAI_HANDPOSE_DET_HANDPOSE_MODEL_HPP
+#ifndef SIGNLANG_EYES_HANDPOSE_DET_HANDPOSE_MODEL_HPP
+#define SIGNLANG_EYES_HANDPOSE_DET_HANDPOSE_MODEL_HPP
 
 #include "handpose_frame.hpp"
 #include "handpose_preprocessor.hpp"
@@ -79,4 +79,4 @@ namespace signlang::handpose_det {
 
 } // namespace signlang::handpose_det
 
-#endif // SIGNLANG_EYES_EDGEAI_HANDPOSE_DET_HANDPOSE_MODEL_HPP
+#endif // SIGNLANG_EYES_HANDPOSE_DET_HANDPOSE_MODEL_HPP

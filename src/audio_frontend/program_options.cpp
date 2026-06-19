@@ -1,7 +1,10 @@
 #include "program_options.hpp"
 
+#include "sound_source_localization.hpp"
+
 #include "cxxopts.hpp"
 
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -48,15 +51,34 @@ namespace signlang::audio_frontend {
       }
     }
 
+    void validate_localization_weight(float weight, const char* option_name) {
+      if (!std::isfinite(weight) || weight < 0.0F || weight > 1.0F) {
+        throw std::runtime_error(std::string("--") + option_name + " must be between 0.0 and 1.0");
+      }
+    }
+
+    void validate_localization_weight_sum(float tdoa_weight, float rms_weight) {
+      constexpr float kWeightSumTolerance = 0.0001F;
+      if (std::fabs((tdoa_weight + rms_weight) - 1.0F) > kWeightSumTolerance) {
+        throw std::runtime_error("--localization-tdoa-weight and --localization-rms-weight must sum to 1.0");
+      }
+    }
+
   } // namespace
 
   auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult {
     cxxopts::Options options{
-        "signlang_eyes_edgeai_audio_frontend",
+        "signlang_eyes_audio_frontend",
         "Capture PCM audio from ALSA and publish it through an iceoryx2 publish-subscribe service."};
 
     options.add_options()("d,device", "ALSA audio device name", cxxopts::value<std::string>())(
         "s,service", "iceoryx2 publish-subscribe service name", cxxopts::value<std::string>())(
+        "localization-blackboard", "iceoryx2 blackboard service name for sound source channel proximity",
+        cxxopts::value<std::string>())(
+        "localization-tdoa-weight", "TDOA weight for sound source proximity fusion",
+        cxxopts::value<float>()->default_value(std::to_string(kDefaultLocalizationTdoaWeight)))(
+        "localization-rms-weight", "RMS energy weight for sound source proximity fusion",
+        cxxopts::value<float>()->default_value(std::to_string(kDefaultLocalizationRmsWeight)))(
         "p,period-ms", "Audio publish period in milliseconds",
         cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultPublishPeriodMs)))(
         "capture-rate", "Requested ALSA capture sample rate in Hz", cxxopts::value<std::uint32_t>())(
@@ -95,9 +117,21 @@ namespace signlang::audio_frontend {
     validate_sample_rate(publish_format.sample_rate_hz, "publish-rate");
     validate_channel_count(publish_format.channel_count, "publish-channels");
 
+    const auto localization_tdoa_weight = parsed_options["localization-tdoa-weight"].as<float>();
+    const auto localization_rms_weight = parsed_options["localization-rms-weight"].as<float>();
+    validate_localization_weight(localization_tdoa_weight, "localization-tdoa-weight");
+    validate_localization_weight(localization_rms_weight, "localization-rms-weight");
+    validate_localization_weight_sum(localization_tdoa_weight, localization_rms_weight);
+
     return ProgramOptionsParseResult{ProgramOptions{
         .audio_device_name = parsed_options["device"].as<std::string>(),
         .service_name = parsed_options["service"].as<std::string>(),
+        .localization_blackboard_service_name =
+            parsed_options.count("localization-blackboard") == 0
+                ? std::nullopt
+                : std::optional<std::string>{parsed_options["localization-blackboard"].as<std::string>()},
+        .localization_tdoa_weight = localization_tdoa_weight,
+        .localization_rms_weight = localization_rms_weight,
         .publish_period_ms = publish_period_ms,
         .enable_denoise = parsed_options["denoise"].as<bool>(),
         .capture_format = capture_format,

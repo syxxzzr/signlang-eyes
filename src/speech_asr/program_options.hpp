@@ -1,5 +1,5 @@
-#ifndef SIGNLANG_EYES_EDGEAI_SPEECH_ASR_PROGRAM_OPTIONS_HPP
-#define SIGNLANG_EYES_EDGEAI_SPEECH_ASR_PROGRAM_OPTIONS_HPP
+#ifndef SIGNLANG_EYES_SPEECH_ASR_PROGRAM_OPTIONS_HPP
+#define SIGNLANG_EYES_SPEECH_ASR_PROGRAM_OPTIONS_HPP
 
 #include "speech_asr_result.hpp"
 #include "rknn_api.h"
@@ -41,4 +41,4 @@ namespace signlang::speech_asr {
 
 } // namespace signlang::speech_asr
 
-#endif // SIGNLANG_EYES_EDGEAI_SPEECH_ASR_PROGRAM_OPTIONS_HPP
+#endif // SIGNLANG_EYES_SPEECH_ASR_PROGRAM_OPTIONS_HPP

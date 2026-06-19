@@ -1,5 +1,5 @@
-#ifndef SIGNLANG_EYES_EDGEAI_SPEECH_ASR_SPEECH_ASR_RESULT_HPP
-#define SIGNLANG_EYES_EDGEAI_SPEECH_ASR_SPEECH_ASR_RESULT_HPP
+#ifndef SIGNLANG_EYES_SPEECH_ASR_SPEECH_ASR_RESULT_HPP
+#define SIGNLANG_EYES_SPEECH_ASR_SPEECH_ASR_RESULT_HPP
 
 #include <array>
 #include <cstdint>
@@ -17,24 +17,6 @@ namespace signlang::speech_asr {
     English = 0,
     Chinese = 1,
   };
-
-  // ASR enable/disable state stored in Blackboard
-  // TODO: Replace placeholder value 0 with actual enabled state identifier
-  enum class AsrState : std::uint32_t {
-    Enabled = 0,   // ASR enabled (currently using 0 as placeholder)
-    Disabled = 1,  // ASR disabled
-  };
-
-  struct AsrStateKey {
-    static constexpr const char* IOX2_TYPE_NAME = "signlang_speech_asr_state_key";
-    std::uint32_t id;
-
-    auto operator==(const AsrStateKey& other) const -> bool { return id == other.id; }
-    auto operator!=(const AsrStateKey& other) const -> bool { return id != other.id; }
-  };
-
-  static_assert(std::is_trivially_copyable_v<AsrStateKey>);
-  static_assert(std::is_trivially_copyable_v<AsrState>);
 
   struct SpeechAsrResult {
     static constexpr const char* IOX2_TYPE_NAME = "signlang_speech_asr_result";
@@ -65,12 +47,10 @@ namespace signlang::speech_asr {
     std::array<char, kMaxTranscriptLength> transcript;
   };
 
-  static_assert(std::is_trivially_copyable_v<AsrStateKey>);
-  static_assert(std::is_trivially_copyable_v<AsrState>);
   static_assert(std::is_trivially_copyable_v<SpeechAsrResult>);
 
   auto language_code(AsrLanguage language) -> const char*;
 
 } // namespace signlang::speech_asr
 
-#endif // SIGNLANG_EYES_EDGEAI_SPEECH_ASR_SPEECH_ASR_RESULT_HPP
+#endif // SIGNLANG_EYES_SPEECH_ASR_SPEECH_ASR_RESULT_HPP

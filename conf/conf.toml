@@ -1,0 +1,69 @@
+[audio_frontend]
+device = "default"                 # ALSA device name (e.g. "hw:0,0", "default")
+denoise = true                     # Enable Wiener noise reduction
+capture_rate = 16000               # Requested capture sample rate in Hz
+capture_channels = 2               # Requested capture channel count
+# publish_rate = 16000             # Published sample rate in Hz
+# publish_channels = 1             # Published channel count
+# period_ms = 100                  # Publish period in milliseconds
+# localization_tdoa_weight = 0.7   # TDOA contribution to channel proximity score
+# localization_rms_weight = 0.3    # RMS energy contribution; must sum with TDOA weight to 1.0
+
+[video_frontend]
+device = "/dev/video21"            # V4L2 camera device path
+# capture_width = 1920             # Requested capture width
+# capture_height = 1080            # Requested capture height
+# output_width = 640               # Published output width
+# output_height = 480              # Published output height
+# fps = 30                         # Requested frame rate
+
+[speech_asr]
+language = "zh"                    # Recognition language: "en" or "zh"
+npu_core = "1"                     # auto, all, 0, 1, 2, 0_1, 0_1_2
+# window_ms = 15000                # ASR window length in ms
+# overlap = 0.2                    # Overlap ratio between adjacent windows
+# max_decode_steps = 96            # Max autoregressive decoder steps
+# encoder_model = "models/whisper/whisper_encoder_base_15s.rknn"
+# decoder_model = "models/whisper/whisper_decoder_base_15s.rknn"
+# vocab_en = "models/whisper/vocab_en.txt"
+# vocab_zh = "models/whisper/vocab_zh.txt"
+# mel_filters = "models/whisper/mel_80_filters.txt"
+# encoder_npu_core = ""            # Override encoder NPU core (empty = use npu_core)
+# decoder_npu_core = ""            # Override decoder NPU core (empty = use npu_core)
+# rknn_priority = "medium"         # high, medium, low
+# poll_ms = 2                      # Subscriber poll interval in ms
+# subscriber_buffer = 4            # iceoryx2 subscriber queue size
+
+[env_sound_det]
+npu_core = "0"
+# window_ms = 3000                 # Detection window length in ms
+# overlap = 0.2                    # Overlap ratio between adjacent windows
+# top_k = 5                        # Number of top classes to publish
+# model = "models/yamnet/yamnet_3s.rknn"
+# class_map = "models/yamnet/yamnet_class_map.txt"
+# rknn_priority = "medium"
+# poll_ms = 2
+# subscriber_buffer = 2
+
+[handpose_det]
+npu_core = "2"
+# model = "models/yolov8n-handpose/yolov8_handpose.rknn"
+# confidence = 0.5                 # Detection confidence threshold
+# nms = 0.4                        # NMS IoU threshold
+# keypoints = 21                   # Expected keypoint count per hand
+# max_detections = 2               # Max detections published per frame
+# subscriber_buffer = 1
+
+[signlang_det]
+npu_core = "0"
+# model = "models/signlang/signlang.rknn"
+# label_map = "models/signlang/labels.txt"
+# prototypes = "models/signlang/prototypes.bin"
+# sequence_length = 30             # Sliding window frame count
+# overlap_ratio = 0.2              # Window overlap ratio
+# min_confidence = 0.3             # Minimum keypoint confidence
+# motion_weight = 0.0              # Velocity feature weight
+# dtw_window_ratio = 0.5           # DTW Sakoe-Chiba window ratio
+# confidence_threshold = 0.6       # Minimum recognition confidence
+# confidence_margin = 0.1          # Min top-1 vs top-2 margin
+# subscriber_buffer = 2

@@ -2,10 +2,12 @@
 #include "handpose_transport.hpp"
 #include "program_options.hpp"
 
-#include <csignal>
 #include <array>
+#include <chrono>
+#include <csignal>
 #include <exception>
 #include <iostream>
+#include <thread>
 #include <variant>
 
 namespace {
@@ -25,6 +27,7 @@ auto main(int argc, char** argv) -> int {
   using signlang::handpose_det::HandPoseDetection;
   using signlang::handpose_det::HandPoseModel;
   using signlang::handpose_det::HandPoseTransport;
+  using signlang::handpose_det::IpcHandPoseStateMonitor;
   using signlang::handpose_det::parse_program_options;
   using signlang::handpose_det::ProgramOptions;
   using signlang::handpose_det::ProgramUsage;
@@ -40,12 +43,29 @@ auto main(int argc, char** argv) -> int {
     install_signal_handlers();
 
     HandPoseModel model{options.model_path, options.rknn_runtime_library_path, options};
-    HandPoseTransport transport{options.input_service_name, options.output_service_name,
-                                options.subscriber_buffer_size, options.max_detections};
+    HandPoseTransport transport{options.input_service_name, options.output_service_name, options.subscriber_buffer_size,
+                                options.max_detections};
+    IpcHandPoseStateMonitor state_monitor{options.state_event_service_name, options.state_blackboard_service_name};
 
     std::uint64_t sequence_number = 0;
     std::array<HandPoseDetection, signlang::handpose_det::kMaxHandPoseDetections> detection_buffer{};
     while (g_should_stop == 0 && transport.wait_for_work()) {
+      state_monitor.try_wait_for_state_change();
+
+      if (!state_monitor.is_enabled()) {
+        // Poll for state change with stop check to avoid hang on shutdown
+        while (g_should_stop == 0 && !state_monitor.is_enabled()) {
+          state_monitor.try_wait_for_state_change();
+          if (!state_monitor.is_enabled()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+          }
+        }
+        if (g_should_stop != 0) {
+          break;
+        }
+        continue;
+      }
+
       transport.receive_latest([&](const signlang::handpose_det::VideoSampleView& sample) {
         auto detections = iox2::bb::MutableSlice<HandPoseDetection>{detection_buffer.data(), options.max_detections};
         const auto result = model.run(*sample.metadata, sample.payload, sample.payload_size, detections);
