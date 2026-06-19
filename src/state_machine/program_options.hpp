@@ -9,6 +9,7 @@ namespace signlang::state_machine {
   struct ProgramOptions {
     std::string state_event_service_name;
     std::string state_blackboard_service_name;
+    std::string state_control_service_name;
   };
 
   struct ProgramUsage {

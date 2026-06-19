@@ -11,6 +11,7 @@ namespace signlang::state_machine {
     Asr = 1,
     SignLanguageChat = 2,
     SignLanguageAi = 3,
+    DangerousSound = 4,
   };
 
   struct AppStateKey {
@@ -26,6 +27,7 @@ namespace signlang::state_machine {
 
   constexpr auto default_app_state_key() -> AppStateKey { return AppStateKey{.id = 0}; }
   auto app_state_name(AppState state) -> const char*;
+  auto is_basic_app_state(AppState state) -> bool;
 
 } // namespace signlang::state_machine
 

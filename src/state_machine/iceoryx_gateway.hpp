@@ -2,6 +2,7 @@
 #define SIGNLANG_EYES_STATE_MACHINE_ICEORYX_GATEWAY_HPP
 
 #include "app_state.hpp"
+#include "state_control.hpp"
 
 #include "iox2/iceoryx2.hpp"
 
@@ -45,6 +46,33 @@ namespace signlang::state_machine {
     iox2::PortFactoryEvent<iox2::ServiceType::Ipc> event_service_;
     iox2::Notifier<iox2::ServiceType::Ipc> notifier_;
     AppState current_state_;
+  };
+
+  class IpcStateControlServer {
+  public:
+    explicit IpcStateControlServer(const std::string& service_name);
+
+    IpcStateControlServer(const IpcStateControlServer&) = delete;
+    auto operator=(const IpcStateControlServer&) -> IpcStateControlServer& = delete;
+    IpcStateControlServer(IpcStateControlServer&&) = delete;
+    auto operator=(IpcStateControlServer&&) -> IpcStateControlServer& = delete;
+
+    void process_pending_requests(StateController& controller, IpcStatePublisher& publisher,
+                                  StateController::Clock::time_point now);
+
+  private:
+    static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
+    static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+        -> iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, StateControlRequest, void, StateControlResponse,
+                                             void>;
+    static auto create_server(const iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, StateControlRequest, void,
+                                                                     StateControlResponse, void>& service)
+        -> iox2::Server<iox2::ServiceType::Ipc, StateControlRequest, void, StateControlResponse, void>;
+
+    iox2::Node<iox2::ServiceType::Ipc> node_;
+    iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, StateControlRequest, void, StateControlResponse, void>
+        service_;
+    iox2::Server<iox2::ServiceType::Ipc, StateControlRequest, void, StateControlResponse, void> server_;
   };
 
 } // namespace signlang::state_machine

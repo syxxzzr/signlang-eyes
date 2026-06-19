@@ -1,6 +1,7 @@
 #include "app_state.hpp"
 #include "iceoryx_gateway.hpp"
 #include "program_options.hpp"
+#include "state_control.hpp"
 
 #include <chrono>
 #include <csignal>
@@ -25,10 +26,12 @@ namespace {
 auto main(int argc, char** argv) -> int {
   using signlang::state_machine::app_state_name;
   using signlang::state_machine::AppState;
+  using signlang::state_machine::IpcStateControlServer;
   using signlang::state_machine::IpcStatePublisher;
   using signlang::state_machine::parse_program_options;
   using signlang::state_machine::ProgramOptions;
   using signlang::state_machine::ProgramUsage;
+  using signlang::state_machine::StateController;
 
   try {
     const auto parse_result = parse_program_options(argc, argv);
@@ -40,12 +43,20 @@ auto main(int argc, char** argv) -> int {
     const auto& options = std::get<ProgramOptions>(parse_result);
     install_signal_handlers();
 
+    StateController state_controller{AppState::Normal};
     IpcStatePublisher state_publisher{options.state_event_service_name, options.state_blackboard_service_name,
-                                      AppState::Normal};
+                                      state_controller.current_published_state()};
+    IpcStateControlServer state_control_server{options.state_control_service_name};
 
     std::cout << "Published initial app state: " << app_state_name(state_publisher.current_state()) << '\n';
 
     while (g_should_stop == 0) {
+      const auto now = StateController::Clock::now();
+      if (state_controller.expire_special_state(now)) {
+        state_publisher.set_state(state_controller.current_published_state());
+      }
+
+      state_control_server.process_pending_requests(state_controller, state_publisher, now);
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 

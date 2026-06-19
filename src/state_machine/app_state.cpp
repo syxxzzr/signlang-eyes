@@ -12,9 +12,25 @@ namespace signlang::state_machine {
       return "sign_language_chat";
     case AppState::SignLanguageAi:
       return "sign_language_ai";
+    case AppState::DangerousSound:
+      return "dangerous_sound";
     }
 
     return "unknown";
+  }
+
+  auto is_basic_app_state(AppState state) -> bool {
+    switch (state) {
+    case AppState::Normal:
+    case AppState::Asr:
+    case AppState::SignLanguageChat:
+    case AppState::SignLanguageAi:
+      return true;
+    case AppState::DangerousSound:
+      return false;
+    }
+
+    return false;
   }
 
 } // namespace signlang::state_machine

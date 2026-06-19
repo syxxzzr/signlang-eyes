@@ -127,4 +127,77 @@ namespace signlang::state_machine {
     }
   }
 
+  IpcStateControlServer::IpcStateControlServer(const std::string& service_name) :
+      node_{create_node()}, service_{create_service(node_, service_name)}, server_{create_server(service_)} {}
+
+  void IpcStateControlServer::process_pending_requests(StateController& controller, IpcStatePublisher& publisher,
+                                                       StateController::Clock::time_point now) {
+    auto receive_result = server_.receive();
+    if (!receive_result.has_value()) {
+      throw std::runtime_error("Failed to receive iceoryx2 app state control request");
+    }
+
+    auto active_request = std::move(receive_result.value());
+    while (active_request.has_value()) {
+      const auto previous_state = controller.current_published_state();
+      const auto response = controller.handle_request(active_request.value().payload(), now);
+      if (controller.current_published_state() != previous_state) {
+        publisher.set_state(controller.current_published_state());
+      }
+
+      const auto send_result = active_request.value().send_copy(response);
+      if (!send_result.has_value()) {
+        throw std::runtime_error("Failed to send iceoryx2 app state control response");
+      }
+
+      receive_result = server_.receive();
+      if (!receive_result.has_value()) {
+        throw std::runtime_error("Failed to receive iceoryx2 app state control request");
+      }
+      active_request = std::move(receive_result.value());
+    }
+  }
+
+  auto IpcStateControlServer::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
+    iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
+
+    auto node = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+    if (!node.has_value()) {
+      throw std::runtime_error("Failed to create iceoryx2 IPC state control node");
+    }
+
+    return std::move(node.value());
+  }
+
+  auto IpcStateControlServer::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                             const std::string& service_name)
+      -> iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, StateControlRequest, void, StateControlResponse,
+                                          void> {
+    auto service = node.service_builder(service_name_from_string(service_name))
+                       .request_response<StateControlRequest, StateControlResponse>()
+                       .max_servers(1)
+                       .max_clients(8)
+                       .max_active_requests_per_client(1)
+                       .max_response_buffer_size(1)
+                       .open_or_create();
+    if (!service.has_value()) {
+      throw std::runtime_error("Failed to open or create iceoryx2 app state control request-response service: " +
+                               service_name);
+    }
+
+    return std::move(service.value());
+  }
+
+  auto IpcStateControlServer::create_server(
+      const iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, StateControlRequest, void, StateControlResponse,
+                                             void>& service)
+      -> iox2::Server<iox2::ServiceType::Ipc, StateControlRequest, void, StateControlResponse, void> {
+    auto server = service.server_builder().create();
+    if (!server.has_value()) {
+      throw std::runtime_error("Failed to create iceoryx2 app state control server");
+    }
+
+    return std::move(server.value());
+  }
+
 } // namespace signlang::state_machine
