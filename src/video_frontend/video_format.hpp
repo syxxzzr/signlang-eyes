@@ -7,9 +7,6 @@
 namespace signlang::video_frontend {
 
   constexpr std::uint32_t kDefaultFps = 30;
-  constexpr std::uint32_t kMinDimension = 1;
-  constexpr std::uint32_t kMaxDimension = 3840;
-  constexpr std::uint32_t kMaxFps = 240;
 
   struct VideoFormatRequest {
     std::optional<std::uint32_t> width;

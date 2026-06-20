@@ -24,15 +24,15 @@ The **video_frontend** module captures video frames from a V4L2 (Video4Linux2) c
 ## Command-Line Parameters
 
 | Parameter | Default | Range | Description |
-|-----------|---------|-------|-------------|
-| `--device` / `-d` | *(required)* | — | V4L2 camera device name (e.g., `/dev/video0`) |
-| `--service` / `-s` | *(required)* | — | iceoryx2 publish-subscribe service name for video output |
-| `--capture-width` | (device default) | `1–3840` | Requested camera capture width in pixels |
-| `--capture-height` | (device default) | `1–3840` | Requested camera capture height in pixels |
-| `--output-width` | (matches capture) | `1–3840` | Published output width in pixels |
-| `--output-height` | (matches capture) | `1–3840` | Published output height in pixels |
-| `--fps` | `30` | `1–240` | Requested camera frame rate |
-| `--help` / `-h` | — | — | Print usage |
+|-----------|---------|----|-------------|
+| `--device` / `-d` | *(required)* | —  | V4L2 camera device name (e.g., `/dev/video0`) |
+| `--service` / `-s` | *(required)* | —  | iceoryx2 publish-subscribe service name for video output |
+| `--capture-width` | (device default) | `>0` | Requested camera capture width in pixels |
+| `--capture-height` | (device default) | `>0` | Requested camera capture height in pixels |
+| `--output-width` | (matches capture) | `>0` | Published output width in pixels |
+| `--output-height` | (matches capture) | `>0` | Published output height in pixels |
+| `--fps` | `30` | `>0` | Requested camera frame rate |
+| `--help` / `-h` | — | —  | Print usage |
 
 > **Note**: `--capture-width` and `--capture-height` must be specified together (or omitted together). Same rule applies to `--output-width` and `--output-height`.
 

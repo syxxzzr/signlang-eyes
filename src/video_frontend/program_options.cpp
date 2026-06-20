@@ -17,9 +17,8 @@ namespace signlang::video_frontend {
       }
 
       const auto value = parsed_options[option_name].as<std::uint32_t>();
-      if (value < kMinDimension || value > kMaxDimension) {
-        throw std::runtime_error(std::string("--") + option_name + " must be between " +
-                                 std::to_string(kMinDimension) + " and " + std::to_string(kMaxDimension));
+      if (value == 0) {
+        throw std::runtime_error(std::string("--") + option_name + " must be greater than 0");
       }
 
       return value;
@@ -58,8 +57,8 @@ namespace signlang::video_frontend {
     }
 
     const auto fps = parsed_options["fps"].as<std::uint32_t>();
-    if (fps == 0 || fps > kMaxFps) {
-      throw std::runtime_error("--fps must be between 1 and " + std::to_string(kMaxFps) + ".\n\n" + options.help());
+    if (fps == 0) {
+      throw std::runtime_error("--fps must be greater than 0.\n\n" + options.help());
     }
 
     const VideoFormatRequest capture_format{
