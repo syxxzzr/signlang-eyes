@@ -1,12 +1,12 @@
 #include "yamnet_model.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <fstream>
 #include <limits>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -231,15 +231,21 @@ namespace signlang::env_sound_det {
         continue;
       }
 
-      std::istringstream line_stream{line};
-      std::uint32_t index = 0;
-      if (!(line_stream >> index)) {
+      const auto separator = line.find_first_of(" \t");
+      if (separator == std::string::npos) {
         throw std::runtime_error("Invalid YAMNet class map line: " + line);
       }
 
-      std::string label;
-      std::getline(line_stream, label);
-      label = trim_leading_spaces(label);
+      const auto index_text = line.substr(0, separator);
+      std::uint32_t index = 0;
+      const auto* index_begin = index_text.data();
+      const auto* index_end = index_begin + index_text.size();
+      const auto [parse_end, parse_error] = std::from_chars(index_begin, index_end, index);
+      if (parse_error != std::errc{} || parse_end != index_end) {
+        throw std::runtime_error("Invalid YAMNet class map line: " + line);
+      }
+
+      auto label = trim_leading_spaces(line.substr(separator + 1));
       if (label.empty()) {
         throw std::runtime_error("Missing YAMNet class label at index " + std::to_string(index));
       }
