@@ -1,5 +1,6 @@
 #include "program_options.hpp"
 
+#include "common/logging_cli.hpp"
 #include "cxxopts.hpp"
 
 #include <stdexcept>
@@ -17,6 +18,7 @@ namespace signlang::state_machine {
                                                          cxxopts::value<std::string>())(
         "state-control-service", "iceoryx2 request-response service name for app state control",
         cxxopts::value<std::string>())("h,help", "Print usage");
+    signlang::logging::add_cli_options(options);
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
@@ -34,6 +36,7 @@ namespace signlang::state_machine {
         .state_event_service_name = parsed_options["state-event-service"].as<std::string>(),
         .state_blackboard_service_name = parsed_options["state-blackboard-service"].as<std::string>(),
         .state_control_service_name = parsed_options["state-control-service"].as<std::string>(),
+        .logging = signlang::logging::parse_cli_options(parsed_options),
     }};
   }
 

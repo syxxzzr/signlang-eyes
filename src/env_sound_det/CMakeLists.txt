@@ -19,7 +19,6 @@ foreach(required_file
 endforeach()
 
 add_executable(signlang_eyes_env_sound_det
-        audio_ring_buffer.cpp
         iceoryx_gateway.cpp
         program_options.cpp
         yamnet_model.cpp
@@ -33,10 +32,11 @@ target_include_directories(signlang_eyes_env_sound_det PRIVATE
 
 target_link_libraries(signlang_eyes_env_sound_det PRIVATE
         cxxopts::cxxopts
+        spdlog::spdlog
         iceoryx2-cxx::shared-lib-cxx
         signlang::rknn_runtime
-        Threads::Threads
-        dl)
+        signlang::common
+        Threads::Threads)
 
 add_custom_command(TARGET signlang_eyes_env_sound_det POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory

@@ -1,7 +1,9 @@
-#include "audio_ring_buffer.hpp"
+#include "common/audio_ring_buffer.hpp"
+#include "common/logging.hpp"
 #include "iceoryx_gateway.hpp"
 #include "program_options.hpp"
 #include "speech_asr_result.hpp"
+#include "spdlog/spdlog.h"
 #include "whisper_model.hpp"
 
 #include <algorithm>
@@ -70,9 +72,11 @@ namespace {
 } // namespace
 
 auto main(int argc, char** argv) -> int {
-  using signlang::speech_asr::AudioRingBuffer;
-  using signlang::speech_asr::AudioWindow;
-  using signlang::speech_asr::hop_samples_for_overlap;
+  using signlang::common::AudioRingBuffer;
+  using signlang::common::AudioWindow;
+  using signlang::common::hop_samples_for_overlap;
+  using signlang::common::samples_for_window_ms;
+  using signlang::speech_asr::AsrLanguage;
   using signlang::speech_asr::IpcAudioSubscriber;
   using signlang::speech_asr::IpcAsrStateMonitor;
   using signlang::speech_asr::IpcResultPublisher;
@@ -80,9 +84,10 @@ auto main(int argc, char** argv) -> int {
   using signlang::speech_asr::parse_program_options;
   using signlang::speech_asr::ProgramOptions;
   using signlang::speech_asr::ProgramUsage;
-  using signlang::speech_asr::samples_for_window_ms;
   using signlang::speech_asr::SpeechAsrResult;
   using signlang::speech_asr::WhisperModel;
+
+  signlang::logging::initialize();
 
   try {
     const auto parse_result = parse_program_options(argc, argv);
@@ -92,7 +97,14 @@ auto main(int argc, char** argv) -> int {
     }
 
     const auto options = std::get<ProgramOptions>(parse_result);
+    signlang::logging::initialize(options.logging);
     install_signal_handlers();
+
+    spdlog::info("Starting speech ASR");
+    spdlog::info("Language: {}", options.language == AsrLanguage::English ? "English" : "Chinese");
+    spdlog::info("Encoder model: {}", options.encoder_model_path);
+    spdlog::info("Decoder model: {}", options.decoder_model_path);
+    spdlog::info("Window: {}ms, overlap: {:.1f}%", options.window_ms, options.overlap_ratio * 100);
 
     const auto window_sample_count = samples_for_window_ms(kWhisperSampleRateHz, options.window_ms);
     const auto hop_sample_count = hop_samples_for_overlap(window_sample_count, options.overlap_ratio);
@@ -100,7 +112,7 @@ auto main(int argc, char** argv) -> int {
       throw std::runtime_error("ASR window has no samples");
     }
 
-    AudioRingBuffer audio_buffer{ring_capacity_samples(window_sample_count, hop_sample_count)};
+    AudioRingBuffer audio_buffer{ring_capacity_samples(window_sample_count, hop_sample_count), kWhisperSampleRateHz};
     std::atomic_bool should_stop{false};
     std::exception_ptr worker_error = nullptr;
     std::mutex worker_error_mutex;
@@ -119,12 +131,10 @@ auto main(int argc, char** argv) -> int {
     std::thread receiver_thread{[&] {
       try {
         IpcAudioSubscriber audio_subscriber{options.audio_service_name, options.subscriber_buffer_size};
-        const auto poll_period = std::chrono::milliseconds(options.poll_period_ms);
 
-        while (!should_stop.load()) {
-          const auto receive_stats = audio_subscriber.receive_available(audio_buffer);
-          if (receive_stats.accepted_count == 0) {
-            std::this_thread::sleep_for(poll_period);
+        while (!should_stop.load() && audio_subscriber.wait_for_work()) {
+          if (!should_stop.load()) {
+            audio_subscriber.receive_available(audio_buffer);
           }
         }
       } catch (...) {
@@ -134,19 +144,35 @@ auto main(int argc, char** argv) -> int {
 
     std::thread detector_thread{[&] {
       try {
+        spdlog::info("Initializing Whisper model");
         WhisperModel model{options};
+        spdlog::info("Whisper model loaded successfully");
+
         IpcResultPublisher result_publisher{options.result_service_name};
-        IpcAsrStateMonitor state_monitor{options.state_event_service_name, options.state_blackboard_service_name};
+        auto state_monitor = std::optional<IpcAsrStateMonitor>{};
+        if (options.state_event_service_name.has_value() && options.state_blackboard_service_name.has_value()) {
+          state_monitor.emplace(options.state_event_service_name.value(), options.state_blackboard_service_name.value());
+        }
+        auto gate_enabled = [&]() { return !state_monitor.has_value() || state_monitor->is_enabled(); };
+        auto poll_gate = [&]() {
+          if (state_monitor.has_value()) {
+            state_monitor->try_wait_for_state_change();
+          }
+        };
         AudioWindow audio_window;
         std::optional<std::uint64_t> next_window_start_sample;
         std::uint64_t result_sequence_number = 0;
 
         while (audio_buffer.wait_for_window(next_window_start_sample, window_sample_count, hop_sample_count,
                                             should_stop, audio_window)) {
-          state_monitor.try_wait_for_state_change();
+          poll_gate();
 
-          if (state_monitor.is_enabled()) {
+          if (gate_enabled()) {
             const auto inference_result = model.infer(audio_window, options.language);
+
+            if (!inference_result.transcript.empty()) {
+              spdlog::info("Transcript: {}", inference_result.transcript);
+            }
 
             SpeechAsrResult result{};
             result.sequence_number = result_sequence_number++;
@@ -172,11 +198,11 @@ auto main(int argc, char** argv) -> int {
             next_window_start_sample = audio_window.start_sample_index + hop_sample_count;
           } else {
             // Poll for state change with stop check to avoid hang on shutdown
-            while (!should_stop.load() && !state_monitor.is_enabled()) {
-              state_monitor.try_wait_for_state_change();
-	              if (!state_monitor.is_enabled()) {
-	                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	              }
+            while (!should_stop.load() && !gate_enabled()) {
+              poll_gate();
+              if (!gate_enabled()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+              }
             }
             // Discard stale audio accumulated during disabled period
             audio_buffer.clear();
@@ -204,7 +230,7 @@ auto main(int argc, char** argv) -> int {
 
     return 0;
   } catch (const std::exception& error) {
-    std::cerr << error.what() << '\n';
+    spdlog::error("{}", error.what());
     return 1;
   }
 }

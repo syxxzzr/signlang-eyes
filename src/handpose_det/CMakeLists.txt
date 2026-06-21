@@ -9,7 +9,6 @@ add_executable(signlang_eyes_handpose_det
         handpose_preprocessor.cpp
         handpose_transport.cpp
         program_options.cpp
-        rknn_runtime.cpp
         main.cpp)
 
 set_target_properties(signlang_eyes_handpose_det PROPERTIES
@@ -20,9 +19,9 @@ target_include_directories(signlang_eyes_handpose_det PRIVATE
 
 target_link_libraries(signlang_eyes_handpose_det PRIVATE
         cxxopts::cxxopts
+        spdlog::spdlog
         iceoryx2-cxx::shared-lib-cxx
-        signlang::rknn_headers
-        dl)
+        signlang::rknn_runtime)
 
 install(TARGETS signlang_eyes_handpose_det DESTINATION bin)
 

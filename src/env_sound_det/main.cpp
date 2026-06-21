@@ -1,7 +1,8 @@
-#include "audio_ring_buffer.hpp"
-#include "env_sound_result.hpp"
+#include "common/audio_ring_buffer.hpp"
+#include "common/logging.hpp"
 #include "iceoryx_gateway.hpp"
 #include "program_options.hpp"
+#include "spdlog/spdlog.h"
 #include "yamnet_model.hpp"
 
 #include <algorithm>
@@ -30,27 +31,15 @@ namespace {
     std::signal(SIGTERM, handle_shutdown_signal);
   }
 
-  void copy_inference_result(const signlang::env_sound_det::YamnetInferenceResult& inference_result,
-                             signlang::env_sound_det::EnvSoundDetectionResult& output_result) {
-    output_result.model_input_sample_count = inference_result.model_input_sample_count;
-    output_result.score_frame_count = inference_result.score_frame_count;
-    output_result.inference_time_ms = inference_result.inference_time_ms;
-    output_result.top_class_count = inference_result.top_class_count;
-
-    for (std::uint32_t index = 0; index < output_result.top_class_count; ++index) {
-      output_result.top_classes[index] = inference_result.top_classes[index];
-    }
-  }
-
   auto is_dangerous_sound_label(const std::array<char, signlang::env_sound_det::kMaxClassLabelLength>& label) -> bool {
     const std::string_view label_view{label.data()};
     return label_view == "Air horn, truck horn" || label_view == "Vehicle horn, car horn, honking" ||
            label_view == "Train horn";
   }
 
-  auto has_dangerous_sound(const signlang::env_sound_det::EnvSoundDetectionResult& result) -> bool {
-    for (std::uint32_t index = 0; index < result.top_class_count; ++index) {
-      if (is_dangerous_sound_label(result.top_classes[index].label)) {
+  auto has_dangerous_sound(const signlang::env_sound_det::YamnetInferenceResult& inference_result) -> bool {
+    for (std::uint32_t index = 0; index < inference_result.detected_class_count; ++index) {
+      if (is_dangerous_sound_label(inference_result.detected_classes[index].label)) {
         return true;
       }
     }
@@ -67,19 +56,19 @@ namespace {
 } // namespace
 
 auto main(int argc, char** argv) -> int {
-  using signlang::env_sound_det::AudioRingBuffer;
-  using signlang::env_sound_det::AudioWindow;
-  using signlang::env_sound_det::EnvSoundDetectionResult;
-  using signlang::env_sound_det::hop_samples_for_overlap;
+  using signlang::common::AudioRingBuffer;
+  using signlang::common::AudioWindow;
+  using signlang::common::hop_samples_for_overlap;
+  using signlang::common::samples_for_window_ms;
   using signlang::env_sound_det::IpcAudioSubscriber;
-  using signlang::env_sound_det::IpcResultPublisher;
   using signlang::env_sound_det::IpcStateControlClient;
   using signlang::env_sound_det::kYamnetSampleRateHz;
   using signlang::env_sound_det::parse_program_options;
   using signlang::env_sound_det::ProgramOptions;
   using signlang::env_sound_det::ProgramUsage;
-  using signlang::env_sound_det::samples_for_window_ms;
   using signlang::env_sound_det::YamnetModel;
+
+  signlang::logging::initialize();
 
   try {
     const auto parse_result = parse_program_options(argc, argv);
@@ -89,7 +78,12 @@ auto main(int argc, char** argv) -> int {
     }
 
     const auto options = std::get<ProgramOptions>(parse_result);
+    signlang::logging::initialize(options.logging);
     install_signal_handlers();
+
+    spdlog::info("Starting environment sound detector");
+    spdlog::info("Model: {}", options.model_path);
+    spdlog::info("Window: {}ms, overlap: {:.1f}%", options.window_ms, options.overlap_ratio * 100);
 
     const auto window_sample_count = samples_for_window_ms(kYamnetSampleRateHz, options.window_ms);
     const auto hop_sample_count = hop_samples_for_overlap(window_sample_count, options.overlap_ratio);
@@ -97,7 +91,7 @@ auto main(int argc, char** argv) -> int {
       throw std::runtime_error("Detection window has no samples");
     }
 
-    AudioRingBuffer audio_buffer{ring_capacity_samples(window_sample_count, hop_sample_count)};
+    AudioRingBuffer audio_buffer{ring_capacity_samples(window_sample_count, hop_sample_count), kYamnetSampleRateHz};
     std::atomic_bool should_stop{false};
     std::exception_ptr worker_error = nullptr;
     std::mutex worker_error_mutex;
@@ -116,12 +110,10 @@ auto main(int argc, char** argv) -> int {
     std::thread receiver_thread{[&] {
       try {
         IpcAudioSubscriber audio_subscriber{options.audio_service_name, options.subscriber_buffer_size};
-        const auto poll_period = std::chrono::milliseconds(options.poll_period_ms);
 
-        while (!should_stop.load()) {
-          const auto receive_stats = audio_subscriber.receive_available(audio_buffer);
-          if (receive_stats.accepted_count == 0) {
-            std::this_thread::sleep_for(poll_period);
+        while (!should_stop.load() && audio_subscriber.wait_for_work()) {
+          if (!should_stop.load()) {
+            audio_subscriber.receive_available(audio_buffer);
           }
         }
       } catch (...) {
@@ -131,40 +123,21 @@ auto main(int argc, char** argv) -> int {
 
     std::thread detector_thread{[&] {
       try {
+        spdlog::info("Initializing YAMNet model");
         YamnetModel model{options.model_path, options.class_map_path, options.npu_core_mask, options.rknn_priority_flag,
-                          options.top_k};
-        IpcResultPublisher result_publisher{options.result_service_name};
+                          options.score_threshold};
+        spdlog::info("YAMNet model loaded successfully");
+
         IpcStateControlClient state_control_client{options.state_control_service_name};
         AudioWindow audio_window;
         std::optional<std::uint64_t> next_window_start_sample;
-        std::uint64_t result_sequence_number = 0;
 
         while (audio_buffer.wait_for_window(next_window_start_sample, window_sample_count, hop_sample_count,
                                             should_stop, audio_window)) {
           const auto inference_result = model.infer(audio_window);
 
-          EnvSoundDetectionResult result{};
-          result.sequence_number = result_sequence_number++;
-          result.timestamp_ns = static_cast<std::uint64_t>(
-              std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
-                  .count());
-          result.audio_start_sample_index = audio_window.start_sample_index;
-          result.audio_end_sample_index = audio_window.end_sample_index;
-          result.latest_audio_sequence_number = audio_window.latest_audio_sequence_number;
-          result.latest_audio_timestamp_ns = audio_window.latest_audio_timestamp_ns;
-          result.latest_audio_sample_rate_hz = audio_window.latest_audio_sample_rate_hz;
-          result.latest_audio_publish_period_ms = audio_window.latest_audio_publish_period_ms;
-          result.latest_audio_frame_count = audio_window.latest_audio_frame_count;
-          result.latest_audio_channel_count = audio_window.latest_audio_channel_count;
-          result.latest_audio_bits_per_sample = audio_window.latest_audio_bits_per_sample;
-          result.audio_sample_rate_hz = kYamnetSampleRateHz;
-          result.window_ms = options.window_ms;
-          result.hop_ms = static_cast<std::uint32_t>((hop_sample_count * 1000) / kYamnetSampleRateHz);
-          result.overlap_ratio = static_cast<float>(options.overlap_ratio);
-          copy_inference_result(inference_result, result);
-
-          result_publisher.publish(result);
-          if (has_dangerous_sound(result)) {
+          if (has_dangerous_sound(inference_result)) {
+            spdlog::warn("Dangerous sound detected!");
             state_control_client.enter_dangerous_sound_state();
           }
           next_window_start_sample = audio_window.start_sample_index + hop_sample_count;
@@ -190,7 +163,7 @@ auto main(int argc, char** argv) -> int {
 
     return 0;
   } catch (const std::exception& error) {
-    std::cerr << error.what() << '\n';
+    spdlog::error("{}", error.what());
     return 1;
   }
 }

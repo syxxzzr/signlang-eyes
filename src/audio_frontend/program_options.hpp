@@ -2,6 +2,7 @@
 #define SIGNLANG_EYES_AUDIO_FRONTEND_PROGRAM_OPTIONS_HPP
 
 #include "audio_format.hpp"
+#include "common/logging.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -17,9 +18,9 @@ namespace signlang::audio_frontend {
     float localization_tdoa_weight;
     float localization_rms_weight;
     std::uint32_t publish_period_ms;
-    bool enable_denoise;
     AudioFormatRequest capture_format;
     AudioFormatRequest publish_format;
+    signlang::logging::Options logging;
   };
 
   struct ProgramUsage {

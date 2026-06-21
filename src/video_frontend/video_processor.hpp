@@ -5,6 +5,7 @@
 #include "video_format.hpp"
 
 #include "iox2/bb/slice.hpp"
+#include "turbojpeg.h"
 
 #include <cstdint>
 #include <vector>
@@ -14,6 +15,12 @@ namespace signlang::video_frontend {
   class VideoProcessor {
   public:
     VideoProcessor(VideoFormat capture_format, VideoFormat output_format);
+    ~VideoProcessor();
+
+    VideoProcessor(const VideoProcessor&) = delete;
+    auto operator=(const VideoProcessor&) -> VideoProcessor& = delete;
+    VideoProcessor(VideoProcessor&&) = delete;
+    auto operator=(VideoProcessor&&) -> VideoProcessor& = delete;
 
     auto capture_format() const -> VideoFormat;
     auto output_format() const -> VideoFormat;
@@ -22,24 +29,19 @@ namespace signlang::video_frontend {
     void process(const CapturedVideoFrame& captured_frame, iox2::bb::MutableSlice<std::uint8_t> output_payload) const;
 
   private:
-    struct YuyvPairMapping {
-      std::uint32_t first_luma_offset;
-      std::uint32_t second_luma_offset;
-      std::uint32_t chroma_offset;
-    };
+    static constexpr auto kRgbBytesPerPixel = std::uint32_t{3};
 
-    auto needs_resize() const -> bool;
-    auto yuyv_output_size_bytes() const -> std::uint32_t;
-    auto yuyv_capture_size_bytes() const -> std::uint32_t;
-    void initialize_yuyv_resize_maps();
-    void copy_frame(const CapturedVideoFrame& captured_frame, iox2::bb::MutableSlice<std::uint8_t> output_payload) const;
-    void resize_yuyv(const CapturedVideoFrame& captured_frame,
-                     iox2::bb::MutableSlice<std::uint8_t> output_payload) const;
+    auto rgb_output_size_bytes() const -> std::uint32_t;
+    auto rgb_capture_size_bytes() const -> std::uint32_t;
+    void yuyv_to_resized_rgb(const CapturedVideoFrame& captured_frame,
+                             iox2::bb::MutableSlice<std::uint8_t> output_payload) const;
+    void mjpeg_to_resized_rgb(const CapturedVideoFrame& captured_frame,
+                              iox2::bb::MutableSlice<std::uint8_t> output_payload) const;
 
     VideoFormat capture_format_;
     VideoFormat output_format_;
-    std::vector<std::uint32_t> yuyv_source_row_offsets_;
-    std::vector<YuyvPairMapping> yuyv_pair_mappings_;
+    mutable std::vector<std::uint8_t> capture_rgb_buffer_;
+    tjhandle jpeg_decompressor_;
   };
 
 } // namespace signlang::video_frontend

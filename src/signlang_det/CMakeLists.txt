@@ -36,11 +36,11 @@ target_include_directories(signlang_eyes_signlang_det PRIVATE
 
 target_link_libraries(signlang_eyes_signlang_det PRIVATE
         cxxopts::cxxopts
+        spdlog::spdlog
         iceoryx2-cxx::shared-lib-cxx
         signlang::rknn_runtime
         Threads::Threads
-        m
-        dl)
+        m)
 
 add_custom_command(TARGET signlang_eyes_signlang_det POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory

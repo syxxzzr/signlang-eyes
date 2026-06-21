@@ -5,7 +5,6 @@
 #include "handpose_preprocessor.hpp"
 #include "program_options.hpp"
 #include "rknn_api.h"
-#include "rknn_runtime.hpp"
 #include "video_frontend/video_frame.hpp"
 
 #include "iox2/bb/slice.hpp"
@@ -28,7 +27,7 @@ namespace signlang::handpose_det {
 
   class HandPoseModel {
   public:
-    HandPoseModel(std::string model_path, std::string runtime_library_path, const ProgramOptions& options);
+    HandPoseModel(std::string model_path, const ProgramOptions& options);
     ~HandPoseModel();
 
     HandPoseModel(const HandPoseModel&) = delete;
@@ -56,7 +55,6 @@ namespace signlang::handpose_det {
                       iox2::bb::MutableSlice<HandPoseDetection> detections) -> std::uint32_t;
 
     std::string model_path_;
-    RknnRuntime runtime_;
     rknn_context context_;
     rknn_input_output_num io_num_;
     std::vector<rknn_tensor_attr> input_attrs_;

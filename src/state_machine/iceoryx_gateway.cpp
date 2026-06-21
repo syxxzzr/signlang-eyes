@@ -1,6 +1,7 @@
 #include "iceoryx_gateway.hpp"
 
 #include "iox2/service_builder_blackboard_error.hpp"
+#include "spdlog/spdlog.h"
 
 #include <stdexcept>
 #include <string>
@@ -37,6 +38,7 @@ namespace signlang::state_machine {
       return;
     }
 
+    spdlog::info("State transition: {} -> {}", app_state_name(current_state_), app_state_name(state));
     current_state_ = state;
     publish_current_state();
   }
@@ -44,7 +46,9 @@ namespace signlang::state_machine {
   auto IpcStatePublisher::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
 
-    auto node = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+    auto node = iox2::NodeBuilder()
+                    .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
+                    .create<iox2::ServiceType::Ipc>();
     if (!node.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 IPC state machine node");
     }
@@ -161,7 +165,9 @@ namespace signlang::state_machine {
   auto IpcStateControlServer::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
 
-    auto node = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+    auto node = iox2::NodeBuilder()
+                    .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
+                    .create<iox2::ServiceType::Ipc>();
     if (!node.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 IPC state control node");
     }

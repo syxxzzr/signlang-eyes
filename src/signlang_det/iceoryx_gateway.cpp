@@ -17,7 +17,9 @@ namespace signlang::signlang_det {
   } // namespace
 
   auto IpcHandposeSubscriber::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
-    auto node_result = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+    auto node_result = iox2::NodeBuilder()
+                           .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
+                           .create<iox2::ServiceType::Ipc>();
     if (!node_result.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 node for handpose subscriber");
     }
@@ -49,8 +51,14 @@ namespace signlang::signlang_det {
   IpcHandposeSubscriber::IpcHandposeSubscriber(const std::string& service_name, std::uint64_t subscriber_buffer_size) :
       node_(create_node()), subscriber_(create_subscriber(node_, service_name, subscriber_buffer_size)) {}
 
+  auto IpcHandposeSubscriber::wait_for_work() -> bool {
+    return node_.wait(iox2::bb::Duration::from_millis(5)).has_value();
+  }
+
   auto IpcSignlangPublisher::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
-    auto node_result = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+    auto node_result = iox2::NodeBuilder()
+                           .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
+                           .create<iox2::ServiceType::Ipc>();
     if (!node_result.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 node for signlang publisher");
     }
@@ -140,7 +148,9 @@ namespace signlang::signlang_det {
   auto IpcSignlangDetStateMonitor::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
 
-    auto node = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+    auto node = iox2::NodeBuilder()
+                    .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
+                    .create<iox2::ServiceType::Ipc>();
     if (!node.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 IPC sign language detection state monitor node");
     }

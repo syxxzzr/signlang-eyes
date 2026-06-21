@@ -1,6 +1,7 @@
 #ifndef SIGNLANG_EYES_VIDEO_FRONTEND_PROGRAM_OPTIONS_HPP
 #define SIGNLANG_EYES_VIDEO_FRONTEND_PROGRAM_OPTIONS_HPP
 
+#include "common/logging.hpp"
 #include "video_format.hpp"
 
 #include <cstdint>
@@ -15,6 +16,7 @@ namespace signlang::video_frontend {
     VideoFormatRequest capture_format;
     VideoFormatRequest output_format;
     std::uint32_t fps;
+    signlang::logging::Options logging;
   };
 
   struct ProgramUsage {

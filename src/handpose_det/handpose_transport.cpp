@@ -34,7 +34,9 @@ namespace signlang::handpose_det {
 
   auto HandPoseTransport::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
-    auto node = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+    auto node = iox2::NodeBuilder()
+                    .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
+                    .create<iox2::ServiceType::Ipc>();
     if (!node.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 IPC node");
     }
@@ -131,7 +133,9 @@ namespace signlang::handpose_det {
   auto IpcHandPoseStateMonitor::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
 
-    auto node = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+    auto node = iox2::NodeBuilder()
+                    .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
+                    .create<iox2::ServiceType::Ipc>();
     if (!node.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 IPC handpose state monitor node");
     }

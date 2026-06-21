@@ -1,12 +1,12 @@
 #include "handpose_model.hpp"
 
 #include "Float16.h"
+#include "spdlog/spdlog.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <fstream>
-#include <iostream>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -18,6 +18,17 @@ namespace signlang::handpose_det {
     constexpr auto kObjectConfidenceChannel = std::uint32_t{4};
     constexpr auto kFirstKeypointChannel = std::uint32_t{5};
     constexpr auto kKeypointFieldCount = std::uint32_t{3};
+
+    auto dims_string(const rknn_tensor_attr& attr) -> std::string {
+      auto result = std::string{};
+      for (std::uint32_t i = 0; i < attr.n_dims; ++i) {
+        if (i != 0) {
+          result += ',';
+        }
+        result += std::to_string(attr.dims[i]);
+      }
+      return result;
+    }
 
     auto read_file(const std::string& path) -> std::vector<std::uint8_t> {
       std::ifstream file{path, std::ios::binary | std::ios::ate};
@@ -128,9 +139,8 @@ namespace signlang::handpose_det {
 
   } // namespace
 
-  HandPoseModel::HandPoseModel(std::string model_path, std::string runtime_library_path,
-                               const ProgramOptions& options) :
-      model_path_{std::move(model_path)}, runtime_{std::move(runtime_library_path)}, context_{0}, io_num_{},
+  HandPoseModel::HandPoseModel(std::string model_path, const ProgramOptions& options) :
+      model_path_{std::move(model_path)}, context_{0}, io_num_{},
       input_mem_{nullptr}, output_mem_{nullptr}, preprocessor_{1, 1}, confidence_threshold_{options.confidence_threshold},
       nms_threshold_{options.nms_threshold}, keypoint_count_{options.keypoint_count},
       max_detections_{options.max_detections}, model_width_{0}, model_height_{0}, output_channel_count_{0},
@@ -141,15 +151,15 @@ namespace signlang::handpose_det {
 
   HandPoseModel::~HandPoseModel() {
     if (output_mem_ != nullptr) {
-      runtime_.destroy_mem(context_, output_mem_);
+      rknn_destroy_mem(context_, output_mem_);
       output_mem_ = nullptr;
     }
     if (input_mem_ != nullptr) {
-      runtime_.destroy_mem(context_, input_mem_);
+      rknn_destroy_mem(context_, input_mem_);
       input_mem_ = nullptr;
     }
     if (context_ != 0) {
-      runtime_.destroy(context_);
+      rknn_destroy(context_);
       context_ = 0;
     }
   }
@@ -160,9 +170,9 @@ namespace signlang::handpose_det {
     preprocessor_.process(metadata, payload, payload_size, static_cast<std::uint8_t*>(input_mem_->virt_addr),
                           input_stride_width_pixels());
 
-    checked_ret(runtime_.mem_sync(context_, input_mem_, RKNN_MEMORY_SYNC_TO_DEVICE), "rknn_mem_sync(input)");
-    checked_ret(runtime_.run(context_, nullptr), "rknn_run");
-    checked_ret(runtime_.mem_sync(context_, output_mem_, RKNN_MEMORY_SYNC_FROM_DEVICE), "rknn_mem_sync(output)");
+    checked_ret(rknn_mem_sync(context_, input_mem_, RKNN_MEMORY_SYNC_TO_DEVICE), "rknn_mem_sync(input)");
+    checked_ret(rknn_run(context_, nullptr), "rknn_run");
+    checked_ret(rknn_mem_sync(context_, output_mem_, RKNN_MEMORY_SYNC_FROM_DEVICE), "rknn_mem_sync(output)");
 
     const auto detection_count = parse_output(preprocessor_.letterbox(), metadata, detections);
     return InferenceResult{
@@ -177,10 +187,10 @@ namespace signlang::handpose_det {
   void HandPoseModel::load_model(const std::string& model_path, const ProgramOptions& options) {
     auto model_data = read_file(model_path);
     const auto flags = RKNN_FLAG_PRIOR_LOW;
-    checked_ret(runtime_.init(&context_, model_data.data(), static_cast<std::uint32_t>(model_data.size()), flags, nullptr),
+    checked_ret(rknn_init(&context_, model_data.data(), static_cast<std::uint32_t>(model_data.size()), flags, nullptr),
                 "rknn_init");
 
-    checked_ret(runtime_.query(context_, RKNN_QUERY_IN_OUT_NUM, &io_num_, sizeof(io_num_)),
+    checked_ret(rknn_query(context_, RKNN_QUERY_IN_OUT_NUM, &io_num_, sizeof(io_num_)),
                 "rknn_query(IN_OUT_NUM)");
     if (io_num_.n_input != 1 || io_num_.n_output != 1) {
       throw std::runtime_error("Expected one RKNN input and one RKNN output for yolov8 handpose model");
@@ -191,7 +201,7 @@ namespace signlang::handpose_det {
       auto& attr = input_attrs_[i];
       std::memset(&attr, 0, sizeof(attr));
       attr.index = i;
-      checked_ret(runtime_.query(context_, RKNN_QUERY_INPUT_ATTR, &attr, sizeof(attr)), "rknn_query(INPUT_ATTR)");
+      checked_ret(rknn_query(context_, RKNN_QUERY_INPUT_ATTR, &attr, sizeof(attr)), "rknn_query(INPUT_ATTR)");
     }
 
     output_attrs_.resize(io_num_.n_output);
@@ -199,10 +209,10 @@ namespace signlang::handpose_det {
       auto& attr = output_attrs_[i];
       std::memset(&attr, 0, sizeof(attr));
       attr.index = i;
-      checked_ret(runtime_.query(context_, RKNN_QUERY_OUTPUT_ATTR, &attr, sizeof(attr)), "rknn_query(OUTPUT_ATTR)");
+      checked_ret(rknn_query(context_, RKNN_QUERY_OUTPUT_ATTR, &attr, sizeof(attr)), "rknn_query(OUTPUT_ATTR)");
     }
 
-    checked_ret(runtime_.set_core_mask(context_, parse_core_mask(options.npu_core_mask)), "rknn_set_core_mask");
+    checked_ret(rknn_set_core_mask(context_, parse_core_mask(options.npu_core_mask)), "rknn_set_core_mask");
 
     model_width_ = input_width(input_attrs_[0]);
     model_height_ = input_height(input_attrs_[0]);
@@ -232,22 +242,22 @@ namespace signlang::handpose_det {
     input_attr.type = RKNN_TENSOR_UINT8;
     input_attr.fmt = RKNN_TENSOR_NHWC;
     input_attr.pass_through = 0;
-    input_mem_ = runtime_.create_mem(context_, input_attr.size_with_stride == 0 ? input_attr.size : input_attr.size_with_stride);
+    input_mem_ = rknn_create_mem(context_, input_attr.size_with_stride == 0 ? input_attr.size : input_attr.size_with_stride);
     if (input_mem_ == nullptr) {
       throw std::runtime_error("rknn_create_mem(input) failed");
     }
-    checked_ret(runtime_.set_io_mem(context_, input_mem_, &input_attr), "rknn_set_io_mem(input)");
+    checked_ret(rknn_set_io_mem(context_, input_mem_, &input_attr), "rknn_set_io_mem(input)");
     input_attrs_[0] = input_attr;
 
     auto output_attr = output_attrs_[0];
     output_attr.type = output_attr.type == RKNN_TENSOR_FLOAT16 ? RKNN_TENSOR_FLOAT16 : output_attr.type;
     output_attr.fmt = RKNN_TENSOR_NCHW;
     const auto output_size = output_attr.size_with_stride == 0 ? output_attr.size : output_attr.size_with_stride;
-    output_mem_ = runtime_.create_mem(context_, output_size);
+    output_mem_ = rknn_create_mem(context_, output_size);
     if (output_mem_ == nullptr) {
       throw std::runtime_error("rknn_create_mem(output) failed");
     }
-    checked_ret(runtime_.set_io_mem(context_, output_mem_, &output_attr), "rknn_set_io_mem(output)");
+    checked_ret(rknn_set_io_mem(context_, output_mem_, &output_attr), "rknn_set_io_mem(output)");
     output_attrs_[0] = output_attr;
 
     candidates_.reserve(output_candidate_count_);
@@ -257,17 +267,10 @@ namespace signlang::handpose_det {
   void HandPoseModel::print_tensor_details() const {
     const auto& input = input_attrs_[0];
     const auto& output = output_attrs_[0];
-    std::cout << "RKNN input: name=" << input.name << " dims=[";
-    for (std::uint32_t i = 0; i < input.n_dims; ++i) {
-      std::cout << (i == 0 ? "" : ",") << input.dims[i];
-    }
-    std::cout << "] size=" << input.size << " stride_size=" << input.size_with_stride << '\n';
-
-    std::cout << "RKNN output: name=" << output.name << " dims=[";
-    for (std::uint32_t i = 0; i < output.n_dims; ++i) {
-      std::cout << (i == 0 ? "" : ",") << output.dims[i];
-    }
-    std::cout << "] size=" << output.size << " stride_size=" << output.size_with_stride << '\n';
+    spdlog::info("RKNN input: name={} dims=[{}] size={} stride_size={}",
+                 input.name, dims_string(input), input.size, input.size_with_stride);
+    spdlog::info("RKNN output: name={} dims=[{}] size={} stride_size={}",
+                 output.name, dims_string(output), output.size, output.size_with_stride);
   }
 
   auto HandPoseModel::input_stride_width_pixels() const -> std::uint32_t {

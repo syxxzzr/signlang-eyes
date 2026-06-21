@@ -8,6 +8,7 @@ namespace signlang::video_frontend {
 
   constexpr auto kPixelFormatYuyv = std::uint32_t{0x56595559};
   constexpr auto kPixelFormatMjpeg = std::uint32_t{0x47504A4D};
+  constexpr auto kPixelFormatRgb24 = std::uint32_t{0x33424752};
 
   struct VideoFrameMetadata {
     std::uint64_t sequence_number;

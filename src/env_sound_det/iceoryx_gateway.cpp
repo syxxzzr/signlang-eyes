@@ -48,10 +48,16 @@ namespace signlang::env_sound_det {
     return stats;
   }
 
+  auto IpcAudioSubscriber::wait_for_work() -> bool {
+    return node_.wait(iox2::bb::Duration::from_millis(5)).has_value();
+  }
+
   auto IpcAudioSubscriber::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
 
-    auto node = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+    auto node = iox2::NodeBuilder()
+                    .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
+                    .create<iox2::ServiceType::Ipc>();
     if (!node.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 IPC audio subscriber node");
     }
@@ -77,51 +83,6 @@ namespace signlang::env_sound_det {
     return std::move(subscriber.value());
   }
 
-  IpcResultPublisher::IpcResultPublisher(const std::string& service_name) :
-      node_{create_node()}, publisher_{create_publisher(node_, service_name)} {}
-
-  void IpcResultPublisher::publish(const EnvSoundDetectionResult& result) {
-    auto loan_result = publisher_.loan_uninit();
-    if (!loan_result.has_value()) {
-      throw std::runtime_error("Failed to loan iceoryx2 environment sound result sample");
-    }
-
-    auto loaned_sample = std::move(loan_result.value());
-    auto initialized_sample = loaned_sample.write_payload(EnvSoundDetectionResult{result});
-    const auto send_result = iox2::send(std::move(initialized_sample));
-    if (!send_result.has_value()) {
-      throw std::runtime_error("Failed to publish environment sound result through iceoryx2");
-    }
-  }
-
-  auto IpcResultPublisher::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
-    iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
-
-    auto node = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
-    if (!node.has_value()) {
-      throw std::runtime_error("Failed to create iceoryx2 IPC result publisher node");
-    }
-
-    return std::move(node.value());
-  }
-
-  auto IpcResultPublisher::create_publisher(const iox2::Node<iox2::ServiceType::Ipc>& node,
-                                            const std::string& service_name)
-      -> iox2::Publisher<iox2::ServiceType::Ipc, EnvSoundDetectionResult, void> {
-    auto service =
-        node.service_builder(service_name_from_string(service_name)).publish_subscribe<EnvSoundDetectionResult>().open_or_create();
-    if (!service.has_value()) {
-      throw std::runtime_error("Failed to open or create iceoryx2 environment sound result service: " + service_name);
-    }
-
-    auto publisher = service.value().publisher_builder().create();
-    if (!publisher.has_value()) {
-      throw std::runtime_error("Failed to create iceoryx2 result publisher for service: " + service_name);
-    }
-
-    return std::move(publisher.value());
-  }
-
   IpcStateControlClient::IpcStateControlClient(const std::string& service_name) :
       node_{create_node()}, service_{create_service(node_, service_name)}, client_{create_client(service_)} {}
 
@@ -138,7 +99,9 @@ namespace signlang::env_sound_det {
   auto IpcStateControlClient::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
 
-    auto node = iox2::NodeBuilder().create<iox2::ServiceType::Ipc>();
+    auto node = iox2::NodeBuilder()
+                    .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
+                    .create<iox2::ServiceType::Ipc>();
     if (!node.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 IPC state control client node");
     }

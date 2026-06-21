@@ -1,7 +1,7 @@
 #ifndef SIGNLANG_EYES_SPEECH_ASR_ICEORYX_GATEWAY_HPP
 #define SIGNLANG_EYES_SPEECH_ASR_ICEORYX_GATEWAY_HPP
 
-#include "audio_ring_buffer.hpp"
+#include "common/audio_ring_buffer.hpp"
 #include "speech_asr_result.hpp"
 
 #include "audio_frontend/audio_frame.hpp"
@@ -13,6 +13,8 @@
 #include <string>
 
 namespace signlang::speech_asr {
+
+  using signlang::common::AudioRingBuffer;
 
   struct AudioReceiveStats {
     std::uint32_t accepted_count;
@@ -29,6 +31,8 @@ namespace signlang::speech_asr {
     auto operator=(IpcAudioSubscriber&&) -> IpcAudioSubscriber& = delete;
 
     auto receive_available(AudioRingBuffer& ring_buffer) -> AudioReceiveStats;
+
+    auto wait_for_work() -> bool;
 
   private:
     static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;

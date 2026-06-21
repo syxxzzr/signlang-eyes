@@ -1,9 +1,11 @@
 #include "alsa_capture_device.hpp"
 #include "audio_processor.hpp"
 #include "audio_publisher.hpp"
+#include "common/logging.hpp"
 #include "program_options.hpp"
 #include "sound_source_blackboard.hpp"
 #include "sound_source_localization.hpp"
+#include "spdlog/spdlog.h"
 
 #include <chrono>
 #include <csignal>
@@ -53,6 +55,8 @@ auto main(int argc, char** argv) -> int {
   using signlang::audio_frontend::SoundSourceBlackboardPublisher;
   using signlang::audio_frontend::SoundSourceLocalizer;
 
+  signlang::logging::initialize();
+
   try {
     const auto parse_result = parse_program_options(argc, argv);
     if (const auto* usage = std::get_if<ProgramUsage>(&parse_result); usage != nullptr) {
@@ -61,18 +65,30 @@ auto main(int argc, char** argv) -> int {
     }
 
     const auto& options = std::get<ProgramOptions>(parse_result);
+    signlang::logging::initialize(options.logging);
     install_signal_handlers();
+
+    spdlog::info("Starting audio frontend");
+    spdlog::info("Device: {}", options.audio_device_name);
+    if (options.capture_format.sample_rate_hz.has_value() && options.capture_format.channel_count.has_value()) {
+      spdlog::info("Requested capture: {}Hz, {} channels",
+                   options.capture_format.sample_rate_hz.value(), options.capture_format.channel_count.value());
+    }
 
     AlsaCaptureDevice capture_device{options.audio_device_name, options.capture_format, options.publish_period_ms};
     const auto capture_format = capture_device.format();
+    spdlog::info("Actual capture: {}Hz, {} channels, period: {}ms",
+                 capture_format.sample_rate_hz, capture_format.channel_count, options.publish_period_ms);
+
     const AudioFormat publish_format{
         .sample_rate_hz =
             options.publish_format.sample_rate_hz.value_or(signlang::audio_frontend::kDefaultSampleRateHz),
         .channel_count = options.publish_format.channel_count.value_or(signlang::audio_frontend::kDefaultChannelCount),
     };
     validate_publish_format(capture_format, publish_format);
+    spdlog::info("Output format: {}Hz, {} channels", publish_format.sample_rate_hz, publish_format.channel_count);
 
-    AudioProcessor audio_processor{capture_format, publish_format, options.publish_period_ms, options.enable_denoise};
+    AudioProcessor audio_processor{capture_format, publish_format, options.publish_period_ms};
     AudioPublisher publisher{options.service_name};
     SoundSourceLocalizer sound_source_localizer{options.localization_tdoa_weight, options.localization_rms_weight};
     std::unique_ptr<SoundSourceBlackboardPublisher> sound_source_blackboard;
@@ -95,7 +111,7 @@ auto main(int argc, char** argv) -> int {
 
     return 0;
   } catch (const std::exception& error) {
-    std::cerr << error.what() << '\n';
+    spdlog::error("{}", error.what());
     return 1;
   }
 }

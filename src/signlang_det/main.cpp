@@ -1,15 +1,19 @@
+#include "common/logging.hpp"
 #include "feature_extractor.hpp"
 #include "iceoryx_gateway.hpp"
 #include "keypoint_ring_buffer.hpp"
 #include "program_options.hpp"
+#include "spdlog/spdlog.h"
 #include "signlang_model.hpp"
 #include "signlang_result.hpp"
 
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <csignal>
 #include <exception>
 #include <iostream>
+#include <optional>
 #include <thread>
 #include <variant>
 
@@ -64,16 +68,14 @@ namespace {
                                             options.subscriber_buffer_size};
     auto extractor = FeatureExtractor{options.min_keypoint_confidence};
 
-    while (!should_stop) {
-      const auto received = subscriber.receive_latest(
-        [&](const auto& metadata, const auto* detections, auto count) {
-          if (auto feature = extractor.extract(metadata, detections, count)) {
-            ring_buffer.push(*feature);
-          }
-        });
-
-      if (!received) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    while (!should_stop && subscriber.wait_for_work()) {
+      if (!should_stop) {
+        subscriber.receive_latest(
+          [&](const auto& metadata, const auto* detections, auto count) {
+            if (auto feature = extractor.extract(metadata, detections, count)) {
+              ring_buffer.push(*feature);
+            }
+          });
       }
     }
   }
@@ -91,23 +93,33 @@ namespace {
                                options.prototypes_path,
                                options.npu_core_mask,
                                options.motion_weight, options.dtw_window_ratio};
-    auto publisher = IpcSignlangPublisher{options.output_service_name};
-    auto state_monitor = IpcSignlangDetStateMonitor{options.state_event_service_name,
-                                                     options.state_blackboard_service_name};
+    spdlog::info("Sign language model loaded successfully");
 
-    const auto hop_frames = static_cast<std::uint32_t>(
-      options.sequence_length * (1.0f - options.overlap_ratio));
-    auto last_processed_seq = std::uint64_t{0};
+    auto publisher = IpcSignlangPublisher{options.output_service_name};
+    auto state_monitor = std::optional<IpcSignlangDetStateMonitor>{};
+    if (options.state_event_service_name.has_value() && options.state_blackboard_service_name.has_value()) {
+      state_monitor.emplace(options.state_event_service_name.value(), options.state_blackboard_service_name.value());
+    }
+    auto gate_enabled = [&]() { return !state_monitor.has_value() || state_monitor->is_enabled(); };
+    auto poll_gate = [&]() {
+      if (state_monitor.has_value()) {
+        state_monitor->try_wait_for_state_change();
+      }
+    };
+
+    const auto hop_frames = std::max<std::uint32_t>(
+      1, static_cast<std::uint32_t>(options.sequence_length * (1.0f - options.overlap_ratio)));
+    auto next_window_end_seq = std::uint64_t{hop_frames};
 
     while (!should_stop) {
       // Check for state changes before waiting for buffer
-      state_monitor.try_wait_for_state_change();
+      poll_gate();
 
-      if (!state_monitor.is_enabled()) {
+      if (!gate_enabled()) {
         // Poll for state change with stop check to avoid hang on shutdown
-        while (!should_stop.load() && !state_monitor.is_enabled()) {
-          state_monitor.try_wait_for_state_change();
-          if (!state_monitor.is_enabled()) {
+        while (!should_stop.load() && !gate_enabled()) {
+          poll_gate();
+          if (!gate_enabled()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
           }
         }
@@ -116,46 +128,41 @@ namespace {
         }
         // Discard stale data accumulated during disabled period
         ring_buffer.clear();
-        last_processed_seq = 0;
+        next_window_end_seq = hop_frames;
         continue;
       }
 
-      if (!ring_buffer.wait_for_size(options.sequence_length, should_stop)) {
+      auto window = ring_buffer.wait_for_window(options.sequence_length, next_window_end_seq, should_stop);
+      if (!window.has_value()) {
         break;
       }
 
-      auto window = ring_buffer.get_window(options.sequence_length);
-      if (!window.has_value()) {
-        continue;
-      }
-
       const auto window_end_seq = window->back().source_sequence_number;
-      if (window_end_seq < last_processed_seq + hop_frames) {
-        continue;
-      }
-
       try {
         const auto inference_result = model.infer(*window);
 
         // Apply confidence threshold
         if (inference_result.confidence < options.confidence_threshold) {
-          last_processed_seq = window_end_seq;
+          next_window_end_seq = window_end_seq + hop_frames;
           continue;
         }
 
         // Apply confidence margin check (reject if top1 and top2 are too close)
         const auto margin = inference_result.confidence - inference_result.second_confidence;
         if (margin < options.confidence_margin) {
-          last_processed_seq = window_end_seq;
+          next_window_end_seq = window_end_seq + hop_frames;
           continue;
         }
 
         const auto result = build_result(*window, inference_result, options, model);
+        spdlog::info("Sign language detected: {} (confidence: {:.2f})",
+                     model.get_gesture_name(inference_result.gesture_id), inference_result.confidence);
         publisher.publish(result);
 
-        last_processed_seq = window_end_seq;
+        next_window_end_seq = window_end_seq + hop_frames;
       } catch (const std::exception& e) {
-        std::cerr << "Inference error: " << e.what() << '\n';
+        spdlog::error("Inference error: {}", e.what());
+        next_window_end_seq = window_end_seq + hop_frames;
       }
     }
   }
@@ -169,6 +176,8 @@ auto main(int argc, char** argv) -> int {
   using signlang::signlang_det::KeypointRingBuffer;
   using signlang::signlang_det::compute_buffer_capacity;
 
+  signlang::logging::initialize();
+
   try {
     const auto parse_result = parse_program_options(argc, argv);
     if (const auto* usage = std::get_if<ProgramUsage>(&parse_result); usage != nullptr) {
@@ -177,7 +186,12 @@ auto main(int argc, char** argv) -> int {
     }
 
     const auto options = std::get<ProgramOptions>(parse_result);
+    signlang::logging::initialize(options.logging);
     install_signal_handlers();
+
+    spdlog::info("Starting sign language detector");
+    spdlog::info("Model: {}", options.model_path);
+    spdlog::info("Sequence length: {}, overlap ratio: {:.1f}%", options.sequence_length, options.overlap_ratio * 100);
 
     const auto buffer_capacity = compute_buffer_capacity(
       options.sequence_length, options.overlap_ratio);
@@ -204,7 +218,7 @@ auto main(int argc, char** argv) -> int {
 
     return 0;
   } catch (const std::exception& e) {
-    std::cerr << "Error: " << e.what() << '\n';
+    spdlog::error("Error: {}", e.what());
     return 1;
   }
 }

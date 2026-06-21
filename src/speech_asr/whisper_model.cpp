@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -341,9 +342,10 @@ namespace signlang::speech_asr {
       const auto token_text = separator == std::string::npos ? std::string{} : line.substr(separator + 1);
 
       std::uint32_t token_index = 0;
-      try {
-        token_index = static_cast<std::uint32_t>(std::stoul(index_text));
-      } catch (const std::exception&) {
+      const auto* index_begin = index_text.data();
+      const auto* index_end = index_begin + index_text.size();
+      const auto [parse_end, parse_error] = std::from_chars(index_begin, index_end, token_index);
+      if (parse_error != std::errc{} || parse_end != index_end) {
         throw std::runtime_error("Invalid Whisper vocabulary line: " + line);
       }
 

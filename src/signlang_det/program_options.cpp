@@ -1,5 +1,6 @@
 #include "program_options.hpp"
 
+#include "common/logging_cli.hpp"
 #include "cxxopts.hpp"
 
 #include <stdexcept>
@@ -65,22 +66,28 @@ namespace signlang::signlang_det {
         cxxopts::value<float>()->default_value(std::to_string(kDefaultConfidenceMargin)))(
         "npu-core", "NPU core selection: auto,0,1,2,0_1,0_1_2,all",
         cxxopts::value<std::string>()->default_value("auto"))("h,help", "Print usage");
+    signlang::logging::add_cli_options(options);
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
       return ProgramUsage{.text = options.help()};
     }
 
-    if (parsed_options.count("input-service") == 0 || parsed_options.count("output-service") == 0 ||
-        parsed_options.count("state-event-service") == 0 || parsed_options.count("state-blackboard-service") == 0) {
-      throw std::runtime_error("Options --input-service, --output-service, --state-event-service, and "
-                               "--state-blackboard-service are required.\n\n" +
+    if (parsed_options.count("input-service") == 0 || parsed_options.count("output-service") == 0) {
+      throw std::runtime_error("Options --input-service and --output-service are required.\n\n" + options.help());
+    }
+
+    const auto has_state_event_service = parsed_options.count("state-event-service") != 0;
+    const auto has_state_blackboard_service = parsed_options.count("state-blackboard-service") != 0;
+    if (has_state_event_service != has_state_blackboard_service) {
+      throw std::runtime_error("Options --state-event-service and --state-blackboard-service must be provided "
+                               "together.\n\n" +
                                options.help());
     }
 
     const auto sequence_length = parsed_options["sequence-length"].as<std::uint32_t>();
-    if (sequence_length == 0 || sequence_length > 120) {
-      throw std::runtime_error("--sequence-length must be between 1 and 120");
+    if (sequence_length == 0) {
+      throw std::runtime_error("--sequence-length must be greater than 0");
     }
 
     const auto overlap_ratio = parsed_options["overlap-ratio"].as<float>();
@@ -94,8 +101,8 @@ namespace signlang::signlang_det {
     }
 
     const auto subscriber_buffer_size = parsed_options["subscriber-buffer"].as<std::uint64_t>();
-    if (subscriber_buffer_size == 0 || subscriber_buffer_size > 8) {
-      throw std::runtime_error("--subscriber-buffer must be between 1 and 8");
+    if (subscriber_buffer_size == 0) {
+      throw std::runtime_error("--subscriber-buffer must be greater than 0");
     }
 
     const auto motion_weight = parsed_options["motion-weight"].as<float>();
@@ -124,8 +131,13 @@ namespace signlang::signlang_det {
     return ProgramOptions{
         .input_service_name = parsed_options["input-service"].as<std::string>(),
         .output_service_name = parsed_options["output-service"].as<std::string>(),
-        .state_event_service_name = parsed_options["state-event-service"].as<std::string>(),
-        .state_blackboard_service_name = parsed_options["state-blackboard-service"].as<std::string>(),
+        .state_event_service_name =
+            has_state_event_service ? std::optional<std::string>{parsed_options["state-event-service"].as<std::string>()}
+                                    : std::nullopt,
+        .state_blackboard_service_name =
+            has_state_blackboard_service
+                ? std::optional<std::string>{parsed_options["state-blackboard-service"].as<std::string>()}
+                : std::nullopt,
         .model_path = parsed_options["model"].as<std::string>(),
         .label_map_path = parsed_options["label-map"].as<std::string>(),
         .prototypes_path = parsed_options["prototypes"].as<std::string>(),
@@ -138,6 +150,7 @@ namespace signlang::signlang_det {
         .dtw_window_ratio = dtw_window_ratio,
         .confidence_threshold = confidence_threshold,
         .confidence_margin = confidence_margin,
+        .logging = signlang::logging::parse_cli_options(parsed_options),
     };
   }
 

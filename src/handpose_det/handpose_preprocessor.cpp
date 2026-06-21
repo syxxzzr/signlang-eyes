@@ -10,24 +10,10 @@ namespace signlang::handpose_det {
   namespace {
 
     constexpr auto kRgbChannelCount = std::uint32_t{3};
-    constexpr auto kYuyvBytesPerPixel = std::uint32_t{2};
     constexpr auto kLetterboxFill = std::uint8_t{114};
 
-    auto checked_yuyv_size_bytes(std::uint32_t width, std::uint32_t height) -> std::uint64_t {
-      return static_cast<std::uint64_t>(width) * height * kYuyvBytesPerPixel;
-    }
-
-    auto clamp_to_u8(int value) -> std::uint8_t {
-      return static_cast<std::uint8_t>(std::clamp(value, 0, 255));
-    }
-
-    void yuv_to_rgb(std::uint8_t y, std::uint8_t u, std::uint8_t v, std::uint8_t* output) {
-      const auto c = static_cast<int>(y) - 16;
-      const auto d = static_cast<int>(u) - 128;
-      const auto e = static_cast<int>(v) - 128;
-      output[0] = clamp_to_u8((298 * c + 409 * e + 128) >> 8);
-      output[1] = clamp_to_u8((298 * c - 100 * d - 208 * e + 128) >> 8);
-      output[2] = clamp_to_u8((298 * c + 516 * d + 128) >> 8);
+    auto checked_rgb_size_bytes(std::uint32_t width, std::uint32_t height) -> std::uint64_t {
+      return static_cast<std::uint64_t>(width) * height * kRgbChannelCount;
     }
 
   } // namespace
@@ -41,16 +27,12 @@ namespace signlang::handpose_det {
   }
 
   void HandPosePreprocessor::prepare(const signlang::video_frontend::VideoFrameMetadata& metadata) {
-    if (metadata.pixel_format != signlang::video_frontend::kPixelFormatYuyv) {
-      throw std::runtime_error("Hand pose detector currently supports YUYV video input only");
+    if (metadata.pixel_format != signlang::video_frontend::kPixelFormatRgb24) {
+      throw std::runtime_error("Hand pose detector currently supports RGB24 video input only");
     }
 
     if (metadata.output_width == 0 || metadata.output_height == 0) {
       throw std::runtime_error("Invalid upstream video frame dimensions");
-    }
-
-    if ((metadata.output_width % 2) != 0) {
-      throw std::runtime_error("YUYV video input width must be even");
     }
 
     if (metadata.output_width != image_width_ || metadata.output_height != image_height_) {
@@ -63,9 +45,9 @@ namespace signlang::handpose_det {
                                      std::uint8_t* output_data, std::uint32_t output_stride_width_pixels) {
     prepare(metadata);
 
-    const auto expected_input_size = checked_yuyv_size_bytes(metadata.output_width, metadata.output_height);
+    const auto expected_input_size = checked_rgb_size_bytes(metadata.output_width, metadata.output_height);
     if (input_size_bytes < expected_input_size) {
-      throw std::runtime_error("Upstream YUYV video frame payload is smaller than metadata dimensions");
+      throw std::runtime_error("Upstream RGB video frame payload is smaller than metadata dimensions");
     }
 
     if (output_stride_width_pixels < model_width_) {
@@ -84,9 +66,11 @@ namespace signlang::handpose_det {
 
       for (std::uint32_t x = 0; x < letterbox_.resized_width; ++x) {
         const auto& mapping = pixel_maps_[map_row_offset + x];
-        const auto* source_pair = input_data + mapping.source_yuyv_pair_offset;
-        const auto y_value = mapping.second_luma ? source_pair[2] : source_pair[0];
-        yuv_to_rgb(y_value, source_pair[1], source_pair[3], output_row + (static_cast<std::uint64_t>(x) * 3));
+        const auto* source_pixel = input_data + mapping.source_rgb_offset;
+        auto* output_pixel = output_row + (static_cast<std::uint64_t>(x) * kRgbChannelCount);
+        output_pixel[0] = source_pixel[0];
+        output_pixel[1] = source_pixel[1];
+        output_pixel[2] = source_pixel[2];
       }
     }
   }
@@ -123,16 +107,14 @@ namespace signlang::handpose_det {
       for (std::uint32_t output_x = 0; output_x < letterbox_.resized_width; ++output_x) {
         const auto source_x = static_cast<std::uint32_t>(
             (static_cast<std::uint64_t>(output_x) * image_width) / letterbox_.resized_width);
-        const auto source_pair_x = source_x / 2;
         const auto source_offset =
-            (static_cast<std::uint64_t>(source_y) * image_width + static_cast<std::uint64_t>(source_pair_x) * 2) * 2;
+            (static_cast<std::uint64_t>(source_y) * image_width + source_x) * kRgbChannelCount;
         if (source_offset > std::numeric_limits<std::uint32_t>::max()) {
-          throw std::runtime_error("YUYV source frame is too large");
+          throw std::runtime_error("RGB source frame is too large");
         }
 
         pixel_maps_[static_cast<std::uint64_t>(output_y) * letterbox_.resized_width + output_x] = PixelMap{
-            .source_yuyv_pair_offset = static_cast<std::uint32_t>(source_offset),
-            .second_luma = (source_x % 2) != 0,
+            .source_rgb_offset = static_cast<std::uint32_t>(source_offset),
         };
       }
     }

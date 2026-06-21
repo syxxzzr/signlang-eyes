@@ -1,9 +1,11 @@
 #ifndef SIGNLANG_EYES_HANDPOSE_DET_PROGRAM_OPTIONS_HPP
 #define SIGNLANG_EYES_HANDPOSE_DET_PROGRAM_OPTIONS_HPP
 
+#include "common/logging.hpp"
 #include "handpose_frame.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <variant>
 
@@ -12,17 +14,16 @@ namespace signlang::handpose_det {
   constexpr auto kDefaultModelPath = "models/yolov8n-handpose/yolov8_handpose.rknn";
   constexpr auto kDefaultConfidenceThreshold = 0.5F;
   constexpr auto kDefaultNmsThreshold = 0.4F;
-  constexpr auto kDefaultSubscriberBufferSize = std::uint64_t{1};
+  constexpr auto kDefaultSubscriberBufferSize = std::uint64_t{2};
   constexpr auto kDefaultKeypointCount = std::uint32_t{21};
   constexpr auto kDefaultMaxDetections = std::uint32_t{16};
 
   struct ProgramOptions {
     std::string input_service_name;
     std::string output_service_name;
-    std::string state_event_service_name;
-    std::string state_blackboard_service_name;
+    std::optional<std::string> state_event_service_name;
+    std::optional<std::string> state_blackboard_service_name;
     std::string model_path;
-    std::string rknn_runtime_library_path;
     float confidence_threshold;
     float nms_threshold;
     std::uint64_t subscriber_buffer_size;
@@ -30,6 +31,7 @@ namespace signlang::handpose_det {
     std::uint32_t max_detections;
     std::string npu_core_mask;
     bool verbose;
+    signlang::logging::Options logging;
   };
 
   struct ProgramUsage {

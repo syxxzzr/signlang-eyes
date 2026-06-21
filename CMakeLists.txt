@@ -26,8 +26,6 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -no-pie")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-pie")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-pie")
 
-option(SIGNLANG_ENABLE_TESTS "Build signlang-eyes manual integration test executables" ON)
-
 set(SIGNLANG_MODEL_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/models CACHE PATH "Local root directory for model assets")
 
 # Add src directory to include path for cross-module headers
@@ -42,6 +40,14 @@ add_library(cxxopts::cxxopts ALIAS cxxopts)
 add_library(tomlplusplus INTERFACE)
 target_include_directories(tomlplusplus INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tomlplusplus/include)
 add_library(tomlplusplus::tomlplusplus ALIAS tomlplusplus)
+
+# spdlog
+add_library(spdlog SHARED IMPORTED GLOBAL)
+set_target_properties(spdlog PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/third_party/spdlog/lib/aarch64/libspdlog.so
+    INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/spdlog/include
+    INTERFACE_COMPILE_DEFINITIONS "SPDLOG_COMPILED_LIB;SPDLOG_SHARED_LIB")
+add_library(spdlog::spdlog ALIAS spdlog)
 
 # iceoryx2
 list(APPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/third_party/iceoryx2)
@@ -70,10 +76,26 @@ set_target_properties(signlang_rknn_runtime PROPERTIES
 target_link_libraries(signlang_rknn_runtime INTERFACE signlang::rknn_headers)
 add_library(signlang::rknn_runtime ALIAS signlang_rknn_runtime)
 
+# libjpeg-turbo
+set(SIGNLANG_TURBOJPEG_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libjpeg_turbo/include)
+set(SIGNLANG_TURBOJPEG_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libjpeg_turbo/lib/aarch64)
+add_library(libjpeg_turbo STATIC IMPORTED GLOBAL)
+set_target_properties(libjpeg_turbo PROPERTIES
+    IMPORTED_LOCATION ${SIGNLANG_TURBOJPEG_LIB_DIR}/libturbojpeg.a
+    INTERFACE_INCLUDE_DIRECTORIES ${SIGNLANG_TURBOJPEG_INCLUDE_DIR})
+add_library(libjpeg-turbo::turbojpeg ALIAS libjpeg_turbo)
+
+# librga (Rockchip RGA hardware accelerator)
+add_library(librga SHARED IMPORTED GLOBAL)
+set_target_properties(librga PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/third_party/librga/lib/aarch64/librga.so
+    INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/librga/include)
+add_library(librga::rga ALIAS librga)
+
 # Modules
 file(GLOB MODULE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src/*)
 foreach(MODULE_DIR ${MODULE_DIRS})
-    if(IS_DIRECTORY ${MODULE_DIR})
+    if(IS_DIRECTORY ${MODULE_DIR} AND EXISTS ${MODULE_DIR}/CMakeLists.txt)
         add_subdirectory(${MODULE_DIR})
     endif()
 endforeach()
@@ -83,6 +105,13 @@ install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/iceoryx2/lib/libiceoryx2_cxx.so
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/iceoryx2/lib/libiceoryx2_ffi_c.so
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/rknn_runtime/lib/aarch64/librknnrt.so
+    DESTINATION lib)
+
+install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/spdlog/lib/aarch64/libspdlog.so.1.17.0
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/spdlog/lib/aarch64/libspdlog.so.1.17
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/spdlog/lib/aarch64/libspdlog.so
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/librga/lib/aarch64/librga.so
     DESTINATION lib)
 
 # Install default launcher configuration

@@ -1,6 +1,9 @@
+[logging]
+rotate_size = 1048576
+retain_files = 100
+
 [audio_frontend]
-device = "default"                 # ALSA device name (e.g. "hw:0,0", "default")
-denoise = true                     # Enable Wiener noise reduction
+device = "hw:2,0"                  # ALSA device name (e.g. "hw:0,0", "default")
 capture_rate = 16000               # Requested capture sample rate in Hz
 capture_channels = 2               # Requested capture channel count
 # publish_rate = 16000             # Published sample rate in Hz
@@ -11,10 +14,10 @@ capture_channels = 2               # Requested capture channel count
 
 [video_frontend]
 device = "/dev/video21"            # V4L2 camera device path
+output_width = 640                 # Published output width
+output_height = 480                # Published output height
 # capture_width = 1920             # Requested capture width
 # capture_height = 1080            # Requested capture height
-# output_width = 640               # Published output width
-# output_height = 480              # Published output height
 # fps = 30                         # Requested frame rate
 
 [speech_asr]
@@ -31,18 +34,16 @@ npu_core = "1"                     # auto, all, 0, 1, 2, 0_1, 0_1_2
 # encoder_npu_core = ""            # Override encoder NPU core (empty = use npu_core)
 # decoder_npu_core = ""            # Override decoder NPU core (empty = use npu_core)
 # rknn_priority = "medium"         # high, medium, low
-# poll_ms = 2                      # Subscriber poll interval in ms
-# subscriber_buffer = 4            # iceoryx2 subscriber queue size
+# subscriber_buffer = 2            # iceoryx2 subscriber queue size
 
 [env_sound_det]
 npu_core = "0"
 # window_ms = 3000                 # Detection window length in ms
 # overlap = 0.2                    # Overlap ratio between adjacent windows
-# top_k = 5                        # Number of top classes to publish
+# score_threshold = 0.3            # Minimum score threshold for dangerous sound detection
 # model = "models/yamnet/yamnet_3s.rknn"
 # class_map = "models/yamnet/yamnet_class_map.txt"
 # rknn_priority = "medium"
-# poll_ms = 2
 # subscriber_buffer = 2
 
 [handpose_det]
@@ -52,7 +53,7 @@ npu_core = "2"
 # nms = 0.4                        # NMS IoU threshold
 # keypoints = 21                   # Expected keypoint count per hand
 # max_detections = 2               # Max detections published per frame
-# subscriber_buffer = 1
+# subscriber_buffer = 2
 
 [signlang_det]
 npu_core = "0"

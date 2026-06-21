@@ -1,7 +1,7 @@
 #ifndef SIGNLANG_EYES_SPEECH_ASR_WHISPER_MODEL_HPP
 #define SIGNLANG_EYES_SPEECH_ASR_WHISPER_MODEL_HPP
 
-#include "audio_ring_buffer.hpp"
+#include "common/audio_ring_buffer.hpp"
 #include "program_options.hpp"
 #include "speech_asr_result.hpp"
 
@@ -13,6 +13,8 @@
 #include <vector>
 
 namespace signlang::speech_asr {
+
+  using signlang::common::AudioWindow;
 
   struct WhisperInferenceResult {
     std::string transcript;

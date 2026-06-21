@@ -1,12 +1,12 @@
 #include "yamnet_model.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <fstream>
 #include <limits>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -68,8 +68,8 @@ namespace signlang::env_sound_det {
   } // namespace
 
   YamnetModel::YamnetModel(const std::string& model_path, const std::string& class_map_path,
-                           rknn_core_mask npu_core_mask, std::uint32_t rknn_priority_flag, std::uint32_t top_k) :
-      context_{0}, io_num_{}, scores_output_index_{0}, score_frame_count_{0}, top_k_{0} {
+                           rknn_core_mask npu_core_mask, std::uint32_t rknn_priority_flag, float score_threshold) :
+      context_{0}, io_num_{}, scores_output_index_{0}, score_frame_count_{0}, score_threshold_{score_threshold} {
     load_labels(class_map_path);
 
     auto* model_path_buffer = const_cast<char*>(model_path.c_str());
@@ -84,7 +84,7 @@ namespace signlang::env_sound_det {
     }
 
     query_model_io();
-    allocate_workspaces(top_k);
+    allocate_workspaces();
   }
 
   YamnetModel::~YamnetModel() {
@@ -124,7 +124,7 @@ namespace signlang::env_sound_det {
     RknnOutputReleaseGuard output_release_guard{context_, io_num_.n_output, outputs_.data()};
 
     const auto* score_buffer = output_buffers_[scores_output_index_].data();
-    const auto top_class_count = post_process_scores(score_buffer);
+    const auto detected_class_count = post_process_scores(score_buffer);
 
     result = output_release_guard.release();
     if (result < 0) {
@@ -138,9 +138,9 @@ namespace signlang::env_sound_det {
     return YamnetInferenceResult{
         .model_input_sample_count = input_attrs_[0].n_elems,
         .score_frame_count = score_frame_count_,
-        .top_class_count = top_class_count,
+        .detected_class_count = detected_class_count,
         .inference_time_ms = inference_time_ms,
-        .top_classes = top_classes_,
+        .detected_classes = detected_classes_,
     };
   }
 
@@ -175,13 +175,7 @@ namespace signlang::env_sound_det {
     }
   }
 
-  void YamnetModel::allocate_workspaces(std::uint32_t top_k) {
-    if (top_k == 0 || top_k > kMaxTopClassCount) {
-      throw std::runtime_error("YAMNet top-k must be between 1 and " + std::to_string(kMaxTopClassCount));
-    }
-
-    top_k_ = top_k;
-
+  void YamnetModel::allocate_workspaces() {
     if (input_attrs_[0].n_elems == 0) {
       throw std::runtime_error("RKNN YAMNet input tensor has no elements");
     }
@@ -231,15 +225,21 @@ namespace signlang::env_sound_det {
         continue;
       }
 
-      std::istringstream line_stream{line};
-      std::uint32_t index = 0;
-      if (!(line_stream >> index)) {
+      const auto separator = line.find_first_of(" \t");
+      if (separator == std::string::npos) {
         throw std::runtime_error("Invalid YAMNet class map line: " + line);
       }
 
-      std::string label;
-      std::getline(line_stream, label);
-      label = trim_leading_spaces(label);
+      const auto index_text = line.substr(0, separator);
+      std::uint32_t index = 0;
+      const auto* index_begin = index_text.data();
+      const auto* index_end = index_begin + index_text.size();
+      const auto [parse_end, parse_error] = std::from_chars(index_begin, index_end, index);
+      if (parse_error != std::errc{} || parse_end != index_end) {
+        throw std::runtime_error("Invalid YAMNet class map line: " + line);
+      }
+
+      auto label = trim_leading_spaces(line.substr(separator + 1));
       if (label.empty()) {
         throw std::runtime_error("Missing YAMNet class label at index " + std::to_string(index));
       }
@@ -282,31 +282,18 @@ namespace signlang::env_sound_det {
       mean_scores_[class_index] = sum / static_cast<float>(score_frame_count_);
     }
 
-    for (auto& top_class : top_classes_) {
-      top_class.class_index = 0;
-      top_class.score = -std::numeric_limits<float>::infinity();
-      clear_label(top_class.label);
-    }
-
-    for (std::uint32_t class_index = 0; class_index < class_count; ++class_index) {
+    std::uint32_t detected_count = 0;
+    for (std::uint32_t class_index = 0; class_index < class_count && detected_count < kMaxDetectedClasses; ++class_index) {
       const auto score = mean_scores_[class_index];
-      for (auto top_index = std::size_t{0}; top_index < top_k_; ++top_index) {
-        if (score <= top_classes_[top_index].score) {
-          continue;
-        }
-
-        for (auto move_index = static_cast<std::size_t>(top_k_ - 1); move_index > top_index; --move_index) {
-          top_classes_[move_index] = top_classes_[move_index - 1];
-        }
-
-        top_classes_[top_index].class_index = class_index;
-        top_classes_[top_index].score = score;
-        copy_label(class_label(class_index), top_classes_[top_index].label);
-        break;
+      if (score >= score_threshold_) {
+        detected_classes_[detected_count].class_index = class_index;
+        detected_classes_[detected_count].score = score;
+        copy_label(class_label(class_index), detected_classes_[detected_count].label);
+        ++detected_count;
       }
     }
 
-    return top_k_;
+    return detected_count;
   }
 
   auto YamnetModel::class_label(std::uint32_t class_index) const -> const std::string& {

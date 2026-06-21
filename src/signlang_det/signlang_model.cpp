@@ -1,11 +1,12 @@
 #include "signlang_model.hpp"
 
+#include "spdlog/spdlog.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstring>
 #include <fstream>
-#include <iostream>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -167,7 +168,7 @@ namespace signlang::signlang_det {
 
     ret = rknn_set_core_mask(ctx_, npu_core);
     if (ret != RKNN_SUCC) {
-      std::cerr << "Warning: rknn_set_core_mask failed, ret=" << ret << '\n';
+      spdlog::warn("rknn_set_core_mask failed, ret={}", ret);
     }
   }
 

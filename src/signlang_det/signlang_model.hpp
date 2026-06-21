@@ -62,7 +62,7 @@ namespace signlang::signlang_det {
                               const std::vector<std::vector<float>>& sample) const -> float;
     auto compute_frame_distance(const std::vector<float>& query_frame,
                                 const std::vector<float>& sample_frame) const -> float;
-    auto compute_dtw_window(std::uint32_t query_length, 
+    auto compute_dtw_window(std::uint32_t query_length,
                             std::uint32_t sample_length) const -> std::uint32_t;
 
     rknn_context ctx_{0};

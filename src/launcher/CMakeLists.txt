@@ -10,6 +10,7 @@ target_include_directories(signlang_eyes_launcher PRIVATE
 
 target_link_libraries(signlang_eyes_launcher PRIVATE
         cxxopts::cxxopts
-        tomlplusplus::tomlplusplus)
+        tomlplusplus::tomlplusplus
+        spdlog::spdlog)
 
 install(TARGETS signlang_eyes_launcher RUNTIME DESTINATION .)

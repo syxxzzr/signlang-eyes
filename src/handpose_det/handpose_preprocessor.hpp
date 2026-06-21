@@ -28,8 +28,7 @@ namespace signlang::handpose_det {
 
   private:
     struct PixelMap {
-      std::uint32_t source_yuyv_pair_offset;
-      bool second_luma;
+      std::uint32_t source_rgb_offset;
     };
 
     void rebuild_maps(std::uint32_t image_width, std::uint32_t image_height);
