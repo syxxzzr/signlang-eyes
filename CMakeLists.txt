@@ -26,8 +26,6 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -no-pie")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-pie")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-pie")
 
-option(SIGNLANG_ENABLE_TESTS "Build signlang-eyes manual integration test executables" ON)
-
 set(SIGNLANG_MODEL_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/models CACHE PATH "Local root directory for model assets")
 
 # Add src directory to include path for cross-module headers
