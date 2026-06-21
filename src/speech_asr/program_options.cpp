@@ -120,9 +120,8 @@ namespace signlang::speech_asr {
     }
 
     const auto window_ms = parsed_options["window-ms"].as<std::uint32_t>();
-    if (window_ms < kMinWindowMs || window_ms > kMaxWindowMs) {
-      throw std::runtime_error("--window-ms must be between " + std::to_string(kMinWindowMs) + " and " +
-                               std::to_string(kMaxWindowMs));
+    if (window_ms == 0) {
+      throw std::runtime_error("--window-ms must be greater than 0");
     }
 
     const auto overlap_ratio = parsed_options["overlap"].as<double>();
@@ -141,8 +140,8 @@ namespace signlang::speech_asr {
     }
 
     const auto max_decode_steps = parsed_options["max-decode-steps"].as<std::uint32_t>();
-    if (max_decode_steps == 0 || max_decode_steps > 1000) {
-      throw std::runtime_error("--max-decode-steps must be between 1 and 1000");
+    if (max_decode_steps == 0) {
+      throw std::runtime_error("--max-decode-steps must be greater than 0");
     }
 
     const auto subscriber_buffer_size = parsed_options["subscriber-buffer"].as<std::uint64_t>();

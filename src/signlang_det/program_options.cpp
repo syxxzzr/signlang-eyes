@@ -86,8 +86,8 @@ namespace signlang::signlang_det {
     }
 
     const auto sequence_length = parsed_options["sequence-length"].as<std::uint32_t>();
-    if (sequence_length == 0 || sequence_length > 120) {
-      throw std::runtime_error("--sequence-length must be between 1 and 120");
+    if (sequence_length == 0) {
+      throw std::runtime_error("--sequence-length must be greater than 0");
     }
 
     const auto overlap_ratio = parsed_options["overlap-ratio"].as<float>();
@@ -101,8 +101,8 @@ namespace signlang::signlang_det {
     }
 
     const auto subscriber_buffer_size = parsed_options["subscriber-buffer"].as<std::uint64_t>();
-    if (subscriber_buffer_size == 0 || subscriber_buffer_size > 8) {
-      throw std::runtime_error("--subscriber-buffer must be between 1 and 8");
+    if (subscriber_buffer_size == 0) {
+      throw std::runtime_error("--subscriber-buffer must be greater than 0");
     }
 
     const auto motion_weight = parsed_options["motion-weight"].as<float>();

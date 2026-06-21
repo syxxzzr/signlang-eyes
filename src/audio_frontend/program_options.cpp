@@ -31,6 +31,9 @@ namespace signlang::audio_frontend {
       }
 
       const auto value = parsed_options[option_name].as<std::uint32_t>();
+      if (value == 0) {
+        throw std::runtime_error(std::string("--") + option_name + " must be greater than 0");
+      }
       if (value > std::numeric_limits<std::uint16_t>::max()) {
         throw std::runtime_error(std::string("--") + option_name + " is outside the supported range");
       }
@@ -39,16 +42,14 @@ namespace signlang::audio_frontend {
     }
 
     void validate_sample_rate(const std::optional<std::uint32_t>& sample_rate_hz, const char* option_name) {
-      if (sample_rate_hz.has_value() && !is_valid_sample_rate(sample_rate_hz.value())) {
-        throw std::runtime_error(std::string("--") + option_name + " must be between " +
-                                 std::to_string(kMinSampleRateHz) + " and " + std::to_string(kMaxSampleRateHz));
+      if (sample_rate_hz.has_value() && sample_rate_hz.value() == 0) {
+        throw std::runtime_error(std::string("--") + option_name + " must be greater than 0");
       }
     }
 
     void validate_channel_count(const std::optional<std::uint16_t>& channel_count, const char* option_name) {
-      if (channel_count.has_value() && !is_valid_channel_count(channel_count.value())) {
-        throw std::runtime_error(std::string("--") + option_name + " must be between " +
-                                 std::to_string(kMinChannelCount) + " and " + std::to_string(kMaxChannelCount));
+      if (channel_count.has_value() && channel_count.value() == 0) {
+        throw std::runtime_error(std::string("--") + option_name + " must be greater than 0");
       }
     }
 
@@ -98,9 +99,8 @@ namespace signlang::audio_frontend {
     }
 
     const auto publish_period_ms = parsed_options["period-ms"].as<std::uint32_t>();
-    if (publish_period_ms == 0 || publish_period_ms > kMaxPublishPeriodMs) {
-      throw std::runtime_error("--period-ms must be between 1 and " + std::to_string(kMaxPublishPeriodMs) + ".\n\n" +
-                               options.help());
+    if (publish_period_ms == 0) {
+      throw std::runtime_error("--period-ms must be greater than 0");
     }
 
     const AudioFormatRequest capture_format{

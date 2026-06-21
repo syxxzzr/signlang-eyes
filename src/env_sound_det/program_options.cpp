@@ -95,9 +95,8 @@ namespace signlang::env_sound_det {
     }
 
     const auto window_ms = parsed_options["window-ms"].as<std::uint32_t>();
-    if (window_ms < kMinWindowMs || window_ms > kMaxWindowMs) {
-      throw std::runtime_error("--window-ms must be between " + std::to_string(kMinWindowMs) + " and " +
-                               std::to_string(kMaxWindowMs));
+    if (window_ms == 0) {
+      throw std::runtime_error("--window-ms must be greater than 0");
     }
 
     const auto overlap_ratio = parsed_options["overlap"].as<double>();

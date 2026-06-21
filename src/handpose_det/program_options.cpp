@@ -66,18 +66,18 @@ namespace signlang::handpose_det {
     validate_threshold(nms_threshold, "nms");
 
     const auto subscriber_buffer_size = parsed_options["subscriber-buffer"].as<std::uint64_t>();
-    if (subscriber_buffer_size == 0 || subscriber_buffer_size > 8) {
-      throw std::runtime_error("--subscriber-buffer must be between 1 and 8");
+    if (subscriber_buffer_size == 0) {
+      throw std::runtime_error("--subscriber-buffer must be greater than 0");
     }
 
     const auto keypoint_count = parsed_options["keypoints"].as<std::uint32_t>();
-    if (keypoint_count == 0 || keypoint_count > kHandPoseKeypointCount) {
-      throw std::runtime_error("--keypoints must be between 1 and " + std::to_string(kHandPoseKeypointCount));
+    if (keypoint_count == 0) {
+      throw std::runtime_error("--keypoints must be greater than 0");
     }
 
     const auto max_detections = parsed_options["max-detections"].as<std::uint32_t>();
-    if (max_detections == 0 || max_detections > kMaxHandPoseDetections) {
-      throw std::runtime_error("--max-detections must be between 1 and " + std::to_string(kMaxHandPoseDetections));
+    if (max_detections == 0) {
+      throw std::runtime_error("--max-detections must be greater than 0");
     }
 
     return ProgramOptionsParseResult{ProgramOptions{
