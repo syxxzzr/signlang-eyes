@@ -14,7 +14,6 @@ namespace signlang::env_sound_det {
     constexpr auto kDefaultClassMapPath = "models/yamnet/yamnet_class_map.txt";
     constexpr std::uint32_t kMinWindowMs = 100;
     constexpr std::uint32_t kMaxWindowMs = 60000;
-    constexpr std::uint32_t kDefaultPollPeriodMs = 2;
     constexpr std::uint64_t kDefaultSubscriberBufferSize = 2;
 
     auto parse_npu_core_mask(const std::string& value) -> rknn_core_mask {
@@ -77,8 +76,6 @@ namespace signlang::env_sound_det {
         cxxopts::value<double>()->default_value(std::to_string(kDefaultOverlapRatio)))(
         "top-k", "Number of top classes to evaluate for dangerous sound labels",
         cxxopts::value<std::uint32_t>()->default_value(std::to_string(kMaxTopClassCount)))(
-        "poll-ms", "Subscriber polling sleep in milliseconds when no audio sample is ready",
-        cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultPollPeriodMs)))(
         "subscriber-buffer", "iceoryx2 subscriber queue size",
         cxxopts::value<std::uint64_t>()->default_value(std::to_string(kDefaultSubscriberBufferSize)))(
         "npu-core", "RK3588 NPU core mask: auto, all, 0, 1, 2, 0_1, 0_1_2",
@@ -113,11 +110,6 @@ namespace signlang::env_sound_det {
       throw std::runtime_error("--top-k must be between 1 and " + std::to_string(kMaxTopClassCount));
     }
 
-    const auto poll_period_ms = parsed_options["poll-ms"].as<std::uint32_t>();
-    if (poll_period_ms == 0 || poll_period_ms > 100) {
-      throw std::runtime_error("--poll-ms must be between 1 and 100");
-    }
-
     const auto subscriber_buffer_size = parsed_options["subscriber-buffer"].as<std::uint64_t>();
     if (subscriber_buffer_size == 0) {
       throw std::runtime_error("--subscriber-buffer must be greater than 0");
@@ -131,7 +123,6 @@ namespace signlang::env_sound_det {
         .window_ms = window_ms,
         .overlap_ratio = overlap_ratio,
         .top_k = top_k,
-        .poll_period_ms = poll_period_ms,
         .subscriber_buffer_size = subscriber_buffer_size,
         .npu_core_mask = parse_npu_core_mask(parsed_options["npu-core"].as<std::string>()),
         .rknn_priority_flag = parse_rknn_priority_flag(parsed_options["rknn-priority"].as<std::string>()),

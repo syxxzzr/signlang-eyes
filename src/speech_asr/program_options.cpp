@@ -19,8 +19,6 @@ namespace signlang::speech_asr {
     constexpr auto kDefaultMelFiltersPath = "models/whisper/mel_80_filters.txt";
     constexpr std::uint32_t kMinWindowMs = 1000;
     constexpr std::uint32_t kMaxWindowMs = 60000;
-    constexpr std::uint32_t kDefaultPollPeriodMs = 2;
-    constexpr std::uint32_t kDefaultEnableRequestTimeoutMs = 50;
     constexpr std::uint32_t kDefaultMaxDecodeSteps = 96;
     constexpr std::uint64_t kDefaultSubscriberBufferSize = 2;
 
@@ -92,8 +90,6 @@ namespace signlang::speech_asr {
         cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultWindowMs)))(
         "overlap", "Overlap ratio between adjacent ASR windows",
         cxxopts::value<double>()->default_value(std::to_string(kDefaultOverlapRatio)))(
-        "poll-ms", "Subscriber polling sleep in milliseconds when no audio sample is ready",
-        cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultPollPeriodMs)))(
         "max-decode-steps", "Maximum autoregressive decoder iterations per ASR window",
         cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultMaxDecodeSteps)))(
         "subscriber-buffer", "iceoryx2 subscriber queue size",
@@ -132,11 +128,6 @@ namespace signlang::speech_asr {
     const auto overlap_ratio = parsed_options["overlap"].as<double>();
     if (overlap_ratio < 0.0 || overlap_ratio >= 1.0) {
       throw std::runtime_error("--overlap must be in the range [0.0, 1.0)");
-    }
-
-    const auto poll_period_ms = parsed_options["poll-ms"].as<std::uint32_t>();
-    if (poll_period_ms == 0 || poll_period_ms > 100) {
-      throw std::runtime_error("--poll-ms must be between 1 and 100");
     }
 
     const auto language_str = parsed_options["language"].as<std::string>();
@@ -184,7 +175,6 @@ namespace signlang::speech_asr {
         .mel_filters_path = parsed_options["mel-filters"].as<std::string>(),
         .window_ms = window_ms,
         .overlap_ratio = overlap_ratio,
-        .poll_period_ms = poll_period_ms,
         .language = language,
         .max_decode_steps = max_decode_steps,
         .subscriber_buffer_size = subscriber_buffer_size,

@@ -110,12 +110,10 @@ auto main(int argc, char** argv) -> int {
     std::thread receiver_thread{[&] {
       try {
         IpcAudioSubscriber audio_subscriber{options.audio_service_name, options.subscriber_buffer_size};
-        const auto poll_period = std::chrono::milliseconds(options.poll_period_ms);
 
-        while (!should_stop.load()) {
-          const auto receive_stats = audio_subscriber.receive_available(audio_buffer);
-          if (receive_stats.accepted_count == 0) {
-            std::this_thread::sleep_for(poll_period);
+        while (!should_stop.load() && audio_subscriber.wait_for_work()) {
+          if (!should_stop.load()) {
+            audio_subscriber.receive_available(audio_buffer);
           }
         }
       } catch (...) {

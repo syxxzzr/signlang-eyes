@@ -31,7 +31,6 @@ namespace signlang::env_sound_det {
     std::uint32_t window_ms;
     double overlap_ratio;
     std::uint32_t top_k;
-    std::uint32_t poll_period_ms;
     std::uint64_t subscriber_buffer_size;
     rknn_core_mask npu_core_mask;
     std::uint32_t rknn_priority_flag;

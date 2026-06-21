@@ -30,6 +30,8 @@ namespace signlang::env_sound_det {
 
     auto receive_available(AudioRingBuffer& ring_buffer) -> AudioReceiveStats;
 
+    auto wait_for_work() -> bool;
+
   private:
     static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
     static auto create_subscriber(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name,

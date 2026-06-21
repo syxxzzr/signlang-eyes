@@ -48,6 +48,10 @@ namespace signlang::env_sound_det {
     return stats;
   }
 
+  auto IpcAudioSubscriber::wait_for_work() -> bool {
+    return node_.wait(iox2::bb::Duration::from_millis(5)).has_value();
+  }
+
   auto IpcAudioSubscriber::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
 

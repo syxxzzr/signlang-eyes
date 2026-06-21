@@ -34,7 +34,6 @@ npu_core = "1"                     # auto, all, 0, 1, 2, 0_1, 0_1_2
 # encoder_npu_core = ""            # Override encoder NPU core (empty = use npu_core)
 # decoder_npu_core = ""            # Override decoder NPU core (empty = use npu_core)
 # rknn_priority = "medium"         # high, medium, low
-# poll_ms = 2                      # Subscriber poll interval in ms
 # subscriber_buffer = 2            # iceoryx2 subscriber queue size
 
 [env_sound_det]
@@ -45,7 +44,6 @@ npu_core = "0"
 # model = "models/yamnet/yamnet_3s.rknn"
 # class_map = "models/yamnet/yamnet_class_map.txt"
 # rknn_priority = "medium"
-# poll_ms = 2
 # subscriber_buffer = 2
 
 [handpose_det]

@@ -68,16 +68,14 @@ namespace {
                                             options.subscriber_buffer_size};
     auto extractor = FeatureExtractor{options.min_keypoint_confidence};
 
-    while (!should_stop) {
-      const auto received = subscriber.receive_latest(
-        [&](const auto& metadata, const auto* detections, auto count) {
-          if (auto feature = extractor.extract(metadata, detections, count)) {
-            ring_buffer.push(*feature);
-          }
-        });
-
-      if (!received) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    while (!should_stop && subscriber.wait_for_work()) {
+      if (!should_stop) {
+        subscriber.receive_latest(
+          [&](const auto& metadata, const auto* detections, auto count) {
+            if (auto feature = extractor.extract(metadata, detections, count)) {
+              ring_buffer.push(*feature);
+            }
+          });
       }
     }
   }

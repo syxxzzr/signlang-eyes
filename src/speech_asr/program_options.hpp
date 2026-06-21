@@ -24,7 +24,6 @@ namespace signlang::speech_asr {
     std::string mel_filters_path;
     std::uint32_t window_ms;
     double overlap_ratio;
-    std::uint32_t poll_period_ms;
     AsrLanguage language;
     std::uint32_t max_decode_steps;
     std::uint64_t subscriber_buffer_size;

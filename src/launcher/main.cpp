@@ -412,7 +412,6 @@ static auto build_speech_asr_args(const toml::table& cfg) -> std::vector<std::st
     add_opt_str(args, "--encoder-npu-core", opt_string(*tbl, "encoder_npu_core"));
     add_opt_str(args, "--decoder-npu-core", opt_string(*tbl, "decoder_npu_core"));
     add_opt_str(args, "--rknn-priority", opt_string(*tbl, "rknn_priority"));
-    add_opt_int(args, "--poll-ms", opt_int(*tbl, "poll_ms"));
     add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
   }
   return args;
@@ -434,7 +433,6 @@ static auto build_env_sound_det_args(const toml::table& cfg) -> std::vector<std:
     add_opt_str(args, "--class-map", opt_string(*tbl, "class_map"));
     add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
     add_opt_str(args, "--rknn-priority", opt_string(*tbl, "rknn_priority"));
-    add_opt_int(args, "--poll-ms", opt_int(*tbl, "poll_ms"));
     add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
   }
   return args;
