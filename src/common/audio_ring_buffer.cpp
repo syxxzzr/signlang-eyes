@@ -13,11 +13,10 @@ namespace signlang::common {
   } // namespace
 
   AudioRingBuffer::AudioRingBuffer(std::uint64_t capacity_samples, std::uint32_t expected_sample_rate_hz) :
-      expected_sample_rate_hz_{expected_sample_rate_hz},
-      samples_(static_cast<std::size_t>(capacity_samples)), start_sample_index_{0}, next_sample_index_{0}, wake_sequence_{0},
-      latest_audio_sequence_number_{0}, latest_audio_timestamp_ns_{0}, latest_audio_sample_rate_hz_{0},
-      latest_audio_publish_period_ms_{0}, latest_audio_frame_count_{0}, latest_audio_channel_count_{0},
-      latest_audio_bits_per_sample_{0} {
+      expected_sample_rate_hz_{expected_sample_rate_hz}, samples_(static_cast<std::size_t>(capacity_samples)),
+      start_sample_index_{0}, next_sample_index_{0}, wake_sequence_{0}, latest_audio_sequence_number_{0},
+      latest_audio_timestamp_ns_{0}, latest_audio_sample_rate_hz_{0}, latest_audio_publish_period_ms_{0},
+      latest_audio_frame_count_{0}, latest_audio_channel_count_{0}, latest_audio_bits_per_sample_{0} {
     if (capacity_samples == 0) {
       throw std::runtime_error("Audio ring buffer capacity must be greater than 0");
     }
@@ -128,8 +127,8 @@ namespace signlang::common {
       return false;
     }
 
-    const auto expected_frame_count =
-        static_cast<std::uint32_t>((static_cast<std::uint64_t>(expected_sample_rate_hz_) * frame.publish_period_ms) / 1000);
+    const auto expected_frame_count = static_cast<std::uint32_t>(
+        (static_cast<std::uint64_t>(expected_sample_rate_hz_) * frame.publish_period_ms) / 1000);
     if (frame.frame_count != expected_frame_count) {
       return false;
     }

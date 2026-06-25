@@ -71,14 +71,14 @@ auto main(int argc, char** argv) -> int {
     spdlog::info("Starting audio frontend");
     spdlog::info("Device: {}", options.audio_device_name);
     if (options.capture_format.sample_rate_hz.has_value() && options.capture_format.channel_count.has_value()) {
-      spdlog::info("Requested capture: {}Hz, {} channels",
-                   options.capture_format.sample_rate_hz.value(), options.capture_format.channel_count.value());
+      spdlog::info("Requested capture: {}Hz, {} channels", options.capture_format.sample_rate_hz.value(),
+                   options.capture_format.channel_count.value());
     }
 
     AlsaCaptureDevice capture_device{options.audio_device_name, options.capture_format, options.publish_period_ms};
     const auto capture_format = capture_device.format();
-    spdlog::info("Actual capture: {}Hz, {} channels, period: {}ms",
-                 capture_format.sample_rate_hz, capture_format.channel_count, options.publish_period_ms);
+    spdlog::info("Actual capture: {}Hz, {} channels, period: {}ms", capture_format.sample_rate_hz,
+                 capture_format.channel_count, options.publish_period_ms);
 
     const AudioFormat publish_format{
         .sample_rate_hz =
@@ -102,8 +102,8 @@ auto main(int argc, char** argv) -> int {
       const auto& input_samples = capture_device.capture_samples();
       const auto current_sequence_number = sequence_number++;
       if (sound_source_blackboard != nullptr) {
-        const auto localization = sound_source_localizer.estimate(input_samples, capture_format, current_sequence_number,
-                                                                  steady_timestamp_ns());
+        const auto localization = sound_source_localizer.estimate(input_samples, capture_format,
+                                                                  current_sequence_number, steady_timestamp_ns());
         sound_source_blackboard->publish(localization);
       }
       publisher.publish(input_samples, audio_processor, current_sequence_number);

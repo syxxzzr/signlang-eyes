@@ -2,8 +2,8 @@
 #include "common/logging.hpp"
 #include "iceoryx_gateway.hpp"
 #include "program_options.hpp"
-#include "speech_asr_result.hpp"
 #include "spdlog/spdlog.h"
+#include "speech_asr_result.hpp"
 #include "whisper_model.hpp"
 
 #include <algorithm>
@@ -77,8 +77,8 @@ auto main(int argc, char** argv) -> int {
   using signlang::common::hop_samples_for_overlap;
   using signlang::common::samples_for_window_ms;
   using signlang::speech_asr::AsrLanguage;
-  using signlang::speech_asr::IpcAudioSubscriber;
   using signlang::speech_asr::IpcAsrStateMonitor;
+  using signlang::speech_asr::IpcAudioSubscriber;
   using signlang::speech_asr::IpcResultPublisher;
   using signlang::speech_asr::kWhisperSampleRateHz;
   using signlang::speech_asr::parse_program_options;
@@ -151,7 +151,8 @@ auto main(int argc, char** argv) -> int {
         IpcResultPublisher result_publisher{options.result_service_name};
         auto state_monitor = std::optional<IpcAsrStateMonitor>{};
         if (options.state_event_service_name.has_value() && options.state_blackboard_service_name.has_value()) {
-          state_monitor.emplace(options.state_event_service_name.value(), options.state_blackboard_service_name.value());
+          state_monitor.emplace(options.state_event_service_name.value(),
+                                options.state_blackboard_service_name.value());
         }
         auto gate_enabled = [&]() { return !state_monitor.has_value() || state_monitor->is_enabled(); };
         auto poll_gate = [&]() {

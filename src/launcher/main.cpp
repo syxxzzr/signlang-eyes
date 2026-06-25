@@ -7,357 +7,339 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
-#include <cstdint>
 #include <csignal>
-#include <ctime>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <fcntl.h>
 #include <filesystem>
 #include <iostream>
 #include <optional>
 #include <span>
 #include <string>
-#include <system_error>
 #include <sys/wait.h>
+#include <system_error>
 #include <unistd.h>
 #include <variant>
 #include <vector>
 
 namespace signlang::launcher::ipc {
 
-constexpr auto kAudioService    = "audio_capture";
-constexpr auto kVideoService    = "video_capture";
-constexpr auto kSpeechAsrOutput = "speech_asr_result";
-constexpr auto kHandposeOutput  = "handpose_result";
-constexpr auto kSignlangOutput  = "signlang_result";
-constexpr auto kStateEvent      = "app_state_event";
-constexpr auto kStateBlackboard = "app_state_blackboard";
-constexpr auto kStateControl    = "app_state_control";
-constexpr auto kAudioLocalizationBlackboard = "audio_source_localization";
+  constexpr auto kAudioService = "audio_capture";
+  constexpr auto kVideoService = "video_capture";
+  constexpr auto kSpeechAsrOutput = "speech_asr_result";
+  constexpr auto kHandposeOutput = "handpose_result";
+  constexpr auto kSignlangOutput = "signlang_result";
+  constexpr auto kStateEvent = "app_state_event";
+  constexpr auto kStateBlackboard = "app_state_blackboard";
+  constexpr auto kStateControl = "app_state_control";
+  constexpr auto kAudioLocalizationBlackboard = "audio_source_localization";
 
 } // namespace signlang::launcher::ipc
 
 namespace {
 
-constexpr auto kExeStateMachine  = "bin/state_machine";
-constexpr auto kExeAudioFrontend = "bin/audio_frontend";
-constexpr auto kExeVideoFrontend = "bin/video_frontend";
-constexpr auto kExeSpeechAsr     = "bin/speech_asr";
-constexpr auto kExeEnvSoundDet   = "bin/env_sound_det";
-constexpr auto kExeHandposeDet   = "bin/handpose_det";
-constexpr auto kExeSignlangDet   = "bin/signlang_det";
+  constexpr auto kExeStateMachine = "bin/state_machine";
+  constexpr auto kExeAudioFrontend = "bin/audio_frontend";
+  constexpr auto kExeVideoFrontend = "bin/video_frontend";
+  constexpr auto kExeSpeechAsr = "bin/speech_asr";
+  constexpr auto kExeEnvSoundDet = "bin/env_sound_det";
+  constexpr auto kExeHandposeDet = "bin/handpose_det";
+  constexpr auto kExeSignlangDet = "bin/signlang_det";
 
-constexpr std::array kIpcKeys = {
-  "input_service",
-  "input-service",
-  "output_service",
-  "output-service",
-  "state_event_service",
-  "state-event-service",
-  "state_blackboard_service",
-  "state-blackboard-service",
-  "state_control_service",
-  "state-control-service",
-  "localization_blackboard",
-  "localization-blackboard",
-};
+  constexpr std::array kIpcKeys = {
+      "input_service",         "input-service",         "output_service",           "output-service",
+      "state_event_service",   "state-event-service",   "state_blackboard_service", "state-blackboard-service",
+      "state_control_service", "state-control-service", "localization_blackboard",  "localization-blackboard",
+  };
 
-void warn_ipc_keys_in_table(const toml::table& tbl, const std::string& section_name) {
-  for (const auto& [key, node] : tbl) {
-    for (const auto* ipc_key : kIpcKeys) {
-      if (key == ipc_key) {
-        spdlog::warn("[launcher] [{}] '{}' is ignored; IPC service names are hardcoded in the launcher",
-                     section_name, key.str());
-        break;
+  void warn_ipc_keys_in_table(const toml::table& tbl, const std::string& section_name) {
+    for (const auto& [key, node] : tbl) {
+      for (const auto* ipc_key : kIpcKeys) {
+        if (key == ipc_key) {
+          spdlog::warn("[launcher] [{}] '{}' is ignored; IPC service names are hardcoded in the launcher", section_name,
+                       key.str());
+          break;
+        }
       }
     }
   }
-}
 
-void warn_ipc_keys_in_config(const toml::table& config) {
-  constexpr std::array kSections = {
-    "state_machine",
-    "audio_frontend",
-    "video_frontend",
-    "speech_asr",
-    "env_sound_det",
-    "handpose_det",
-    "signlang_det",
+  void warn_ipc_keys_in_config(const toml::table& config) {
+    constexpr std::array kSections = {
+        "state_machine", "audio_frontend", "video_frontend", "speech_asr",
+        "env_sound_det", "handpose_det",   "signlang_det",
+    };
+
+    for (const auto* section_name : kSections) {
+      if (const auto* section = config[section_name].as_table()) {
+        warn_ipc_keys_in_table(*section, section_name);
+      }
+    }
+  }
+
+  struct ChildInfo {
+    pid_t pid;
+    std::string name;
   };
 
-  for (const auto* section_name : kSections) {
-    if (const auto* section = config[section_name].as_table()) {
-      warn_ipc_keys_in_table(*section, section_name);
+  struct LoggingConfig {
+    std::uint64_t rotate_size = signlang::logging::kDefaultRotateSize;
+    std::uint64_t retain_files = signlang::logging::kDefaultRetainFiles;
+  };
+
+  std::vector<ChildInfo> g_children;
+  volatile std::sig_atomic_t g_shutdown = 0;
+
+  void handle_signal(int /* sig */) { g_shutdown = 1; }
+
+  void terminate_all_children() {
+    for (const auto& child : g_children) {
+      spdlog::info("[launcher] terminating {} (pid {})", child.name, child.pid);
+      kill(child.pid, SIGTERM);
+    }
+    for (const auto& child : g_children) {
+      int status = 0;
+      waitpid(child.pid, &status, 0);
     }
   }
-}
 
-struct ChildInfo {
-  pid_t pid;
-  std::string name;
-};
+  auto launch_child(const std::vector<std::string>& args) -> pid_t {
+    int pipefd[2];
+    if (pipe2(pipefd, O_CLOEXEC) < 0) {
+      spdlog::error("[launcher] pipe2 failed: {}", std::strerror(errno));
+      return -1;
+    }
 
-struct LoggingConfig {
-  std::uint64_t rotate_size = signlang::logging::kDefaultRotateSize;
-  std::uint64_t retain_files = signlang::logging::kDefaultRetainFiles;
-};
+    const auto pid = fork();
+    if (pid < 0) {
+      spdlog::error("[launcher] fork failed: {}", std::strerror(errno));
+      close(pipefd[0]);
+      close(pipefd[1]);
+      return -1;
+    }
 
-std::vector<ChildInfo> g_children;
-volatile std::sig_atomic_t g_shutdown = 0;
+    if (pid == 0) {
+      close(pipefd[0]);
 
-void handle_signal(int /* sig */) { g_shutdown = 1; }
+      std::vector<char*> argv;
+      argv.reserve(args.size() + 1);
+      for (const auto& arg : args) {
+        argv.push_back(const_cast<char*>(arg.c_str()));
+      }
+      argv.push_back(nullptr);
 
-void terminate_all_children() {
-  for (const auto& child : g_children) {
-    spdlog::info("[launcher] terminating {} (pid {})", child.name, child.pid);
-    kill(child.pid, SIGTERM);
-  }
-  for (const auto& child : g_children) {
-    int status = 0;
-    waitpid(child.pid, &status, 0);
-  }
-}
+      execvp(argv[0], argv.data());
 
-auto launch_child(const std::vector<std::string>& args) -> pid_t {
-  int pipefd[2];
-  if (pipe2(pipefd, O_CLOEXEC) < 0) {
-    spdlog::error("[launcher] pipe2 failed: {}", std::strerror(errno));
-    return -1;
-  }
+      auto exec_err = errno;
+      static_cast<void>(write(pipefd[1], &exec_err, sizeof(exec_err)));
+      _exit(EXIT_FAILURE);
+    }
 
-  const auto pid = fork();
-  if (pid < 0) {
-    spdlog::error("[launcher] fork failed: {}", std::strerror(errno));
-    close(pipefd[0]);
     close(pipefd[1]);
-    return -1;
-  }
-
-  if (pid == 0) {
+    int child_err = 0;
+    const auto n = read(pipefd[0], &child_err, sizeof(child_err));
     close(pipefd[0]);
 
-    std::vector<char*> argv;
-    argv.reserve(args.size() + 1);
-    for (const auto& arg : args) {
-      argv.push_back(const_cast<char*>(arg.c_str()));
+    if (n > 0) {
+      spdlog::error("[launcher] exec failed for {}: {}", args[0], std::strerror(child_err));
+      int status = 0;
+      waitpid(pid, &status, 0);
+      return -1;
     }
-    argv.push_back(nullptr);
 
-    execvp(argv[0], argv.data());
-
-    auto exec_err = errno;
-    static_cast<void>(write(pipefd[1], &exec_err, sizeof(exec_err)));
-    _exit(EXIT_FAILURE);
+    return pid;
   }
 
-  close(pipefd[1]);
-  int child_err = 0;
-  const auto n = read(pipefd[0], &child_err, sizeof(child_err));
-  close(pipefd[0]);
-
-  if (n > 0) {
-    spdlog::error("[launcher] exec failed for {}: {}", args[0], std::strerror(child_err));
-    int status = 0;
-    waitpid(pid, &status, 0);
-    return -1;
+  auto opt_string(const toml::table& tbl, const char* key) -> std::optional<std::string> {
+    if (auto node = tbl[key].as_string()) {
+      return std::string{node->get()};
+    }
+    return std::nullopt;
   }
 
-  return pid;
-}
-
-auto opt_string(const toml::table& tbl, const char* key) -> std::optional<std::string> {
-  if (auto node = tbl[key].as_string()) {
-    return std::string{node->get()};
+  auto opt_int(const toml::table& tbl, const char* key) -> std::optional<std::int64_t> {
+    if (auto node = tbl[key].as_integer()) {
+      return node->get();
+    }
+    return std::nullopt;
   }
-  return std::nullopt;
-}
 
-auto opt_int(const toml::table& tbl, const char* key) -> std::optional<std::int64_t> {
-  if (auto node = tbl[key].as_integer()) {
-    return node->get();
+  auto opt_double(const toml::table& tbl, const char* key) -> std::optional<double> {
+    if (auto node = tbl[key].as_floating_point()) {
+      return node->get();
+    }
+    return std::nullopt;
   }
-  return std::nullopt;
-}
 
-auto opt_double(const toml::table& tbl, const char* key) -> std::optional<double> {
-  if (auto node = tbl[key].as_floating_point()) {
-    return node->get();
+  auto opt_bool(const toml::table& tbl, const char* key) -> std::optional<bool> {
+    if (auto node = tbl[key].as_boolean()) {
+      return node->get();
+    }
+    return std::nullopt;
   }
-  return std::nullopt;
-}
 
-auto opt_bool(const toml::table& tbl, const char* key) -> std::optional<bool> {
-  if (auto node = tbl[key].as_boolean()) {
-    return node->get();
+  void add_opt_str(std::vector<std::string>& args, const char* flag, const std::optional<std::string>& val) {
+    if (val && !val->empty()) {
+      args.emplace_back(flag);
+      args.push_back(*val);
+    }
   }
-  return std::nullopt;
-}
 
-void add_opt_str(std::vector<std::string>& args, const char* flag, const std::optional<std::string>& val) {
-  if (val && !val->empty()) {
-    args.emplace_back(flag);
-    args.push_back(*val);
+  void add_opt_int(std::vector<std::string>& args, const char* flag, const std::optional<std::int64_t>& val) {
+    if (val) {
+      args.emplace_back(flag);
+      args.push_back(std::to_string(*val));
+    }
   }
-}
 
-void add_opt_int(std::vector<std::string>& args, const char* flag, const std::optional<std::int64_t>& val) {
-  if (val) {
-    args.emplace_back(flag);
-    args.push_back(std::to_string(*val));
+  void add_opt_double(std::vector<std::string>& args, const char* flag, const std::optional<double>& val) {
+    if (val) {
+      args.emplace_back(flag);
+      args.push_back(std::to_string(*val));
+    }
   }
-}
 
-void add_opt_double(std::vector<std::string>& args, const char* flag, const std::optional<double>& val) {
-  if (val) {
-    args.emplace_back(flag);
-    args.push_back(std::to_string(*val));
+  void add_opt_bool_true(std::vector<std::string>& args, const char* flag, const std::optional<bool>& val) {
+    if (val && *val) {
+      args.emplace_back(flag);
+    }
   }
-}
 
-void add_opt_bool_true(std::vector<std::string>& args, const char* flag, const std::optional<bool>& val) {
-  if (val && *val) {
-    args.emplace_back(flag);
-  }
-}
+  auto logging_config_from_toml(const toml::table& config) -> LoggingConfig {
+    auto logging = LoggingConfig{};
 
-auto logging_config_from_toml(const toml::table& config) -> LoggingConfig {
-  auto logging = LoggingConfig{};
+    const auto logging_node = config["logging"];
+    if (!logging_node) {
+      return logging;
+    }
 
-  const auto logging_node = config["logging"];
-  if (!logging_node) {
+    const auto* logging_table = logging_node.as_table();
+    if (logging_table == nullptr) {
+      throw std::runtime_error("[logging] must be a TOML table");
+    }
+
+    if (const auto rotate_size = opt_int(*logging_table, "rotate_size")) {
+      if (*rotate_size <= 0) {
+        throw std::runtime_error("[logging].rotate_size must be greater than 0");
+      }
+      logging.rotate_size = static_cast<std::uint64_t>(*rotate_size);
+    }
+
+    if (const auto retain_files = opt_int(*logging_table, "retain_files")) {
+      if (*retain_files <= 0) {
+        throw std::runtime_error("[logging].retain_files must be greater than 0");
+      }
+      logging.retain_files = static_cast<std::uint64_t>(*retain_files);
+    }
+
     return logging;
   }
 
-  const auto* logging_table = logging_node.as_table();
-  if (logging_table == nullptr) {
-    throw std::runtime_error("[logging] must be a TOML table");
-  }
+  auto utc_start_timestamp() -> std::string {
+    const auto now = std::time(nullptr);
+    std::tm utc_time{};
+    gmtime_r(&now, &utc_time);
 
-  if (const auto rotate_size = opt_int(*logging_table, "rotate_size")) {
-    if (*rotate_size <= 0) {
-      throw std::runtime_error("[logging].rotate_size must be greater than 0");
+    std::array<char, 32> buffer{};
+    if (std::strftime(buffer.data(), buffer.size(), "%Y%m%dT%H%M%SZ", &utc_time) == 0) {
+      throw std::runtime_error("Failed to format launcher UTC start time");
     }
-    logging.rotate_size = static_cast<std::uint64_t>(*rotate_size);
+    return buffer.data();
   }
 
-  if (const auto retain_files = opt_int(*logging_table, "retain_files")) {
-    if (*retain_files <= 0) {
-      throw std::runtime_error("[logging].retain_files must be greater than 0");
-    }
-    logging.retain_files = static_cast<std::uint64_t>(*retain_files);
+  auto log_path_for(const std::string& start_timestamp, const std::string& module_name) -> std::string {
+    return (std::filesystem::path{"log"} / (start_timestamp + "-" + module_name + ".log")).string();
   }
 
-  return logging;
-}
-
-auto utc_start_timestamp() -> std::string {
-  const auto now = std::time(nullptr);
-  std::tm utc_time{};
-  gmtime_r(&now, &utc_time);
-
-  std::array<char, 32> buffer{};
-  if (std::strftime(buffer.data(), buffer.size(), "%Y%m%dT%H%M%SZ", &utc_time) == 0) {
-    throw std::runtime_error("Failed to format launcher UTC start time");
-  }
-  return buffer.data();
-}
-
-auto log_path_for(const std::string& start_timestamp, const std::string& module_name) -> std::string {
-  return (std::filesystem::path{"log"} / (start_timestamp + "-" + module_name + ".log")).string();
-}
-
-void append_logging_args(std::vector<std::string>& args, const std::string& start_timestamp,
-                         const std::string& module_name, std::uint64_t rotate_size) {
-  args.emplace_back("--log-file");
-  args.push_back(log_path_for(start_timestamp, module_name));
-  args.emplace_back("--log-rotate-size");
-  args.push_back(std::to_string(rotate_size));
-}
-
-auto is_log_file(const std::filesystem::path& path) -> bool {
-  const auto filename = path.filename().string();
-  return filename.find(".log") != std::string::npos;
-}
-
-void cleanup_old_log_files(std::uint64_t retain_files) {
-  namespace fs = std::filesystem;
-
-  const auto log_dir = fs::path{"log"};
-  fs::create_directories(log_dir);
-
-  struct LogFile {
-    fs::path path;
-    fs::file_time_type modified_time;
-  };
-
-  std::vector<LogFile> log_files;
-  std::error_code error;
-  auto it = fs::directory_iterator{log_dir, error};
-  if (error) {
-    spdlog::warn("[launcher] failed to scan log directory '{}': {}", log_dir.string(), error.message());
-    return;
+  void append_logging_args(std::vector<std::string>& args, const std::string& start_timestamp,
+                           const std::string& module_name, std::uint64_t rotate_size) {
+    args.emplace_back("--log-file");
+    args.push_back(log_path_for(start_timestamp, module_name));
+    args.emplace_back("--log-rotate-size");
+    args.push_back(std::to_string(rotate_size));
   }
 
-  const auto end = fs::directory_iterator{};
-  for (; it != end; it.increment(error)) {
+  auto is_log_file(const std::filesystem::path& path) -> bool {
+    const auto filename = path.filename().string();
+    return filename.find(".log") != std::string::npos;
+  }
+
+  void cleanup_old_log_files(std::uint64_t retain_files) {
+    namespace fs = std::filesystem;
+
+    const auto log_dir = fs::path{"log"};
+    fs::create_directories(log_dir);
+
+    struct LogFile {
+      fs::path path;
+      fs::file_time_type modified_time;
+    };
+
+    std::vector<LogFile> log_files;
+    std::error_code error;
+    auto it = fs::directory_iterator{log_dir, error};
     if (error) {
-      spdlog::warn("[launcher] failed while scanning log directory '{}': {}", log_dir.string(), error.message());
+      spdlog::warn("[launcher] failed to scan log directory '{}': {}", log_dir.string(), error.message());
       return;
     }
 
-    const auto& entry = *it;
-    if (!entry.is_regular_file(error) || error || !is_log_file(entry.path())) {
-      error.clear();
-      continue;
+    const auto end = fs::directory_iterator{};
+    for (; it != end; it.increment(error)) {
+      if (error) {
+        spdlog::warn("[launcher] failed while scanning log directory '{}': {}", log_dir.string(), error.message());
+        return;
+      }
+
+      const auto& entry = *it;
+      if (!entry.is_regular_file(error) || error || !is_log_file(entry.path())) {
+        error.clear();
+        continue;
+      }
+
+      const auto modified_time = entry.last_write_time(error);
+      if (error) {
+        spdlog::warn("[launcher] failed to read log mtime '{}': {}", entry.path().string(), error.message());
+        error.clear();
+        continue;
+      }
+      log_files.push_back(LogFile{.path = entry.path(), .modified_time = modified_time});
     }
 
-    const auto modified_time = entry.last_write_time(error);
-    if (error) {
-      spdlog::warn("[launcher] failed to read log mtime '{}': {}", entry.path().string(), error.message());
-      error.clear();
-      continue;
+    if (log_files.size() <= retain_files) {
+      return;
     }
-    log_files.push_back(LogFile{.path = entry.path(), .modified_time = modified_time});
-  }
 
-  if (log_files.size() <= retain_files) {
-    return;
-  }
+    std::sort(log_files.begin(), log_files.end(),
+              [](const LogFile& lhs, const LogFile& rhs) { return lhs.modified_time < rhs.modified_time; });
 
-  std::sort(log_files.begin(), log_files.end(),
-            [](const LogFile& lhs, const LogFile& rhs) { return lhs.modified_time < rhs.modified_time; });
-
-  const auto remove_count = log_files.size() - static_cast<std::size_t>(retain_files);
-  for (std::size_t i = 0; i < remove_count; ++i) {
-    fs::remove(log_files[i].path, error);
-    if (error) {
-      spdlog::warn("[launcher] failed to remove old log '{}': {}", log_files[i].path.string(), error.message());
-      error.clear();
-    } else {
-      spdlog::info("[launcher] removed old log '{}'", log_files[i].path.string());
+    const auto remove_count = log_files.size() - static_cast<std::size_t>(retain_files);
+    for (std::size_t i = 0; i < remove_count; ++i) {
+      fs::remove(log_files[i].path, error);
+      if (error) {
+        spdlog::warn("[launcher] failed to remove old log '{}': {}", log_files[i].path.string(), error.message());
+        error.clear();
+      } else {
+        spdlog::info("[launcher] removed old log '{}'", log_files[i].path.string());
+      }
     }
   }
-}
 
 } // namespace
 
 static auto build_state_machine_args(const toml::table& /* cfg */) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   return {
-    kExeStateMachine,
-    "--state-event-service",      kStateEvent,
-    "--state-blackboard-service", kStateBlackboard,
-    "--state-control-service",    kStateControl,
+      kExeStateMachine, "--state-event-service",   kStateEvent,   "--state-blackboard-service",
+      kStateBlackboard, "--state-control-service", kStateControl,
   };
 }
 
 static auto build_audio_frontend_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
-    kExeAudioFrontend,
-    "--service", kAudioService,
-    "--localization-blackboard", kAudioLocalizationBlackboard,
+      kExeAudioFrontend, "--service", kAudioService, "--localization-blackboard", kAudioLocalizationBlackboard,
   };
 
   if (const auto* tbl = cfg["audio_frontend"].as_table()) {
@@ -391,11 +373,9 @@ static auto build_video_frontend_args(const toml::table& cfg) -> std::vector<std
 static auto build_speech_asr_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
-    kExeSpeechAsr,
-    "--input-service",            kAudioService,
-    "--output-service",           kSpeechAsrOutput,
-    "--state-event-service",      kStateEvent,
-    "--state-blackboard-service", kStateBlackboard,
+      kExeSpeechAsr,    "--input-service",       kAudioService, "--output-service",
+      kSpeechAsrOutput, "--state-event-service", kStateEvent,   "--state-blackboard-service",
+      kStateBlackboard,
   };
 
   if (const auto* tbl = cfg["speech_asr"].as_table()) {
@@ -420,9 +400,7 @@ static auto build_speech_asr_args(const toml::table& cfg) -> std::vector<std::st
 static auto build_env_sound_det_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
-    kExeEnvSoundDet,
-    "--input-service",         kAudioService,
-    "--state-control-service", kStateControl,
+      kExeEnvSoundDet, "--input-service", kAudioService, "--state-control-service", kStateControl,
   };
 
   if (const auto* tbl = cfg["env_sound_det"].as_table()) {
@@ -441,11 +419,9 @@ static auto build_env_sound_det_args(const toml::table& cfg) -> std::vector<std:
 static auto build_handpose_det_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
-    kExeHandposeDet,
-    "--input-service",            kVideoService,
-    "--output-service",           kHandposeOutput,
-    "--state-event-service",      kStateEvent,
-    "--state-blackboard-service", kStateBlackboard,
+      kExeHandposeDet,  "--input-service",       kVideoService, "--output-service",
+      kHandposeOutput,  "--state-event-service", kStateEvent,   "--state-blackboard-service",
+      kStateBlackboard,
   };
 
   if (const auto* tbl = cfg["handpose_det"].as_table()) {
@@ -483,11 +459,9 @@ static auto build_handpose_det_args(const toml::table& cfg) -> std::vector<std::
 static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
-    kExeSignlangDet,
-    "--input-service",            kHandposeOutput,
-    "--output-service",           kSignlangOutput,
-    "--state-event-service",      kStateEvent,
-    "--state-blackboard-service", kStateBlackboard,
+      kExeSignlangDet,  "--input-service",       kHandposeOutput, "--output-service",
+      kSignlangOutput,  "--state-event-service", kStateEvent,     "--state-blackboard-service",
+      kStateBlackboard,
   };
 
   if (const auto* tbl = cfg["signlang_det"].as_table()) {
@@ -507,9 +481,9 @@ static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::
 }
 
 auto main(int argc, char** argv) -> int {
+  using signlang::launcher::parse_program_options;
   using signlang::launcher::ProgramOptions;
   using signlang::launcher::ProgramUsage;
-  using signlang::launcher::parse_program_options;
 
   signlang::logging::initialize();
 
@@ -558,13 +532,10 @@ auto main(int argc, char** argv) -> int {
     };
 
     std::vector<ModuleEntry> modules = {
-      {"state_machine",  build_state_machine_args(config)},
-      {"audio_frontend", build_audio_frontend_args(config)},
-      {"video_frontend", build_video_frontend_args(config)},
-      {"speech_asr",     build_speech_asr_args(config)},
-      {"env_sound_det",  build_env_sound_det_args(config)},
-      {"handpose_det",   build_handpose_det_args(config)},
-      {"signlang_det",   build_signlang_det_args(config)},
+        {"state_machine", build_state_machine_args(config)},   {"audio_frontend", build_audio_frontend_args(config)},
+        {"video_frontend", build_video_frontend_args(config)}, {"speech_asr", build_speech_asr_args(config)},
+        {"env_sound_det", build_env_sound_det_args(config)},   {"handpose_det", build_handpose_det_args(config)},
+        {"signlang_det", build_signlang_det_args(config)},
     };
 
     for (auto& mod : modules) {
@@ -599,26 +570,24 @@ auto main(int argc, char** argv) -> int {
       const auto pid = waitpid(-1, &status, WNOHANG);
 
       if (pid > 0) {
-        auto it = std::find_if(g_children.begin(), g_children.end(),
-                               [pid](const ChildInfo& c) { return c.pid == pid; });
+        auto it =
+            std::find_if(g_children.begin(), g_children.end(), [pid](const ChildInfo& c) { return c.pid == pid; });
         if (it != g_children.end()) {
           if (WIFEXITED(status)) {
             const auto exit_code = WEXITSTATUS(status);
             if (exit_code != 0) {
-              spdlog::error("[launcher] {} (pid {}) exited with code {}, shutting down",
-                            it->name, pid, exit_code);
+              spdlog::error("[launcher] {} (pid {}) exited with code {}, shutting down", it->name, pid, exit_code);
             } else {
               spdlog::warn("[launcher] {} (pid {}) exited normally, shutting down", it->name, pid);
             }
           } else if (WIFSIGNALED(status)) {
-            spdlog::error("[launcher] {} (pid {}) killed by signal {}, shutting down",
-                          it->name, pid, WTERMSIG(status));
+            spdlog::error("[launcher] {} (pid {}) killed by signal {}, shutting down", it->name, pid, WTERMSIG(status));
           }
           g_children.erase(it);
         }
         g_shutdown = 1;
       } else if (pid == 0) {
-        struct timespec ts{ .tv_sec = 0, .tv_nsec = 500000000 };
+        struct timespec ts{.tv_sec = 0, .tv_nsec = 500000000};
         nanosleep(&ts, nullptr);
       } else {
         break;

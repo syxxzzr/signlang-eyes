@@ -27,10 +27,8 @@ namespace signlang::signlang_det {
     prev_sequence_number_ = 0;
   }
 
-  auto FeatureExtractor::prepare_hands(const handpose_det::HandPoseDetection* detections,
-                                       std::uint32_t count) const
-    -> std::vector<const handpose_det::HandPoseDetection*>
-  {
+  auto FeatureExtractor::prepare_hands(const handpose_det::HandPoseDetection* detections, std::uint32_t count) const
+      -> std::vector<const handpose_det::HandPoseDetection*> {
     auto hands = std::vector<const handpose_det::HandPoseDetection*>{};
 
     for (std::uint32_t i = 0; i < count; ++i) {
@@ -41,9 +39,8 @@ namespace signlang::signlang_det {
     }
 
     // Sort hands left-to-right by x-coordinate
-    std::sort(hands.begin(), hands.end(), [this](const auto* a, const auto* b) {
-      return compute_hand_center(*a) < compute_hand_center(*b);
-    });
+    std::sort(hands.begin(), hands.end(),
+              [this](const auto* a, const auto* b) { return compute_hand_center(*a) < compute_hand_center(*b); });
 
     // Take at most 2 hands
     if (hands.size() > kMaxHandCount) {
@@ -86,10 +83,8 @@ namespace signlang::signlang_det {
     return std::sqrt(dx * dx + dy * dy);
   }
 
-  auto FeatureExtractor::assign_hands_to_slots(
-    const std::vector<const handpose_det::HandPoseDetection*>& hands)
-    -> std::array<const handpose_det::HandPoseDetection*, kMaxHandCount>
-  {
+  auto FeatureExtractor::assign_hands_to_slots(const std::vector<const handpose_det::HandPoseDetection*>& hands)
+      -> std::array<const handpose_det::HandPoseDetection*, kMaxHandCount> {
     auto assigned = std::array<const handpose_det::HandPoseDetection*, kMaxHandCount>{nullptr, nullptr};
 
     if (hands.size() == kMaxHandCount) {
@@ -127,16 +122,15 @@ namespace signlang::signlang_det {
 
       assigned[best_slot] = hand;
       available_slots.erase(std::remove(available_slots.begin(), available_slots.end(), best_slot),
-                           available_slots.end());
+                            available_slots.end());
     }
 
     return assigned;
   }
 
   auto FeatureExtractor::compute_bounding_box_scale(
-    const std::array<handpose_det::HandPoseKeypoint, handpose_det::kHandPoseKeypointCount>& keypoints) const
-    -> float
-  {
+      const std::array<handpose_det::HandPoseKeypoint, handpose_det::kHandPoseKeypointCount>& keypoints) const
+      -> float {
     const auto& wrist = keypoints[0];
     auto max_distance = 0.0F;
 
@@ -150,11 +144,8 @@ namespace signlang::signlang_det {
     return max_distance + kScaleEpsilon;
   }
 
-  auto FeatureExtractor::extract_single_hand(const handpose_det::HandPoseDetection& hand,
-                                             std::uint32_t hand_index,
-                                             bool sequence_continuous)
-    -> HandFeatures
-  {
+  auto FeatureExtractor::extract_single_hand(const handpose_det::HandPoseDetection& hand, std::uint32_t hand_index,
+                                             bool sequence_continuous) -> HandFeatures {
     const auto& keypoints = hand.keypoints;
     const auto& wrist = keypoints[0];
     const auto scale = compute_bounding_box_scale(keypoints);
@@ -187,10 +178,8 @@ namespace signlang::signlang_det {
   }
 
   auto FeatureExtractor::extract(const handpose_det::HandPoseFrameMetadata& metadata,
-                                 const handpose_det::HandPoseDetection* detections,
-                                 std::uint32_t detection_count)
-    -> std::optional<FeatureVector>
-  {
+                                 const handpose_det::HandPoseDetection* detections, std::uint32_t detection_count)
+      -> std::optional<FeatureVector> {
     const auto hands = prepare_hands(detections, detection_count);
     if (hands.empty()) {
       return std::nullopt;
@@ -199,7 +188,7 @@ namespace signlang::signlang_det {
     const auto assigned_hands = assign_hands_to_slots(hands);
 
     const auto sequence_continuous =
-      (prev_sequence_number_ != 0) && (metadata.source_sequence_number == prev_sequence_number_ + 1);
+        (prev_sequence_number_ != 0) && (metadata.source_sequence_number == prev_sequence_number_ + 1);
 
     auto feature = FeatureVector{};
     feature.source_sequence_number = metadata.source_sequence_number;

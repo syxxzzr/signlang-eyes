@@ -43,9 +43,9 @@ namespace signlang::handpose_det {
   } // namespace
 
   auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult {
-    cxxopts::Options options{
-        "signlang_eyes_handpose_det",
-        "Subscribe video frames from iceoryx2, run MediaPipe palm and hand landmark RKNN models, and publish hand keypoints."};
+    cxxopts::Options options{"signlang_eyes_handpose_det",
+                             "Subscribe video frames from iceoryx2, run MediaPipe palm and hand landmark RKNN models, "
+                             "and publish hand keypoints."};
 
     // clang-format off
     options.add_options()
@@ -122,23 +122,21 @@ namespace signlang::handpose_det {
 
     const auto default_npu_core = parsed_options["npu-core"].as<std::string>();
     const auto palm_npu_core = parsed_options.count("palm-npu-core") != 0
-                                   ? parsed_options["palm-npu-core"].as<std::string>()
-                                   : default_npu_core;
+        ? parsed_options["palm-npu-core"].as<std::string>()
+        : default_npu_core;
     const auto landmark_npu_core = parsed_options.count("landmark-npu-core") != 0
-                                       ? parsed_options["landmark-npu-core"].as<std::string>()
-                                       : default_npu_core;
+        ? parsed_options["landmark-npu-core"].as<std::string>()
+        : default_npu_core;
 
     return ProgramOptionsParseResult{ProgramOptions{
         .input_service_name = parsed_options["input-service"].as<std::string>(),
         .output_service_name = parsed_options["output-service"].as<std::string>(),
-        .state_event_service_name =
-            has_state_event_service
-                ? std::optional<std::string>{parsed_options["state-event-service"].as<std::string>()}
-                : std::nullopt,
-        .state_blackboard_service_name =
-            has_state_blackboard_service
-                ? std::optional<std::string>{parsed_options["state-blackboard-service"].as<std::string>()}
-                : std::nullopt,
+        .state_event_service_name = has_state_event_service
+            ? std::optional<std::string>{parsed_options["state-event-service"].as<std::string>()}
+            : std::nullopt,
+        .state_blackboard_service_name = has_state_blackboard_service
+            ? std::optional<std::string>{parsed_options["state-blackboard-service"].as<std::string>()}
+            : std::nullopt,
         .palm_detector_model_path = parsed_options["model"].as<std::string>(),
         .landmark_model_path = parsed_options["landmark-model"].as<std::string>(),
         .confidence_threshold = parsed_options["confidence"].as<float>(),

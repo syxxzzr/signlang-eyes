@@ -22,8 +22,7 @@ namespace signlang::audio_frontend {
 
   } // namespace
 
-  AudioProcessor::AudioProcessor(AudioFormat input_format, AudioFormat output_format,
-                                 std::uint32_t publish_period_ms) :
+  AudioProcessor::AudioProcessor(AudioFormat input_format, AudioFormat output_format, std::uint32_t publish_period_ms) :
       input_format_{input_format}, output_format_{output_format}, publish_period_ms_{publish_period_ms} {
     if (output_format_.channel_count > input_format_.channel_count) {
       throw std::runtime_error("Output channel count must be less than or equal to input channel count");

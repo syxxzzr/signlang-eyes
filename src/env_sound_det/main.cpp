@@ -34,7 +34,7 @@ namespace {
   auto is_dangerous_sound_label(const std::array<char, signlang::env_sound_det::kMaxClassLabelLength>& label) -> bool {
     const std::string_view label_view{label.data()};
     return label_view == "Air horn, truck horn" || label_view == "Vehicle horn, car horn, honking" ||
-           label_view == "Train horn";
+        label_view == "Train horn";
   }
 
   auto has_dangerous_sound(const signlang::env_sound_det::YamnetInferenceResult& inference_result) -> bool {

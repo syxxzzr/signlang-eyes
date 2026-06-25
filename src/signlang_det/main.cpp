@@ -3,12 +3,12 @@
 #include "iceoryx_gateway.hpp"
 #include "keypoint_ring_buffer.hpp"
 #include "program_options.hpp"
-#include "spdlog/spdlog.h"
 #include "signlang_model.hpp"
 #include "signlang_result.hpp"
+#include "spdlog/spdlog.h"
 
-#include <atomic>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <csignal>
 #include <exception>
@@ -21,25 +21,20 @@ namespace {
 
   volatile std::sig_atomic_t g_should_stop = 0;
 
-  void handle_shutdown_signal(int) {
-    g_should_stop = 1;
-  }
+  void handle_shutdown_signal(int) { g_should_stop = 1; }
 
   void install_signal_handlers() {
     std::signal(SIGINT, handle_shutdown_signal);
     std::signal(SIGTERM, handle_shutdown_signal);
   }
 
-  auto build_result(
-    const std::vector<signlang::signlang_det::FeatureVector>& window,
-    const signlang::signlang_det::SignlangModel::InferenceResult& inference,
-    const signlang::signlang_det::ProgramOptions& options,
-    const signlang::signlang_det::SignlangModel& model,
-    bool recognized)
-    -> signlang::signlang_det::SignlangResult
-  {
-    using signlang::signlang_det::SignlangResult;
+  auto build_result(const std::vector<signlang::signlang_det::FeatureVector>& window,
+                    const signlang::signlang_det::SignlangModel::InferenceResult& inference,
+                    const signlang::signlang_det::ProgramOptions& options,
+                    const signlang::signlang_det::SignlangModel& model, bool recognized)
+      -> signlang::signlang_det::SignlangResult {
     using signlang::signlang_det::copy_string;
+    using signlang::signlang_det::SignlangResult;
     using signlang::signlang_det::steady_timestamp_ns;
 
     auto result = SignlangResult{};
@@ -59,8 +54,8 @@ namespace {
     const auto* gesture_name = model.get_gesture_name(inference.gesture_id);
     copy_string(gesture_name, result.gesture_name);
 
-    const auto candidate_count = std::min<std::size_t>(
-      inference.candidates.size(), signlang::signlang_det::kMaxGestureCandidates);
+    const auto candidate_count =
+        std::min<std::size_t>(inference.candidates.size(), signlang::signlang_det::kMaxGestureCandidates);
     result.candidate_count = static_cast<std::uint32_t>(candidate_count);
     for (std::size_t index = 0; index < candidate_count; ++index) {
       const auto& candidate = inference.candidates[index];
@@ -74,41 +69,32 @@ namespace {
     return result;
   }
 
-  void receiver_loop(
-    const signlang::signlang_det::ProgramOptions& options,
-    signlang::signlang_det::KeypointRingBuffer& ring_buffer,
-    const std::atomic<bool>& should_stop)
-  {
-    using signlang::signlang_det::IpcHandposeSubscriber;
+  void receiver_loop(const signlang::signlang_det::ProgramOptions& options,
+                     signlang::signlang_det::KeypointRingBuffer& ring_buffer, const std::atomic<bool>& should_stop) {
     using signlang::signlang_det::FeatureExtractor;
+    using signlang::signlang_det::IpcHandposeSubscriber;
 
-    auto subscriber = IpcHandposeSubscriber{options.input_service_name,
-                                            options.subscriber_buffer_size};
+    auto subscriber = IpcHandposeSubscriber{options.input_service_name, options.subscriber_buffer_size};
     auto extractor = FeatureExtractor{options.min_keypoint_confidence};
 
     while (!should_stop && subscriber.wait_for_work()) {
       if (!should_stop) {
-        subscriber.receive_latest(
-          [&](const auto& metadata, const auto* detections, auto count) {
-            if (auto feature = extractor.extract(metadata, detections, count)) {
-              ring_buffer.push(*feature);
-            }
-          });
+        subscriber.receive_latest([&](const auto& metadata, const auto* detections, auto count) {
+          if (auto feature = extractor.extract(metadata, detections, count)) {
+            ring_buffer.push(*feature);
+          }
+        });
       }
     }
   }
 
-  void inference_loop(
-    const signlang::signlang_det::ProgramOptions& options,
-    signlang::signlang_det::KeypointRingBuffer& ring_buffer,
-    const std::atomic<bool>& should_stop)
-  {
-    using signlang::signlang_det::SignlangModel;
-    using signlang::signlang_det::IpcSignlangPublisher;
+  void inference_loop(const signlang::signlang_det::ProgramOptions& options,
+                      signlang::signlang_det::KeypointRingBuffer& ring_buffer, const std::atomic<bool>& should_stop) {
     using signlang::signlang_det::IpcSignlangDetStateMonitor;
+    using signlang::signlang_det::IpcSignlangPublisher;
+    using signlang::signlang_det::SignlangModel;
 
-    auto model = SignlangModel{options.model_path, options.prototypes_path,
-                               options.npu_core_mask,
+    auto model = SignlangModel{options.model_path, options.prototypes_path, options.npu_core_mask,
                                options.motion_weight, options.dtw_window_ratio};
     if (model.expected_sequence_length() != options.sequence_length) {
       throw std::runtime_error("Configured sequence length " + std::to_string(options.sequence_length) +
@@ -130,7 +116,7 @@ namespace {
     };
 
     const auto hop_frames = std::max<std::uint32_t>(
-      1, static_cast<std::uint32_t>(options.sequence_length * (1.0f - options.overlap_ratio)));
+        1, static_cast<std::uint32_t>(options.sequence_length * (1.0f - options.overlap_ratio)));
     auto next_window_end_seq = std::uint64_t{hop_frames};
 
     while (!should_stop) {
@@ -163,8 +149,7 @@ namespace {
       try {
         const auto inference_result = model.infer(*window);
 
-        auto recognized = inference_result.recognized &&
-          inference_result.confidence >= options.confidence_threshold;
+        auto recognized = inference_result.recognized && inference_result.confidence >= options.confidence_threshold;
         const auto margin = inference_result.confidence - inference_result.second_confidence;
         if (margin < options.confidence_margin) {
           recognized = false;
@@ -173,8 +158,7 @@ namespace {
         const auto result = build_result(*window, inference_result, options, model, recognized);
         if (recognized) {
           spdlog::info("Sign language detected: {} (confidence: {:.2f}, margin: {:.2f})",
-                       model.get_gesture_name(inference_result.gesture_id),
-                       inference_result.confidence, margin);
+                       model.get_gesture_name(inference_result.gesture_id), inference_result.confidence, margin);
         }
         publisher.publish(result);
 
@@ -189,11 +173,11 @@ namespace {
 } // namespace
 
 auto main(int argc, char** argv) -> int {
+  using signlang::signlang_det::compute_buffer_capacity;
+  using signlang::signlang_det::KeypointRingBuffer;
   using signlang::signlang_det::parse_program_options;
   using signlang::signlang_det::ProgramOptions;
   using signlang::signlang_det::ProgramUsage;
-  using signlang::signlang_det::KeypointRingBuffer;
-  using signlang::signlang_det::compute_buffer_capacity;
 
   signlang::logging::initialize();
 
@@ -212,18 +196,13 @@ auto main(int argc, char** argv) -> int {
     spdlog::info("Model: {}", options.model_path);
     spdlog::info("Sequence length: {}, overlap ratio: {:.1f}%", options.sequence_length, options.overlap_ratio * 100);
 
-    const auto buffer_capacity = compute_buffer_capacity(
-      options.sequence_length, options.overlap_ratio);
+    const auto buffer_capacity = compute_buffer_capacity(options.sequence_length, options.overlap_ratio);
     auto ring_buffer = KeypointRingBuffer{buffer_capacity};
     auto should_stop = std::atomic<bool>{false};
 
-    auto receiver_thread = std::thread{[&]() {
-      receiver_loop(options, ring_buffer, should_stop);
-    }};
+    auto receiver_thread = std::thread{[&]() { receiver_loop(options, ring_buffer, should_stop); }};
 
-    auto inference_thread = std::thread{[&]() {
-      inference_loop(options, ring_buffer, should_stop);
-    }};
+    auto inference_thread = std::thread{[&]() { inference_loop(options, ring_buffer, should_stop); }};
 
     while (g_should_stop == 0) {
       std::this_thread::sleep_for(std::chrono::milliseconds(100));

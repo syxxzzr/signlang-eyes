@@ -64,7 +64,7 @@ namespace signlang::state_machine {
     static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
     static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
         -> iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, StateControlRequest, void, StateControlResponse,
-                                             void>;
+                                            void>;
     static auto create_server(const iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, StateControlRequest, void,
                                                                      StateControlResponse, void>& service)
         -> iox2::Server<iox2::ServiceType::Ipc, StateControlRequest, void, StateControlResponse, void>;

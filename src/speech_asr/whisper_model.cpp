@@ -196,8 +196,7 @@ namespace signlang::speech_asr {
 
   void WhisperModel::initialize_context(const std::string& model_path, rknn_core_mask npu_core_mask,
                                         std::uint32_t rknn_priority_flag, rknn_context& context,
-                                        rknn_input_output_num& io_num,
-                                        std::vector<rknn_tensor_attr>& input_attrs,
+                                        rknn_input_output_num& io_num, std::vector<rknn_tensor_attr>& input_attrs,
                                         std::vector<rknn_tensor_attr>& output_attrs) {
     auto* model_path_buffer = const_cast<char*>(model_path.c_str());
     const auto init_result = rknn_init(&context, model_path_buffer, 0, rknn_priority_flag, nullptr);
@@ -394,9 +393,10 @@ namespace signlang::speech_asr {
   void WhisperModel::initialize_fft_workspace() {
     hann_window_.resize(kNfft);
     for (std::uint32_t sample_index = 0; sample_index < kNfft; ++sample_index) {
-      hann_window_[sample_index] =
-          0.5F * (1.0F - std::cos((2.0F * std::numbers::pi_v<float> * static_cast<float>(sample_index)) /
-                                  static_cast<float>(kNfft - 1)));
+      hann_window_[sample_index] = 0.5F *
+          (1.0F -
+           std::cos((2.0F * std::numbers::pi_v<float> * static_cast<float>(sample_index)) /
+                    static_cast<float>(kNfft - 1)));
     }
 
     fft_input_ = static_cast<float*>(fftwf_malloc(sizeof(float) * kNfft));
@@ -564,8 +564,7 @@ namespace signlang::speech_asr {
     rknn_input inputs[2]{};
     inputs[decoder_tokens_input_index_].index = decoder_tokens_input_index_;
     inputs[decoder_tokens_input_index_].buf = decoder_tokens_.data();
-    inputs[decoder_tokens_input_index_].size =
-        static_cast<std::uint32_t>(decoder_token_count_ * sizeof(std::int64_t));
+    inputs[decoder_tokens_input_index_].size = static_cast<std::uint32_t>(decoder_token_count_ * sizeof(std::int64_t));
     inputs[decoder_tokens_input_index_].pass_through = 0;
     inputs[decoder_tokens_input_index_].type = RKNN_TENSOR_INT64;
     inputs[decoder_tokens_input_index_].fmt = decoder_input_attrs_[decoder_tokens_input_index_].fmt;

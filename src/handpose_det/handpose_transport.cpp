@@ -23,10 +23,9 @@ namespace signlang::handpose_det {
 
   HandPoseTransport::HandPoseTransport(const std::string& input_service_name, const std::string& output_service_name,
                                        std::uint64_t subscriber_buffer_size, std::uint32_t output_capacity) :
-      node_{create_node()},
-      subscriber_{create_video_subscriber(node_, input_service_name, subscriber_buffer_size)},
-      publisher_{create_handpose_publisher(node_, output_service_name, output_capacity)}, output_capacity_{
-                                                                                              output_capacity} {}
+      node_{create_node()}, subscriber_{create_video_subscriber(node_, input_service_name, subscriber_buffer_size)},
+      publisher_{create_handpose_publisher(node_, output_service_name, output_capacity)},
+      output_capacity_{output_capacity} {}
 
   auto HandPoseTransport::wait_for_work() -> bool {
     return node_.wait(iox2::bb::Duration::from_millis(kWaitPeriodMs)).has_value();
@@ -34,9 +33,8 @@ namespace signlang::handpose_det {
 
   auto HandPoseTransport::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
-    auto node = iox2::NodeBuilder()
-                    .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
-                    .create<iox2::ServiceType::Ipc>();
+    auto node =
+        iox2::NodeBuilder().signal_handling_mode(iox2::SignalHandlingMode::Disabled).create<iox2::ServiceType::Ipc>();
     if (!node.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 IPC node");
     }
@@ -94,9 +92,8 @@ namespace signlang::handpose_det {
 
   IpcHandPoseStateMonitor::IpcHandPoseStateMonitor(const std::string& event_service_name,
                                                    const std::string& blackboard_service_name) :
-      node_{create_node()},
-      listener_{create_listener(node_, event_service_name)}, blackboard_service_{open_blackboard_service(
-                                                                 node_, blackboard_service_name)},
+      node_{create_node()}, listener_{create_listener(node_, event_service_name)},
+      blackboard_service_{open_blackboard_service(node_, blackboard_service_name)},
       reader_{create_reader(blackboard_service_)}, cached_state_{signlang::state_machine::AppState::Normal} {
     cached_state_ = read_state_from_blackboard();
   }
@@ -133,9 +130,8 @@ namespace signlang::handpose_det {
   auto IpcHandPoseStateMonitor::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
 
-    auto node = iox2::NodeBuilder()
-                    .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
-                    .create<iox2::ServiceType::Ipc>();
+    auto node =
+        iox2::NodeBuilder().signal_handling_mode(iox2::SignalHandlingMode::Disabled).create<iox2::ServiceType::Ipc>();
     if (!node.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 IPC handpose state monitor node");
     }

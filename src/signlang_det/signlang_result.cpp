@@ -23,9 +23,7 @@ namespace signlang::signlang_det {
 
   } // namespace
 
-  auto steady_timestamp_ns() -> std::uint64_t {
-    return steady_timestamp_ns_impl();
-  }
+  auto steady_timestamp_ns() -> std::uint64_t { return steady_timestamp_ns_impl(); }
 
   void copy_string(const char* source, std::array<char, kMaxGestureNameLength>& dest) {
     copy_string_impl(source, dest);

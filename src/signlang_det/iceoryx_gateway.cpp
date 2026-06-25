@@ -17,9 +17,8 @@ namespace signlang::signlang_det {
   } // namespace
 
   auto IpcHandposeSubscriber::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
-    auto node_result = iox2::NodeBuilder()
-                           .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
-                           .create<iox2::ServiceType::Ipc>();
+    auto node_result =
+        iox2::NodeBuilder().signal_handling_mode(iox2::SignalHandlingMode::Disabled).create<iox2::ServiceType::Ipc>();
     if (!node_result.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 node for handpose subscriber");
     }
@@ -56,9 +55,8 @@ namespace signlang::signlang_det {
   }
 
   auto IpcSignlangPublisher::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
-    auto node_result = iox2::NodeBuilder()
-                           .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
-                           .create<iox2::ServiceType::Ipc>();
+    auto node_result =
+        iox2::NodeBuilder().signal_handling_mode(iox2::SignalHandlingMode::Disabled).create<iox2::ServiceType::Ipc>();
     if (!node_result.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 node for signlang publisher");
     }
@@ -107,9 +105,8 @@ namespace signlang::signlang_det {
 
   IpcSignlangDetStateMonitor::IpcSignlangDetStateMonitor(const std::string& event_service_name,
                                                          const std::string& blackboard_service_name) :
-      node_{create_node()},
-      listener_{create_listener(node_, event_service_name)}, blackboard_service_{open_blackboard_service(
-                                                                 node_, blackboard_service_name)},
+      node_{create_node()}, listener_{create_listener(node_, event_service_name)},
+      blackboard_service_{open_blackboard_service(node_, blackboard_service_name)},
       reader_{create_reader(blackboard_service_)}, cached_state_{signlang::state_machine::AppState::Normal} {
     cached_state_ = read_state_from_blackboard();
   }
@@ -148,9 +145,8 @@ namespace signlang::signlang_det {
   auto IpcSignlangDetStateMonitor::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
 
-    auto node = iox2::NodeBuilder()
-                    .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
-                    .create<iox2::ServiceType::Ipc>();
+    auto node =
+        iox2::NodeBuilder().signal_handling_mode(iox2::SignalHandlingMode::Disabled).create<iox2::ServiceType::Ipc>();
     if (!node.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 IPC sign language detection state monitor node");
     }

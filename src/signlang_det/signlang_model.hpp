@@ -54,13 +54,12 @@ namespace signlang::signlang_det {
 
     explicit DtwMatcher(float window_ratio);
 
-    auto match(const EncodedSequence& query, const PrototypeStore& store)
-      const -> std::vector<Candidate>;
+    auto match(const EncodedSequence& query, const PrototypeStore& store) const -> std::vector<Candidate>;
 
   private:
     auto compute_distance(const EncodedSequence& query, const EncodedSequence& sample) const -> float;
-    auto compute_frame_distance(const std::vector<float>& query_frame,
-                                const std::vector<float>& sample_frame) const -> float;
+    auto compute_frame_distance(const std::vector<float>& query_frame, const std::vector<float>& sample_frame) const
+        -> float;
     auto compute_window(std::uint32_t query_length, std::uint32_t sample_length) const -> std::uint32_t;
 
     float window_ratio_;
@@ -108,11 +107,8 @@ namespace signlang::signlang_det {
       std::vector<DtwMatcher::Candidate> candidates;
     };
 
-    SignlangModel(const std::string& model_path,
-                  const std::string& prototypes_path,
-                  rknn_core_mask npu_core,
-                  float motion_weight = 0.0F,
-                  float dtw_window_ratio = 0.5F);
+    SignlangModel(const std::string& model_path, const std::string& prototypes_path, rknn_core_mask npu_core,
+                  float motion_weight = 0.0F, float dtw_window_ratio = 0.5F);
 
     SignlangModel(const SignlangModel&) = delete;
     auto operator=(const SignlangModel&) -> SignlangModel& = delete;

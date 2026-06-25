@@ -72,17 +72,16 @@ namespace signlang::handpose_det {
     void print_tensor_details() const;
     void build_palm_anchors();
 
-    void run_palm_detector(const signlang::video_frontend::VideoFrameMetadata& metadata,
-                           const std::uint8_t* payload, std::uint64_t payload_size);
+    void run_palm_detector(const signlang::video_frontend::VideoFrameMetadata& metadata, const std::uint8_t* payload,
+                           std::uint64_t payload_size);
 
     void run_landmark_detector(const signlang::video_frontend::VideoFrameMetadata& metadata,
-                               const std::uint8_t* payload, std::uint64_t payload_size,
-                               PalmCandidate& candidate);
+                               const std::uint8_t* payload, std::uint64_t payload_size, PalmCandidate& candidate);
 
-    auto extract_landmarks(const signlang::video_frontend::VideoFrameMetadata& metadata,
-                           const std::uint8_t* payload, std::uint64_t payload_size,
-                           const CropTransform& transform, std::array<HandPoseKeypoint, kHandPoseKeypointCount>& out,
-                           float& out_presence, bool& out_is_left) const -> bool;
+    auto extract_landmarks(const signlang::video_frontend::VideoFrameMetadata& metadata, const std::uint8_t* payload,
+                           std::uint64_t payload_size, const CropTransform& transform,
+                           std::array<HandPoseKeypoint, kHandPoseKeypointCount>& out, float& out_presence,
+                           bool& out_is_left) const -> bool;
 
     void try_tracking_from_previous_frame(const signlang::video_frontend::VideoFrameMetadata& metadata,
                                           const std::uint8_t* payload, std::uint64_t payload_size);
@@ -92,11 +91,10 @@ namespace signlang::handpose_det {
 
     auto compute_iou(const HandPoseBox& box1, const HandPoseBox& box2) const -> float;
 
-    auto crop_transform_from_box(const HandPoseBox& box, std::uint32_t image_width,
-                                 std::uint32_t image_height) const -> CropTransform;
+    auto crop_transform_from_box(const HandPoseBox& box, std::uint32_t image_width, std::uint32_t image_height) const
+        -> CropTransform;
 
-    auto crop_transform_from_palm_keypoints(const std::array<float, 14>& palm_keypoints,
-                                            std::uint32_t image_width,
+    auto crop_transform_from_palm_keypoints(const std::array<float, 14>& palm_keypoints, std::uint32_t image_width,
                                             std::uint32_t image_height) const -> CropTransform;
 
     auto apply_one_euro_filter(OneEuroFilter& filter, float value, std::uint64_t timestamp_ns) -> float;

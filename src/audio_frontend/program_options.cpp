@@ -126,10 +126,9 @@ namespace signlang::audio_frontend {
     return ProgramOptionsParseResult{ProgramOptions{
         .audio_device_name = parsed_options["device"].as<std::string>(),
         .service_name = parsed_options["service"].as<std::string>(),
-        .localization_blackboard_service_name =
-            parsed_options.count("localization-blackboard") == 0
-                ? std::nullopt
-                : std::optional<std::string>{parsed_options["localization-blackboard"].as<std::string>()},
+        .localization_blackboard_service_name = parsed_options.count("localization-blackboard") == 0
+            ? std::nullopt
+            : std::optional<std::string>{parsed_options["localization-blackboard"].as<std::string>()},
         .localization_tdoa_weight = localization_tdoa_weight,
         .localization_rms_weight = localization_rms_weight,
         .publish_period_ms = publish_period_ms,

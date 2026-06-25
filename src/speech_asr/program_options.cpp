@@ -17,8 +17,6 @@ namespace signlang::speech_asr {
     constexpr auto kDefaultVocabEnPath = "models/whisper/vocab_en.txt";
     constexpr auto kDefaultVocabZhPath = "models/whisper/vocab_zh.txt";
     constexpr auto kDefaultMelFiltersPath = "models/whisper/mel_80_filters.txt";
-    constexpr std::uint32_t kMinWindowMs = 1000;
-    constexpr std::uint32_t kMaxWindowMs = 60000;
     constexpr std::uint32_t kDefaultMaxDecodeSteps = 96;
     constexpr std::uint64_t kDefaultSubscriberBufferSize = 2;
 
@@ -160,13 +158,12 @@ namespace signlang::speech_asr {
     return ProgramOptionsParseResult{ProgramOptions{
         .audio_service_name = parsed_options["input-service"].as<std::string>(),
         .result_service_name = parsed_options["output-service"].as<std::string>(),
-        .state_event_service_name =
-            has_state_event_service ? std::optional<std::string>{parsed_options["state-event-service"].as<std::string>()}
-                                    : std::nullopt,
-        .state_blackboard_service_name =
-            has_state_blackboard_service
-                ? std::optional<std::string>{parsed_options["state-blackboard-service"].as<std::string>()}
-                : std::nullopt,
+        .state_event_service_name = has_state_event_service
+            ? std::optional<std::string>{parsed_options["state-event-service"].as<std::string>()}
+            : std::nullopt,
+        .state_blackboard_service_name = has_state_blackboard_service
+            ? std::optional<std::string>{parsed_options["state-blackboard-service"].as<std::string>()}
+            : std::nullopt,
         .encoder_model_path = parsed_options["encoder-model"].as<std::string>(),
         .decoder_model_path = parsed_options["decoder-model"].as<std::string>(),
         .vocab_en_path = parsed_options["vocab-en"].as<std::string>(),

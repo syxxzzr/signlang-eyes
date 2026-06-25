@@ -55,9 +55,8 @@ namespace signlang::env_sound_det {
   auto IpcAudioSubscriber::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
 
-    auto node = iox2::NodeBuilder()
-                    .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
-                    .create<iox2::ServiceType::Ipc>();
+    auto node =
+        iox2::NodeBuilder().signal_handling_mode(iox2::SignalHandlingMode::Disabled).create<iox2::ServiceType::Ipc>();
     if (!node.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 IPC audio subscriber node");
     }
@@ -66,11 +65,11 @@ namespace signlang::env_sound_det {
   }
 
   auto IpcAudioSubscriber::create_subscriber(const iox2::Node<iox2::ServiceType::Ipc>& node,
-                                             const std::string& service_name,
-                                             std::uint64_t subscriber_buffer_size)
+                                             const std::string& service_name, std::uint64_t subscriber_buffer_size)
       -> iox2::Subscriber<iox2::ServiceType::Ipc, signlang::audio_frontend::AudioFrame, void> {
-    auto service =
-        node.service_builder(service_name_from_string(service_name)).publish_subscribe<signlang::audio_frontend::AudioFrame>().open_or_create();
+    auto service = node.service_builder(service_name_from_string(service_name))
+                       .publish_subscribe<signlang::audio_frontend::AudioFrame>()
+                       .open_or_create();
     if (!service.has_value()) {
       throw std::runtime_error("Failed to open or create iceoryx2 audio service: " + service_name);
     }
@@ -99,9 +98,8 @@ namespace signlang::env_sound_det {
   auto IpcStateControlClient::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
 
-    auto node = iox2::NodeBuilder()
-                    .signal_handling_mode(iox2::SignalHandlingMode::Disabled)
-                    .create<iox2::ServiceType::Ipc>();
+    auto node =
+        iox2::NodeBuilder().signal_handling_mode(iox2::SignalHandlingMode::Disabled).create<iox2::ServiceType::Ipc>();
     if (!node.has_value()) {
       throw std::runtime_error("Failed to create iceoryx2 IPC state control client node");
     }

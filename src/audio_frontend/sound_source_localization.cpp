@@ -155,8 +155,8 @@ namespace signlang::audio_frontend {
 
   auto SoundSourceLocalizer::estimate_lag(const std::vector<std::int16_t>& interleaved_samples,
                                           std::uint32_t first_frame, std::uint32_t frame_count,
-                                          std::uint16_t channel_count, std::uint16_t channel_a,
-                                          std::uint16_t channel_b, std::uint32_t max_lag_samples) -> LagEstimate {
+                                          std::uint16_t channel_count, std::uint16_t channel_a, std::uint16_t channel_b,
+                                          std::uint32_t max_lag_samples) -> LagEstimate {
     LagEstimate best{.lag_samples = 0, .correlation = -1.0F};
     const auto max_lag = static_cast<int>(max_lag_samples);
 
@@ -172,10 +172,8 @@ namespace signlang::audio_frontend {
       double square_a = 0.0;
       double square_b = 0.0;
       for (std::uint32_t offset = 0; offset < usable_frames; ++offset) {
-        const auto sample_a =
-            sample_at(interleaved_samples, first_frame + start_a + offset, channel_count, channel_a);
-        const auto sample_b =
-            sample_at(interleaved_samples, first_frame + start_b + offset, channel_count, channel_b);
+        const auto sample_a = sample_at(interleaved_samples, first_frame + start_a + offset, channel_count, channel_a);
+        const auto sample_b = sample_at(interleaved_samples, first_frame + start_b + offset, channel_count, channel_b);
         cross += sample_a * sample_b;
         square_a += sample_a * sample_a;
         square_b += sample_b * sample_b;

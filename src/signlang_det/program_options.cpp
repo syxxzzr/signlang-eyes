@@ -130,13 +130,12 @@ namespace signlang::signlang_det {
     return ProgramOptions{
         .input_service_name = parsed_options["input-service"].as<std::string>(),
         .output_service_name = parsed_options["output-service"].as<std::string>(),
-        .state_event_service_name =
-            has_state_event_service ? std::optional<std::string>{parsed_options["state-event-service"].as<std::string>()}
-                                    : std::nullopt,
-        .state_blackboard_service_name =
-            has_state_blackboard_service
-                ? std::optional<std::string>{parsed_options["state-blackboard-service"].as<std::string>()}
-                : std::nullopt,
+        .state_event_service_name = has_state_event_service
+            ? std::optional<std::string>{parsed_options["state-event-service"].as<std::string>()}
+            : std::nullopt,
+        .state_blackboard_service_name = has_state_blackboard_service
+            ? std::optional<std::string>{parsed_options["state-blackboard-service"].as<std::string>()}
+            : std::nullopt,
         .model_path = parsed_options["model"].as<std::string>(),
         .prototypes_path = parsed_options["prototypes"].as<std::string>(),
         .sequence_length = sequence_length,

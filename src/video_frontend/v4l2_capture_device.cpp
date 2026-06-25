@@ -22,9 +22,7 @@ namespace signlang::video_frontend {
     constexpr auto kRequestedBufferCount = std::uint32_t{4};
     constexpr auto kSelectTimeoutSeconds = long{2};
 
-    auto v4l2_error_message(const std::string& context) -> std::string {
-      return context + ": " + std::strerror(errno);
-    }
+    auto v4l2_error_message(const std::string& context) -> std::string { return context + ": " + std::strerror(errno); }
 
     auto retry_ioctl(int fd, unsigned long request, void* arg) -> int {
       int result = 0;
@@ -54,11 +52,12 @@ namespace signlang::video_frontend {
       const auto candidate_area = frame_area(candidate.width, candidate.height);
       const auto selected_area = frame_area(selected_format.width, selected_format.height);
       return candidate_area > selected_area ||
-             (candidate_area == selected_area && candidate.pixel_format == kPixelFormatYuyv &&
-              selected_format.pixel_format != kPixelFormatYuyv);
+          (candidate_area == selected_area && candidate.pixel_format == kPixelFormatYuyv &&
+           selected_format.pixel_format != kPixelFormatYuyv);
     }
 
-    auto matches_stepwise_size(const v4l2_frmsize_stepwise& stepwise, std::uint32_t width, std::uint32_t height) -> bool {
+    auto matches_stepwise_size(const v4l2_frmsize_stepwise& stepwise, std::uint32_t width, std::uint32_t height)
+        -> bool {
       if (width < stepwise.min_width || width > stepwise.max_width || height < stepwise.min_height ||
           height > stepwise.max_height) {
         return false;
@@ -185,8 +184,7 @@ namespace signlang::video_frontend {
           selected_format.width = frame_size.discrete.width;
           selected_format.height = frame_size.discrete.height;
         }
-      } else if (frame_size.type == V4L2_FRMSIZE_TYPE_STEPWISE ||
-                 frame_size.type == V4L2_FRMSIZE_TYPE_CONTINUOUS) {
+      } else if (frame_size.type == V4L2_FRMSIZE_TYPE_STEPWISE || frame_size.type == V4L2_FRMSIZE_TYPE_CONTINUOUS) {
         if (frame_area(frame_size.stepwise.max_width, frame_size.stepwise.max_height) >
             frame_area(selected_format.width, selected_format.height)) {
           selected_format.width = frame_size.stepwise.max_width;
@@ -196,7 +194,8 @@ namespace signlang::video_frontend {
     }
 
     if (selected_format.width == 0 || selected_format.height == 0) {
-      throw std::runtime_error(std::string("Failed to enumerate V4L2 frame sizes for ") + pixel_format_name(pixel_format));
+      throw std::runtime_error(std::string("Failed to enumerate V4L2 frame sizes for ") +
+                               pixel_format_name(pixel_format));
     }
 
     return selected_format;
@@ -212,8 +211,7 @@ namespace signlang::video_frontend {
         if (frame_size.discrete.width == width && frame_size.discrete.height == height) {
           return true;
         }
-      } else if (frame_size.type == V4L2_FRMSIZE_TYPE_STEPWISE ||
-                 frame_size.type == V4L2_FRMSIZE_TYPE_CONTINUOUS) {
+      } else if (frame_size.type == V4L2_FRMSIZE_TYPE_STEPWISE || frame_size.type == V4L2_FRMSIZE_TYPE_CONTINUOUS) {
         if (matches_stepwise_size(frame_size.stepwise, width, height)) {
           return true;
         }

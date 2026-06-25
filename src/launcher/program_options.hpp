@@ -6,19 +6,19 @@
 
 namespace signlang::launcher {
 
-constexpr auto kDefaultConfigPath = "conf/conf.toml";
+  constexpr auto kDefaultConfigPath = "conf/conf.toml";
 
-struct ProgramOptions {
-  std::string config_path;
-};
+  struct ProgramOptions {
+    std::string config_path;
+  };
 
-struct ProgramUsage {
-  std::string text;
-};
+  struct ProgramUsage {
+    std::string text;
+  };
 
-using ProgramOptionsParseResult = std::variant<ProgramOptions, ProgramUsage>;
+  using ProgramOptionsParseResult = std::variant<ProgramOptions, ProgramUsage>;
 
-auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult;
+  auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult;
 
 } // namespace signlang::launcher
 

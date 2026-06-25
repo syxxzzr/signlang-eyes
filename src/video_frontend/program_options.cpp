@@ -42,9 +42,9 @@ namespace signlang::video_frontend {
     options.add_options()("d,device", "V4L2 camera device name", cxxopts::value<std::string>())(
         "s,service", "iceoryx2 publish-subscribe service name", cxxopts::value<std::string>())(
         "capture-width", "Requested camera capture width in pixels", cxxopts::value<std::uint32_t>())(
-        "capture-height", "Requested camera capture height in pixels", cxxopts::value<std::uint32_t>())(
-        "fps", "Requested camera frame rate",
-        cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultFps)))(
+        "capture-height", "Requested camera capture height in pixels",
+        cxxopts::value<std::uint32_t>())("fps", "Requested camera frame rate",
+                                         cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultFps)))(
         "output-width", "Published output width in pixels", cxxopts::value<std::uint32_t>())(
         "output-height", "Published output height in pixels", cxxopts::value<std::uint32_t>())("h,help", "Print usage");
     signlang::logging::add_cli_options(options);

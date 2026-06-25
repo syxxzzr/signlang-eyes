@@ -2,8 +2,8 @@
 #define SIGNLANG_EYES_SPEECH_ASR_PROGRAM_OPTIONS_HPP
 
 #include "common/logging.hpp"
-#include "speech_asr_result.hpp"
 #include "rknn_api.h"
+#include "speech_asr_result.hpp"
 
 #include <cstdint>
 #include <optional>

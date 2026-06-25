@@ -24,8 +24,8 @@ namespace signlang::audio_frontend {
     static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
     static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
         -> iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, SoundSourceLocalizationKey>;
-    static auto create_writer(
-        const iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, SoundSourceLocalizationKey>& service)
+    static auto
+    create_writer(const iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, SoundSourceLocalizationKey>& service)
         -> iox2::Writer<iox2::ServiceType::Ipc, SoundSourceLocalizationKey>;
     static auto create_entry(iox2::Writer<iox2::ServiceType::Ipc, SoundSourceLocalizationKey>& writer)
         -> iox2::EntryHandleMut<iox2::ServiceType::Ipc, SoundSourceLocalizationKey, SoundSourceLocalizationResult>;

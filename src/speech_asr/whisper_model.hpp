@@ -46,11 +46,10 @@ namespace signlang::speech_asr {
 
     void initialize_contexts(const ProgramOptions& options);
     void initialize_context(const std::string& model_path, rknn_core_mask npu_core_mask,
-                            std::uint32_t rknn_priority_flag, rknn_context& context,
-                            rknn_input_output_num& io_num, std::vector<rknn_tensor_attr>& input_attrs,
-                            std::vector<rknn_tensor_attr>& output_attrs);
-    void query_model_io(rknn_context context, rknn_input_output_num& io_num,
-                        std::vector<rknn_tensor_attr>& input_attrs, std::vector<rknn_tensor_attr>& output_attrs);
+                            std::uint32_t rknn_priority_flag, rknn_context& context, rknn_input_output_num& io_num,
+                            std::vector<rknn_tensor_attr>& input_attrs, std::vector<rknn_tensor_attr>& output_attrs);
+    void query_model_io(rknn_context context, rknn_input_output_num& io_num, std::vector<rknn_tensor_attr>& input_attrs,
+                        std::vector<rknn_tensor_attr>& output_attrs);
     void validate_model_io();
     void allocate_workspaces(std::uint32_t max_decode_steps);
     void load_assets(const ProgramOptions& options);

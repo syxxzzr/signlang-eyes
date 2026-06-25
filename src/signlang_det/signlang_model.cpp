@@ -41,17 +41,15 @@ namespace signlang::signlang_det {
 
     class RknnOutputReleaseGuard {
     public:
-      RknnOutputReleaseGuard(rknn_context context, std::uint32_t output_count, rknn_output* outputs)
-        : context_{context}, output_count_{output_count}, outputs_{outputs} {}
+      RknnOutputReleaseGuard(rknn_context context, std::uint32_t output_count, rknn_output* outputs) :
+          context_{context}, output_count_{output_count}, outputs_{outputs} {}
 
       RknnOutputReleaseGuard(const RknnOutputReleaseGuard&) = delete;
       auto operator=(const RknnOutputReleaseGuard&) -> RknnOutputReleaseGuard& = delete;
       RknnOutputReleaseGuard(RknnOutputReleaseGuard&&) = delete;
       auto operator=(RknnOutputReleaseGuard&&) -> RknnOutputReleaseGuard& = delete;
 
-      ~RknnOutputReleaseGuard() {
-        static_cast<void>(rknn_outputs_release(context_, output_count_, outputs_));
-      }
+      ~RknnOutputReleaseGuard() { static_cast<void>(rknn_outputs_release(context_, output_count_, outputs_)); }
 
     private:
       rknn_context context_;
@@ -65,16 +63,13 @@ namespace signlang::signlang_det {
     auto database = SQLite::Database{path, SQLite::OPEN_READONLY};
     auto store = PrototypeStore{};
 
-    if (!database.tableExists("meta") ||
-        !database.tableExists("gestures") ||
-        !database.tableExists("samples")) {
+    if (!database.tableExists("meta") || !database.tableExists("gestures") || !database.tableExists("samples")) {
       throw std::runtime_error("Prototype SQLite database is missing required tables: " + path);
     }
 
     const auto schema_version = read_meta_int(database, "schema_version", 0);
     if (schema_version != kPrototypeSchemaVersion) {
-      throw std::runtime_error("Unsupported prototype SQLite schema version: " +
-                               std::to_string(schema_version));
+      throw std::runtime_error("Unsupported prototype SQLite schema version: " + std::to_string(schema_version));
     }
 
     const auto meta_embedding_dim = read_meta_int(database, "embedding_dim", 0);
@@ -83,30 +78,27 @@ namespace signlang::signlang_det {
     }
     store.embedding_dim_ = static_cast<std::uint32_t>(meta_embedding_dim);
 
-    auto gesture_query = SQLite::Statement{
-      database,
-      "SELECT id, name "
-      "FROM gestures "
-      "WHERE enabled != 0 "
-      "ORDER BY id"};
+    auto gesture_query = SQLite::Statement{database,
+                                           "SELECT id, name "
+                                           "FROM gestures "
+                                           "WHERE enabled != 0 "
+                                           "ORDER BY id"};
 
     while (gesture_query.executeStep()) {
       auto gesture = GesturePrototypeSet{
-        .gesture_id = static_cast<std::uint32_t>(gesture_query.getColumn(0).getUInt()),
-        .name = gesture_query.getColumn(1).getString(),
-        .samples = {},
+          .gesture_id = static_cast<std::uint32_t>(gesture_query.getColumn(0).getUInt()),
+          .name = gesture_query.getColumn(1).getString(),
+          .samples = {},
       };
       if (gesture.name.empty()) {
-        throw std::runtime_error("Enabled gesture has an empty name: " +
-                                 std::to_string(gesture.gesture_id));
+        throw std::runtime_error("Enabled gesture has an empty name: " + std::to_string(gesture.gesture_id));
       }
 
-      auto sample_query = SQLite::Statement{
-        database,
-        "SELECT id, frame_count, embedding_dim, dtype, data "
-        "FROM samples "
-        "WHERE gesture_id = ? "
-        "ORDER BY id"};
+      auto sample_query = SQLite::Statement{database,
+                                            "SELECT id, frame_count, embedding_dim, dtype, data "
+                                            "FROM samples "
+                                            "WHERE gesture_id = ? "
+                                            "ORDER BY id"};
       sample_query.bind(1, gesture.gesture_id);
 
       while (sample_query.executeStep()) {
@@ -122,19 +114,15 @@ namespace signlang::signlang_det {
         }
         if (embedding_dim != store.embedding_dim_) {
           throw std::runtime_error("Prototype sample embedding dimension mismatch: expected " +
-                                   std::to_string(store.embedding_dim_) + ", got " +
-                                   std::to_string(embedding_dim));
+                                   std::to_string(store.embedding_dim_) + ", got " + std::to_string(embedding_dim));
         }
         if (dtype != kFloat32Dtype) {
           throw std::runtime_error("Unsupported prototype sample dtype: " + dtype);
         }
 
-        const auto expected_bytes =
-          static_cast<std::size_t>(frame_count) * embedding_dim * sizeof(float);
-        if (blob == nullptr || blob_bytes < 0 ||
-            static_cast<std::size_t>(blob_bytes) != expected_bytes) {
-          throw std::runtime_error("Prototype sample blob size mismatch for sample " +
-                                   std::to_string(sample_id));
+        const auto expected_bytes = static_cast<std::size_t>(frame_count) * embedding_dim * sizeof(float);
+        if (blob == nullptr || blob_bytes < 0 || static_cast<std::size_t>(blob_bytes) != expected_bytes) {
+          throw std::runtime_error("Prototype sample blob size mismatch for sample " + std::to_string(sample_id));
         }
 
         auto sample = GesturePrototype{.sample_id = sample_id, .frames = EncodedSequence(frame_count)};
@@ -148,8 +136,7 @@ namespace signlang::signlang_det {
       }
 
       if (gesture.samples.empty()) {
-        throw std::runtime_error("Enabled gesture has no prototype samples: " +
-                                 std::to_string(gesture.gesture_id));
+        throw std::runtime_error("Enabled gesture has no prototype samples: " + std::to_string(gesture.gesture_id));
       }
       store.names_by_id_.emplace(gesture.gesture_id, gesture.name);
       store.gestures_.push_back(std::move(gesture));
@@ -162,21 +149,13 @@ namespace signlang::signlang_det {
     return store;
   }
 
-  auto PrototypeStore::gestures() const -> const std::vector<GesturePrototypeSet>& {
-    return gestures_;
-  }
+  auto PrototypeStore::gestures() const -> const std::vector<GesturePrototypeSet>& { return gestures_; }
 
-  auto PrototypeStore::gesture_count() const -> std::size_t {
-    return gestures_.size();
-  }
+  auto PrototypeStore::gesture_count() const -> std::size_t { return gestures_.size(); }
 
-  auto PrototypeStore::sample_count() const -> std::size_t {
-    return sample_count_;
-  }
+  auto PrototypeStore::sample_count() const -> std::size_t { return sample_count_; }
 
-  auto PrototypeStore::embedding_dim() const -> std::uint32_t {
-    return embedding_dim_;
-  }
+  auto PrototypeStore::embedding_dim() const -> std::uint32_t { return embedding_dim_; }
 
   auto PrototypeStore::gesture_name(std::uint32_t gesture_id) const -> const char* {
     if (const auto found = names_by_id_.find(gesture_id); found != names_by_id_.end()) {
@@ -187,18 +166,16 @@ namespace signlang::signlang_det {
 
   DtwMatcher::DtwMatcher(float window_ratio) : window_ratio_{window_ratio} {}
 
-  auto DtwMatcher::match(const EncodedSequence& query, const PrototypeStore& store)
-    const -> std::vector<Candidate>
-  {
+  auto DtwMatcher::match(const EncodedSequence& query, const PrototypeStore& store) const -> std::vector<Candidate> {
     auto candidates = std::vector<Candidate>{};
     candidates.reserve(store.gesture_count());
 
     for (const auto& gesture : store.gestures()) {
       auto best = Candidate{
-        .gesture_id = gesture.gesture_id,
-        .sample_id = 0,
-        .distance = std::numeric_limits<float>::infinity(),
-        .confidence = 0.0F,
+          .gesture_id = gesture.gesture_id,
+          .sample_id = 0,
+          .distance = std::numeric_limits<float>::infinity(),
+          .confidence = 0.0F,
       };
 
       for (const auto& sample : gesture.samples) {
@@ -238,24 +215,19 @@ namespace signlang::signlang_det {
     return std::sqrt(sum_sq_diff / static_cast<float>(query_frame.size()));
   }
 
-  auto DtwMatcher::compute_window(std::uint32_t query_length,
-                                  std::uint32_t sample_length) const -> std::uint32_t {
+  auto DtwMatcher::compute_window(std::uint32_t query_length, std::uint32_t sample_length) const -> std::uint32_t {
     const auto max_length = std::max(query_length, sample_length);
     if (window_ratio_ >= 1.0F) {
       return max_length;
     }
 
-    const auto ratio_window = static_cast<std::uint32_t>(
-      std::round(static_cast<float>(max_length) * window_ratio_));
-    const auto length_diff = query_length > sample_length
-      ? query_length - sample_length
-      : sample_length - query_length;
+    const auto ratio_window = static_cast<std::uint32_t>(std::round(static_cast<float>(max_length) * window_ratio_));
+    const auto length_diff = query_length > sample_length ? query_length - sample_length : sample_length - query_length;
 
     return std::max({length_diff, ratio_window, 1U});
   }
 
-  auto DtwMatcher::compute_distance(const EncodedSequence& query,
-                                    const EncodedSequence& sample) const -> float {
+  auto DtwMatcher::compute_distance(const EncodedSequence& query, const EncodedSequence& sample) const -> float {
     const auto query_length = static_cast<std::uint32_t>(query.size());
     const auto sample_length = static_cast<std::uint32_t>(sample.size());
     if (query_length == 0 || sample_length == 0) {
@@ -276,15 +248,13 @@ namespace signlang::signlang_det {
 
       for (auto j = j_start; j <= j_end; ++j) {
         const auto candidates = std::array<std::pair<float, std::uint32_t>, 3>{{
-          {prev_cost[j], prev_steps[j]},
-          {curr_cost[j - 1], curr_steps[j - 1]},
-          {prev_cost[j - 1], prev_steps[j - 1]},
+            {prev_cost[j], prev_steps[j]},
+            {curr_cost[j - 1], curr_steps[j - 1]},
+            {prev_cost[j - 1], prev_steps[j - 1]},
         }};
 
-        const auto best = *std::min_element(
-          candidates.begin(),
-          candidates.end(),
-          [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+        const auto best = *std::min_element(candidates.begin(), candidates.end(),
+                                            [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
 
         const auto frame_cost = compute_frame_distance(query[i - 1], sample[j - 1]);
         curr_cost[j] = best.first + frame_cost;
@@ -302,9 +272,8 @@ namespace signlang::signlang_det {
     return prev_cost[sample_length] / static_cast<float>(prev_steps[sample_length]);
   }
 
-  BilstmEncoder::BilstmEncoder(const std::string& model_path, rknn_core_mask npu_core, float motion_weight)
-    : motion_weight_{motion_weight}
-  {
+  BilstmEncoder::BilstmEncoder(const std::string& model_path, rknn_core_mask npu_core, float motion_weight) :
+      motion_weight_{motion_weight} {
     load_model(model_path, npu_core);
     query_io_info();
   }
@@ -315,13 +284,9 @@ namespace signlang::signlang_det {
     }
   }
 
-  auto BilstmEncoder::sequence_length() const -> std::uint32_t {
-    return expected_sequence_length_;
-  }
+  auto BilstmEncoder::sequence_length() const -> std::uint32_t { return expected_sequence_length_; }
 
-  auto BilstmEncoder::embedding_dim() const -> std::uint32_t {
-    return frame_embedding_dim_;
-  }
+  auto BilstmEncoder::embedding_dim() const -> std::uint32_t { return frame_embedding_dim_; }
 
   void BilstmEncoder::load_model(const std::string& model_path, rknn_core_mask npu_core) {
     auto model_file = std::ifstream{model_path, std::ios::binary | std::ios::ate};
@@ -357,9 +322,8 @@ namespace signlang::signlang_det {
       throw std::runtime_error("rknn_query IN_OUT_NUM failed, ret=" + std::to_string(ret));
     }
     if (io_num_.n_input != 1 || io_num_.n_output != 1) {
-      throw std::runtime_error("Expected 1 input and 1 output, got " +
-                               std::to_string(io_num_.n_input) + " inputs and " +
-                               std::to_string(io_num_.n_output) + " outputs");
+      throw std::runtime_error("Expected 1 input and 1 output, got " + std::to_string(io_num_.n_input) +
+                               " inputs and " + std::to_string(io_num_.n_output) + " outputs");
     }
 
     std::memset(&input_attr_, 0, sizeof(input_attr_));
@@ -376,8 +340,7 @@ namespace signlang::signlang_det {
     expected_sequence_length_ = input_attr_.dims[1];
     const auto expected_feature_dim = input_attr_.dims[2];
     if (expected_feature_dim != kFeatureDim) {
-      throw std::runtime_error("Feature dimension mismatch: model expects " +
-                               std::to_string(expected_feature_dim) +
+      throw std::runtime_error("Feature dimension mismatch: model expects " + std::to_string(expected_feature_dim) +
                                ", but kFeatureDim=" + std::to_string(kFeatureDim));
     }
 
@@ -398,8 +361,7 @@ namespace signlang::signlang_det {
 
   void BilstmEncoder::flatten_features(const std::vector<FeatureVector>& sequence) {
     if (sequence.size() != expected_sequence_length_) {
-      throw std::runtime_error("Sequence length mismatch: expected " +
-                               std::to_string(expected_sequence_length_) +
+      throw std::runtime_error("Sequence length mismatch: expected " + std::to_string(expected_sequence_length_) +
                                ", got " + std::to_string(sequence.size()));
     }
 
@@ -451,45 +413,36 @@ namespace signlang::signlang_det {
     const auto output_size = outputs[0].size / sizeof(float);
     const auto expected_output_size = expected_sequence_length_ * frame_embedding_dim_;
     if (output_size != expected_output_size) {
-      throw std::runtime_error("Output size mismatch: expected " +
-                               std::to_string(expected_output_size) +
-                               ", got " + std::to_string(output_size));
+      throw std::runtime_error("Output size mismatch: expected " + std::to_string(expected_output_size) + ", got " +
+                               std::to_string(output_size));
     }
 
     auto encoded_frames = EncodedSequence(expected_sequence_length_);
     for (std::uint32_t frame_index = 0; frame_index < expected_sequence_length_; ++frame_index) {
-      encoded_frames[frame_index].assign(
-        output_data + frame_index * frame_embedding_dim_,
-        output_data + (frame_index + 1) * frame_embedding_dim_);
+      encoded_frames[frame_index].assign(output_data + frame_index * frame_embedding_dim_,
+                                         output_data + (frame_index + 1) * frame_embedding_dim_);
     }
 
     return encoded_frames;
   }
 
-  SignlangModel::SignlangModel(const std::string& model_path,
-                               const std::string& prototypes_path,
-                               rknn_core_mask npu_core,
-                               float motion_weight,
-                               float dtw_window_ratio)
-    : encoder_{std::make_unique<BilstmEncoder>(model_path, npu_core, motion_weight)},
-      prototypes_{PrototypeStore::load(prototypes_path)},
-      matcher_{dtw_window_ratio}
-  {
+  SignlangModel::SignlangModel(const std::string& model_path, const std::string& prototypes_path,
+                               rknn_core_mask npu_core, float motion_weight, float dtw_window_ratio) :
+      encoder_{std::make_unique<BilstmEncoder>(model_path, npu_core, motion_weight)},
+      prototypes_{PrototypeStore::load(prototypes_path)}, matcher_{dtw_window_ratio} {
     if (prototypes_.embedding_dim() != encoder_->embedding_dim()) {
       throw std::runtime_error("Prototype embedding dimension mismatch: encoder outputs " +
-                               std::to_string(encoder_->embedding_dim()) +
-                               ", prototypes contain " + std::to_string(prototypes_.embedding_dim()));
+                               std::to_string(encoder_->embedding_dim()) + ", prototypes contain " +
+                               std::to_string(prototypes_.embedding_dim()));
     }
 
-    spdlog::info("Loaded {} prototype samples across {} enabled gestures",
-                 prototypes_.sample_count(), prototypes_.gesture_count());
+    spdlog::info("Loaded {} prototype samples across {} enabled gestures", prototypes_.sample_count(),
+                 prototypes_.gesture_count());
   }
 
   SignlangModel::~SignlangModel() = default;
 
-  auto SignlangModel::expected_sequence_length() const -> std::uint32_t {
-    return encoder_->sequence_length();
-  }
+  auto SignlangModel::expected_sequence_length() const -> std::uint32_t { return encoder_->sequence_length(); }
 
   auto SignlangModel::get_gesture_name(std::uint32_t gesture_id) const -> const char* {
     return prototypes_.gesture_name(gesture_id);
@@ -502,13 +455,13 @@ namespace signlang::signlang_det {
     auto candidates = matcher_.match(encoded_frames, prototypes_);
 
     auto result = InferenceResult{
-      .recognized = !candidates.empty(),
-      .gesture_id = candidates.empty() ? 0U : candidates.front().gesture_id,
-      .inference_time_ms = 0.0F,
-      .confidence = candidates.empty() ? 0.0F : candidates.front().confidence,
-      .second_confidence = candidates.size() > 1 ? candidates[1].confidence : 0.0F,
-      .distance = candidates.empty() ? std::numeric_limits<float>::infinity() : candidates.front().distance,
-      .candidates = std::move(candidates),
+        .recognized = !candidates.empty(),
+        .gesture_id = candidates.empty() ? 0U : candidates.front().gesture_id,
+        .inference_time_ms = 0.0F,
+        .confidence = candidates.empty() ? 0.0F : candidates.front().confidence,
+        .second_confidence = candidates.size() > 1 ? candidates[1].confidence : 0.0F,
+        .distance = candidates.empty() ? std::numeric_limits<float>::infinity() : candidates.front().distance,
+        .candidates = std::move(candidates),
     };
 
     const auto end_time = std::chrono::steady_clock::now();
