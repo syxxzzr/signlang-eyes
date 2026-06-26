@@ -209,6 +209,12 @@ namespace {
     }
   }
 
+  void add_opt_bool_assignment(std::vector<std::string>& args, const char* flag, const std::optional<bool>& val) {
+    if (val) {
+      args.emplace_back(std::string{flag} + "=" + (*val ? "true" : "false"));
+    }
+  }
+
   auto logging_config_from_toml(const toml::table& config) -> LoggingConfig {
     auto logging = LoggingConfig{};
 
@@ -448,8 +454,7 @@ static auto build_handpose_det_args(const toml::table& cfg) -> std::vector<std::
     add_opt_double(args, "--handedness-threshold", opt_double(*tbl, "handedness_threshold"));
     add_opt_int(args, "--max-tracking-gap", opt_int(*tbl, "max_tracking_gap"));
     add_opt_int(args, "--max-stale-frames", opt_int(*tbl, "max_stale_frames"));
-    add_opt_int(args, "--keypoints", opt_int(*tbl, "keypoints"));
-    add_opt_int(args, "--output-hands", opt_int(*tbl, "output_hands"));
+    add_opt_bool_assignment(args, "--single-hand", opt_bool(*tbl, "single_hand"));
     add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
     add_opt_str(args, "--palm-npu-core", opt_string(*tbl, "palm_npu_core"));
     add_opt_str(args, "--landmark-npu-core", opt_string(*tbl, "landmark_npu_core"));

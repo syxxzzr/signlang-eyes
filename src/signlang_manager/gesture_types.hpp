@@ -1,6 +1,8 @@
 #ifndef SIGNLANG_EYES_SIGNLANG_MANAGER_GESTURE_TYPES_HPP
 #define SIGNLANG_EYES_SIGNLANG_MANAGER_GESTURE_TYPES_HPP
 
+#include "handpose_det/handpose_frame.hpp"
+
 #include <array>
 #include <cstdint>
 #include <string>
@@ -8,10 +10,9 @@
 
 namespace signlang::signlang_manager {
 
-  constexpr auto kKeypointCount = std::uint32_t{21};
   constexpr auto kMaxHandCount = std::uint32_t{2};
   constexpr auto kFeatureChannelsPerKeypoint = std::uint32_t{4};
-  constexpr auto kFeatureDimPerHand = kKeypointCount * kFeatureChannelsPerKeypoint;
+  constexpr auto kFeatureDimPerHand = signlang::handpose_det::kHandPoseKeypointCount * kFeatureChannelsPerKeypoint;
   constexpr auto kFeatureDim = kMaxHandCount * kFeatureDimPerHand;
 
   struct KeypointFeature {
@@ -22,7 +23,7 @@ namespace signlang::signlang_manager {
   };
 
   struct HandFeatures {
-    std::array<KeypointFeature, kKeypointCount> features;
+    std::array<KeypointFeature, signlang::handpose_det::kHandPoseKeypointCount> features;
     bool present;
   };
 

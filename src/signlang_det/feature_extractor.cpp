@@ -7,9 +7,6 @@
 namespace signlang::signlang_det {
   namespace {
 
-    static_assert(signlang::handpose_det::kHandPoseKeypointCount == signlang::signlang_det::kKeypointCount,
-                  "Keypoint count mismatch between handpose and signlang modules");
-
     constexpr auto kScaleEpsilon = float{1e-6F};
 
   } // namespace

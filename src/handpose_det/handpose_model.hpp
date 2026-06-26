@@ -26,7 +26,8 @@ namespace signlang::handpose_det {
 
   class HandPoseModel {
   public:
-    HandPoseModel(std::string palm_detector_model_path, std::string landmark_model_path, const ProgramOptions& options);
+    HandPoseModel(std::string palm_detector_model_path, std::string landmark_model_path, const ProgramOptions& options,
+                  std::uint32_t hand_slots);
     ~HandPoseModel();
 
     HandPoseModel(const HandPoseModel&) = delete;
@@ -135,8 +136,7 @@ namespace signlang::handpose_det {
     float handedness_threshold_;
     std::uint32_t max_tracking_gap_;
     std::uint32_t max_stale_frames_;
-    std::uint32_t keypoint_count_;
-    std::uint32_t output_hands_;
+    const std::uint32_t hand_slots_;
     std::uint32_t model_width_;
     std::uint32_t model_height_;
     mutable int source_dma_fd_;

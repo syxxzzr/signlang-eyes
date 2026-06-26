@@ -8,7 +8,6 @@
 namespace signlang::handpose_det {
 
   constexpr auto kHandPoseKeypointCount = std::uint32_t{21};
-  constexpr auto kMaxHandPoseDetections = std::uint32_t{16};
 
   struct HandPoseKeypoint {
     float x;

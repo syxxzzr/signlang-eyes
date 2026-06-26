@@ -9,12 +9,6 @@
 namespace signlang::handpose_det {
   namespace {
 
-    void validate_threshold(float value, const char* option_name) {
-      if (value <= 0.0F || value >= 1.0F) {
-        throw std::runtime_error(std::string("--") + option_name + " must be between 0 and 1");
-      }
-    }
-
     auto parse_core_mask(const std::string& value) -> rknn_core_mask {
       if (value == "auto") {
         return RKNN_NPU_CORE_AUTO;
@@ -75,8 +69,7 @@ namespace signlang::handpose_det {
       ("max-tracking-gap",             "Max frames gap before tracking is considered lost",         cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultMaxTrackingGap)))
       ("max-stale-frames",             "Max frames before a stale tracked hand slot is reclaimed",  cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultMaxStaleFrames)))
       ("subscriber-buffer",            "iceoryx2 subscriber queue size",                            cxxopts::value<std::uint64_t>()->default_value(std::to_string(kDefaultSubscriberBufferSize)))
-      ("keypoints",                    "Expected keypoint count per detection",                     cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultKeypointCount)))
-      ("output-hands",                 "Number of hands published per frame",                       cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultOutputHands)))
+      ("single-hand",                  "Recognize and publish one hand slot instead of two",        cxxopts::value<bool>()->default_value(kDefaultSingleHand ? "true" : "false")->implicit_value("true"))
       ("npu-core",                     "RK3588 NPU core mask: auto,0,1,2,0_1,0_1_2,all",           cxxopts::value<std::string>()->default_value("auto"))
       ("palm-npu-core",                "Palm detector NPU core mask; defaults to --npu-core",       cxxopts::value<std::string>())
       ("landmark-npu-core",            "Hand landmark NPU core mask; defaults to --npu-core",       cxxopts::value<std::string>())
@@ -107,18 +100,7 @@ namespace signlang::handpose_det {
       throw std::runtime_error("--subscriber-buffer must be greater than 0");
     }
 
-    const auto keypoint_count = parsed_options["keypoints"].as<std::uint32_t>();
-    if (keypoint_count == 0) {
-      throw std::runtime_error("--keypoints must be greater than 0");
-    }
-
-    const auto output_hands = parsed_options["output-hands"].as<std::uint32_t>();
-    if (output_hands == 0) {
-      throw std::runtime_error("--output-hands must be greater than 0");
-    }
-    if (output_hands > kMaxHandPoseDetections) {
-      throw std::runtime_error("--output-hands exceeds handpose payload capacity");
-    }
+    const auto single_hand = parsed_options["single-hand"].as<bool>();
 
     const auto default_npu_core = parsed_options["npu-core"].as<std::string>();
     const auto palm_npu_core = parsed_options.count("palm-npu-core") != 0
@@ -159,8 +141,7 @@ namespace signlang::handpose_det {
         .max_tracking_gap = parsed_options["max-tracking-gap"].as<std::uint32_t>(),
         .max_stale_frames = parsed_options["max-stale-frames"].as<std::uint32_t>(),
         .subscriber_buffer_size = subscriber_buffer_size,
-        .keypoint_count = keypoint_count,
-        .output_hands = output_hands,
+        .single_hand = single_hand,
         .palm_detector_npu_core_mask = parse_core_mask(palm_npu_core),
         .landmark_npu_core_mask = parse_core_mask(landmark_npu_core),
         .verbose = parsed_options.count("verbose") != 0,

@@ -21,19 +21,19 @@ The **handpose_det** module subscribes to RGB24 video frames, runs the MediaPipe
 
 ## Output Semantics
 
-The module always publishes exactly `--output-hands` hand slots per frame (default 2).
+The module publishes two hand slots by default. `--single-hand` switches recognition and output to one hand slot.
 
 **Detection pipeline:**
 1. Try tracking from previous frame ROIs using landmark model only
-2. If tracked hands fewer than `--output-hands`, run full-frame palm detection
+2. If tracked hands are fewer than the configured one-hand/two-hand mode, run full-frame palm detection
 3. Apply weighted NMS to merge overlapping palm proposals by confidence
 4. For new detections: compute adaptive ROI from palm keypoints, run landmark model
 5. Filter by presence confidence; extract handedness classification
 6. Apply One Euro Filter temporal smoothing to all tracked keypoints
-7. Output exactly `--output-hands` slots; zero-fill remaining with `present = false`
+7. Output the configured hand slots; zero-fill remaining slots with `present = false`
 
 **Key properties:**
-- `HandPoseFrameMetadata::detection_count` and `payload_count` are always set to `--output-hands`
+- `HandPoseFrameMetadata::detection_count` and `payload_count` are always 1 in single-hand mode and 2 in dual-hand mode
 - Zero-filled slots have `present = false` in the detection structure
 - Consistent slot ordering (left-to-right) enables temporal hand tracking in downstream modules
 - Output keypoints: 21 landmarks per hand with `x`, `y`, `z` (relative depth), and `confidence`
@@ -46,7 +46,7 @@ The module always publishes exactly `--output-hands` hand slots per frame (defau
 | `--output-service`, `-o` | required                                        | –                        | Hand pose output iceoryx2 service                    |
 | `--model`, `-m`          | `models/mediapipe/hand_detector.rknn`           | –                        | Palm detector RKNN model                             |
 | `--landmark-model`       | `models/mediapipe/hand_landmarks_detector.rknn` | –                        | Hand landmark RKNN model                             |
-| `--output-hands`         | `2`                                             | 1–16                     | Fixed number of hand slots to publish                |
+| `--single-hand`          | `false`                                         | `true`/`false`           | Detect and publish one hand instead of two           |
 | `--confidence`           | `0.5`                                           | (0, 1)                   | Palm detection confidence threshold                  |
 | `--presence-threshold`   | `0.5`                                           | (0, 1)                   | Hand presence confidence threshold                   |
 | `--tracking-threshold`   | `0.5`                                           | (0, 1)                   | Confidence threshold for reusing previous ROI        |
@@ -109,7 +109,7 @@ Coordinates are in source image pixel space. Landmark `z` is scaled from the 224
 ./handpose_det \
   --input-service video_capture \
   --output-service handpose_result \
-  --output-hands 2 \
+  --single-hand=false \
   --confidence 0.5
 ```
 

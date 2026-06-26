@@ -52,11 +52,12 @@ auto main(int argc, char** argv) -> int {
     spdlog::info("Palm detector model: {}", options.palm_detector_model_path);
     spdlog::info("Landmark model: {}", options.landmark_model_path);
 
-    HandPoseModel model{options.palm_detector_model_path, options.landmark_model_path, options};
+    const auto hand_slots = options.single_hand ? 1U : 2U;
+    HandPoseModel model{options.palm_detector_model_path, options.landmark_model_path, options, hand_slots};
     spdlog::info("Hand pose model loaded successfully");
 
     HandPoseTransport transport{options.input_service_name, options.output_service_name, options.subscriber_buffer_size,
-                                options.output_hands};
+                                hand_slots};
     auto state_monitor = std::optional<IpcHandPoseStateMonitor>{};
     if (options.state_event_service_name.has_value() && options.state_blackboard_service_name.has_value()) {
       state_monitor.emplace(options.state_event_service_name.value(), options.state_blackboard_service_name.value());
@@ -69,7 +70,7 @@ auto main(int argc, char** argv) -> int {
     };
 
     std::uint64_t sequence_number = 0;
-    std::array<HandPoseDetection, signlang::handpose_det::kMaxHandPoseDetections> detection_buffer{};
+    std::array<HandPoseDetection, 2> detection_buffer{};
     while (g_should_stop == 0 && transport.wait_for_work()) {
       poll_gate();
 
@@ -88,7 +89,7 @@ auto main(int argc, char** argv) -> int {
       }
 
       transport.receive_latest([&](const signlang::handpose_det::VideoSampleView& sample) {
-        auto detections = iox2::bb::MutableSlice<HandPoseDetection>{detection_buffer.data(), options.output_hands};
+        auto detections = iox2::bb::MutableSlice<HandPoseDetection>{detection_buffer.data(), hand_slots};
         const auto result = model.run(*sample.metadata, sample.payload, sample.payload_size, detections);
         transport.publish(*sample.metadata, sequence_number++,
                           signlang::handpose_det::HandPosePublishInfo{

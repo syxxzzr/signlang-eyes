@@ -34,8 +34,7 @@ namespace signlang::handpose_det {
   constexpr auto kDefaultMaxTrackingGap = std::uint32_t{2};
   constexpr auto kDefaultMaxStaleFrames = std::uint32_t{5};
   constexpr auto kDefaultSubscriberBufferSize = std::uint64_t{2};
-  constexpr auto kDefaultKeypointCount = std::uint32_t{21};
-  constexpr auto kDefaultOutputHands = std::uint32_t{2};
+  constexpr auto kDefaultSingleHand = false;
 
   struct ProgramOptions {
     std::string input_service_name;
@@ -64,8 +63,7 @@ namespace signlang::handpose_det {
     std::uint32_t max_tracking_gap;
     std::uint32_t max_stale_frames;
     std::uint64_t subscriber_buffer_size;
-    std::uint32_t keypoint_count;
-    std::uint32_t output_hands;
+    bool single_hand;
     rknn_core_mask palm_detector_npu_core_mask;
     rknn_core_mask landmark_npu_core_mask;
     bool verbose;

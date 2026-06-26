@@ -7,16 +7,11 @@
 namespace signlang::signlang_manager {
   namespace {
 
-    static_assert(handpose_det::kHandPoseKeypointCount == kKeypointCount,
-                  "Keypoint count mismatch between handpose and signlang manager modules");
-
     constexpr auto kScaleEpsilon = float{1e-6F};
 
   } // namespace
 
-  GestureFeatureExtractor::GestureFeatureExtractor(float min_confidence) : min_confidence_{min_confidence} {
-    reset();
-  }
+  GestureFeatureExtractor::GestureFeatureExtractor(float min_confidence) : min_confidence_{min_confidence} { reset(); }
 
   void GestureFeatureExtractor::reset() {
     for (auto& slot : prev_hands_) {
@@ -78,8 +73,7 @@ namespace signlang::signlang_manager {
     return std::sqrt(dx * dx + dy * dy);
   }
 
-  auto GestureFeatureExtractor::assign_hands_to_slots(
-      const std::vector<const handpose_det::HandPoseDetection*>& hands)
+  auto GestureFeatureExtractor::assign_hands_to_slots(const std::vector<const handpose_det::HandPoseDetection*>& hands)
       -> std::array<const handpose_det::HandPoseDetection*, kMaxHandCount> {
     auto assigned = std::array<const handpose_det::HandPoseDetection*, kMaxHandCount>{nullptr, nullptr};
 

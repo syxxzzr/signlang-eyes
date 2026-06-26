@@ -28,7 +28,7 @@ See `conf/conf.toml` for the default configuration with all available keys docum
 - `[video_frontend]` — Video capture parameters (device, output_width, output_height, etc.)
 - `[speech_asr]` — Whisper ASR parameters (language, npu_core, window_ms, etc.)
 - `[env_sound_det]` — YAMNet environmental sound detection parameters (npu_core, score_threshold, etc.)
-- `[handpose_det]` — MediaPipe hand pose detection parameters (npu_core, confidence, output_hands, etc.)
+- `[handpose_det]` — MediaPipe hand pose detection parameters (npu_core, confidence, single_hand, etc.)
 - `[signlang_det]` — Sign language recognition parameters (npu_core, sequence_length, confidence_threshold, etc.)
 
 ## Technical Details

@@ -53,8 +53,7 @@ npu_core = "2"
 # model = "models/mediapipe/hand_detector.rknn"
 # landmark_model = "models/mediapipe/hand_landmarks_detector.rknn"
 # confidence = 0.5                 # Detection confidence threshold
-# keypoints = 21                   # Expected keypoint count per hand
-# output_hands = 2                 # Fixed number of hand slots published per frame
+# single_hand = false              # true: recognize/publish one hand; false: two hands
 # subscriber_buffer = 2
 
 [signlang_det]

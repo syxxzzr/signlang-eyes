@@ -1,16 +1,17 @@
 #ifndef SIGNLANG_EYES_SIGNLANG_DET_SIGNLANG_RESULT_HPP
 #define SIGNLANG_EYES_SIGNLANG_DET_SIGNLANG_RESULT_HPP
 
+#include "handpose_det/handpose_frame.hpp"
+
 #include <array>
 #include <cstdint>
 #include <type_traits>
 
 namespace signlang::signlang_det {
 
-  constexpr auto kKeypointCount = std::uint32_t{21};
   constexpr auto kMaxHandCount = std::uint32_t{2};
   constexpr auto kFeatureChannelsPerKeypoint = std::uint32_t{4};
-  constexpr auto kFeatureDimPerHand = kKeypointCount * kFeatureChannelsPerKeypoint;
+  constexpr auto kFeatureDimPerHand = signlang::handpose_det::kHandPoseKeypointCount * kFeatureChannelsPerKeypoint;
   constexpr auto kFeatureDim = kMaxHandCount * kFeatureDimPerHand;
   constexpr auto kMaxGestureNameLength = std::uint32_t{64};
   constexpr auto kMaxGestureCandidates = std::uint32_t{5};
@@ -23,7 +24,7 @@ namespace signlang::signlang_det {
   };
 
   struct HandFeatures {
-    std::array<KeypointFeature, kKeypointCount> features;
+    std::array<KeypointFeature, signlang::handpose_det::kHandPoseKeypointCount> features;
     bool present; // Whether this hand slot has valid data
   };
 

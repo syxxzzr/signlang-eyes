@@ -5,10 +5,10 @@
 #include "rga.h"
 #include "spdlog/spdlog.h"
 
+#include <dirent.h>
 #include <fcntl.h>
 #include <linux/dma-buf.h>
 #include <linux/dma-heap.h>
-#include <dirent.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -39,12 +39,9 @@ namespace signlang::handpose_det {
     constexpr auto kLandmarkValueCount = std::uint32_t{63};
     constexpr auto kPi = 3.14159265358979F;
     constexpr auto kDmaHeapPaths = std::array{
-        "/dev/dma_heap/system-dma32",
-        "/dev/dma_heap/system-uncached-dma32",
-        "/dev/dma_heap/system-uncached",
-        "/dev/dma_heap/system",
-        "/dev/dma_heap/linux,cma",
-        "/dev/dma_heap/cma",
+        "/dev/dma_heap/system-dma32",    "/dev/dma_heap/system-uncached-dma32",
+        "/dev/dma_heap/system-uncached", "/dev/dma_heap/system",
+        "/dev/dma_heap/linux,cma",       "/dev/dma_heap/cma",
         "/dev/dma_heap/cma-uncached",
     };
     constexpr auto kDmaHeapDirectory = "/dev/dma_heap";
@@ -155,8 +152,8 @@ namespace signlang::handpose_det {
       open_errors += heap_path + " errno=" + std::to_string(error_number);
     }
 
-    auto try_allocate_dma_heap_buffer(const std::string& heap_path, std::uint64_t size_bytes,
-                                      std::string& open_errors) -> int {
+    auto try_allocate_dma_heap_buffer(const std::string& heap_path, std::uint64_t size_bytes, std::string& open_errors)
+        -> int {
       const auto heap_fd = ::open(heap_path.c_str(), O_RDWR | O_CLOEXEC);
       if (heap_fd < 0) {
         append_open_error(open_errors, heap_path, errno);
@@ -210,9 +207,8 @@ namespace signlang::handpose_det {
       throw std::runtime_error("Failed to open any handpose DMA heap: " + open_errors);
     }
 
-    void resize_rgb_with_rga(int src_fd, std::uint32_t src_width, std::uint32_t src_height,
-                             std::uint8_t* dst_data, std::uint32_t dst_width, std::uint32_t dst_height,
-                             im_rect src_rect) {
+    void resize_rgb_with_rga(int src_fd, std::uint32_t src_width, std::uint32_t src_height, std::uint8_t* dst_data,
+                             std::uint32_t dst_width, std::uint32_t dst_height, im_rect src_rect) {
       const auto src_size = checked_rgb_size_bytes(src_width, src_height);
       const auto dst_size = checked_rgb_size_bytes(dst_width, dst_height);
       const auto src_handle = importbuffer_fd(src_fd, static_cast<int>(src_size));
@@ -360,7 +356,7 @@ namespace signlang::handpose_det {
   };
 
   HandPoseModel::HandPoseModel(std::string palm_detector_model_path, std::string landmark_model_path,
-                               const ProgramOptions& options) :
+                               const ProgramOptions& options, std::uint32_t hand_slots) :
       palm_detector_model_path_{std::move(palm_detector_model_path)},
       landmark_model_path_{std::move(landmark_model_path)}, palm_detector_{nullptr}, landmark_model_{nullptr},
       current_frame_number_{0}, confidence_threshold_{options.confidence_threshold},
@@ -373,19 +369,15 @@ namespace signlang::handpose_det {
       boundary_min_factor_{options.boundary_min_factor}, euro_min_cutoff_{options.euro_min_cutoff},
       euro_beta_{options.euro_beta}, euro_d_cutoff_{options.euro_d_cutoff},
       handedness_threshold_{options.handedness_threshold}, max_tracking_gap_{options.max_tracking_gap},
-      max_stale_frames_{options.max_stale_frames}, keypoint_count_{options.keypoint_count},
-      output_hands_{options.output_hands}, model_width_{kPalmInputSize}, model_height_{kPalmInputSize}, source_dma_fd_{-1},
-      source_dma_data_{nullptr}, source_dma_capacity_{0} {
-    if (keypoint_count_ != kHandPoseKeypointCount) {
-      throw std::runtime_error("MediaPipe hand landmark model requires exactly 21 keypoints");
-    }
+      max_stale_frames_{options.max_stale_frames}, hand_slots_{hand_slots}, model_width_{kPalmInputSize},
+      model_height_{kPalmInputSize}, source_dma_fd_{-1}, source_dma_data_{nullptr}, source_dma_capacity_{0} {
     initialize_models(options);
     validate_models();
     build_palm_anchors();
     candidates_.reserve(kPalmAnchorCount);
-    selected_.reserve(output_hands_);
-    tracked_hands_.reserve(output_hands_);
-    keypoint_filters_.resize(output_hands_);
+    selected_.reserve(hand_slots_);
+    tracked_hands_.reserve(hand_slots_);
+    keypoint_filters_.resize(hand_slots_);
     for (auto& hand_filters : keypoint_filters_) {
       hand_filters.resize(kHandPoseKeypointCount * 3);
       for (auto& filter : hand_filters) {
@@ -457,8 +449,8 @@ namespace signlang::handpose_det {
   auto HandPoseModel::run(const signlang::video_frontend::VideoFrameMetadata& metadata, const std::uint8_t* payload,
                           std::uint64_t payload_size, iox2::bb::MutableSlice<HandPoseDetection> detections)
       -> InferenceResult {
-    if (detections.number_of_elements() < output_hands_) {
-      throw std::runtime_error("Hand pose output slice is smaller than requested hand count");
+    if (detections.number_of_elements() < hand_slots_) {
+      throw std::runtime_error("Hand pose output slice is smaller than configured hand slots");
     }
     if (metadata.pixel_format != signlang::video_frontend::kPixelFormatRgb24) {
       throw std::runtime_error("Hand pose detector supports RGB24 video input only");
@@ -476,7 +468,7 @@ namespace signlang::handpose_det {
     std::memcpy(source_dma_data(), payload, static_cast<std::size_t>(source_size));
     sync_source_dma_buffer(DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE);
 
-    for (std::uint32_t i = 0; i < output_hands_; ++i) {
+    for (std::uint32_t i = 0; i < hand_slots_; ++i) {
       detections[i] = HandPoseDetection{};
       detections[i].present = false;
     }
@@ -492,7 +484,8 @@ namespace signlang::handpose_det {
       }
     }
 
-    if (tracked_count < output_hands_) {
+    selected_.clear();
+    if (tracked_count < hand_slots_) {
       run_palm_detector(metadata, payload, payload_size);
       apply_nms();
 
@@ -500,8 +493,7 @@ namespace signlang::handpose_det {
         return lhs.detection.confidence > rhs.detection.confidence;
       });
 
-      selected_.clear();
-      for (std::size_t i = 0; i < candidates_.size() && selected_.size() < output_hands_ - tracked_count; ++i) {
+      for (std::size_t i = 0; i < candidates_.size() && selected_.size() < hand_slots_ - tracked_count; ++i) {
         auto already_tracked = false;
         for (const auto& tracked : tracked_hands_) {
           if (tracked.last_seen_frame == current_frame_number_ &&
@@ -528,7 +520,7 @@ namespace signlang::handpose_det {
 
     update_tracked_hands(selected_);
 
-    for (std::size_t i = 0; i < tracked_hands_.size() && static_cast<std::uint32_t>(i) < output_hands_; ++i) {
+    for (std::size_t i = 0; i < tracked_hands_.size() && static_cast<std::uint32_t>(i) < hand_slots_; ++i) {
       if (tracked_hands_[i].last_seen_frame == current_frame_number_) {
         smooth_keypoints_hand(i, metadata.timestamp_ns);
       }
@@ -536,7 +528,7 @@ namespace signlang::handpose_det {
 
     auto output_idx = std::uint32_t{0};
     for (const auto& tracked : tracked_hands_) {
-      if (tracked.last_seen_frame == current_frame_number_ && output_idx < output_hands_) {
+      if (tracked.last_seen_frame == current_frame_number_ && output_idx < hand_slots_) {
         detections[output_idx] = HandPoseDetection{
             .box = tracked.roi,
             .keypoints = tracked.smoothed_keypoints,
@@ -551,7 +543,7 @@ namespace signlang::handpose_det {
     }
 
     return InferenceResult{
-        .detection_count = output_hands_,
+        .detection_count = hand_slots_,
         .image_width = metadata.output_width,
         .image_height = metadata.output_height,
         .model_width = palm_detector_->width(),
@@ -1016,7 +1008,7 @@ namespace signlang::handpose_det {
           }
         }
 
-        if (!added && tracked_hands_.size() < output_hands_) {
+        if (!added && tracked_hands_.size() < hand_slots_) {
           tracked_hands_.push_back(new_hand);
         }
       }

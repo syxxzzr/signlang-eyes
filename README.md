@@ -50,7 +50,7 @@ Modular architecture using iceoryx2 zero-copy IPC for high-performance inter-pro
 - **video_frontend**: V4L2 camera capture with RGA hardware-accelerated format conversion (YUYV/MJPEG→RGB24) and scaling
 - **speech_asr**: Whisper base encoder-decoder speech recognition with 15s sliding window for Chinese/English
 - **env_sound_det**: YAMNet (MobileNetV1) environmental sound classification with threshold-based dangerous sound alerts
-- **handpose_det**: MediaPipe dual-model pipeline (palm detector + hand landmarks) with fixed 2-hand-slot output
+- **handpose_det**: MediaPipe dual-model pipeline (palm detector + hand landmarks) with single-hand or dual-hand output
 - **signlang_det**: Dual-hand sign language recognition using BiLSTM encoder + DTW matching against SQLite prototype database
 - **signlang_manager**: BLE GATT access point for handpose streaming and runtime gesture prototype database management
 - **state_machine**: Global state coordinator managing module lifecycle via Event + Blackboard + Request-Response IPC
@@ -175,6 +175,7 @@ score_threshold = 0.3      # Detection threshold (0.0-1.0)
 [handpose_det]
 npu_core = "2"
 confidence = 0.5           # Detection confidence threshold (0.0-1.0)
+single_hand = false        # true for one hand, false for two hands
 
 [signlang_det]
 npu_core = "0"
@@ -279,7 +280,7 @@ Detailed documentation for each module:
 Inter-module communication via iceoryx2 services (hardcoded names):
 - `audio_capture`: Audio frame data stream (PCM 16-bit, publish-subscribe)
 - `video_capture`: Video frame data stream (RGB24, publish-subscribe with user header)
-- `handpose_data`: Hand keypoint data stream (21 landmarks × 2 hands, publish-subscribe with user header)
+- `handpose_data`: Hand keypoint data stream (21 landmarks for one or two hands, publish-subscribe with user header)
 - `speech_asr_result`: Speech recognition transcription results (publish-subscribe)
 - `signlang_result`: Sign language recognition results (publish-subscribe)
 - `app_state_event`: State change event notifications (event notifier)
