@@ -91,9 +91,9 @@ namespace {
 
   void inference_loop(const signlang::signlang_det::ProgramOptions& options,
                       signlang::signlang_det::KeypointRingBuffer& ring_buffer, const std::atomic<bool>& should_stop) {
+    using signlang::signlang_det::IpcPrototypeControlServer;
     using signlang::signlang_det::IpcSignlangDetStateMonitor;
     using signlang::signlang_det::IpcSignlangPublisher;
-    using signlang::signlang_det::IpcPrototypeControlServer;
     using signlang::signlang_det::PrototypeControlCommand;
     using signlang::signlang_det::PrototypeControlResponse;
     using signlang::signlang_det::PrototypeControlStatus;

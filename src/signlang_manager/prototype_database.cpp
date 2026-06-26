@@ -110,27 +110,26 @@ namespace signlang::signlang_manager {
     auto database = SQLite::Database{path_, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE};
     auto transaction = SQLite::Transaction{database};
 
-    database.exec(
-        "CREATE TABLE meta ("
-        "  key TEXT PRIMARY KEY,"
-        "  value TEXT NOT NULL"
-        ");"
-        "CREATE TABLE gestures ("
-        "  id INTEGER PRIMARY KEY,"
-        "  name TEXT NOT NULL,"
-        "  enabled INTEGER NOT NULL DEFAULT 1"
-        ");"
-        "CREATE TABLE samples ("
-        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "  gesture_id INTEGER NOT NULL,"
-        "  frame_count INTEGER NOT NULL,"
-        "  embedding_dim INTEGER NOT NULL,"
-        "  dtype TEXT NOT NULL DEFAULT 'f32',"
-        "  data BLOB NOT NULL,"
-        "  weight REAL NOT NULL DEFAULT 1.0,"
-        "  FOREIGN KEY (gesture_id) REFERENCES gestures(id)"
-        ");"
-        "CREATE INDEX idx_samples_gesture_id ON samples(gesture_id);");
+    database.exec("CREATE TABLE meta ("
+                  "  key TEXT PRIMARY KEY,"
+                  "  value TEXT NOT NULL"
+                  ");"
+                  "CREATE TABLE gestures ("
+                  "  id INTEGER PRIMARY KEY,"
+                  "  name TEXT NOT NULL,"
+                  "  enabled INTEGER NOT NULL DEFAULT 1"
+                  ");"
+                  "CREATE TABLE samples ("
+                  "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                  "  gesture_id INTEGER NOT NULL,"
+                  "  frame_count INTEGER NOT NULL,"
+                  "  embedding_dim INTEGER NOT NULL,"
+                  "  dtype TEXT NOT NULL DEFAULT 'f32',"
+                  "  data BLOB NOT NULL,"
+                  "  weight REAL NOT NULL DEFAULT 1.0,"
+                  "  FOREIGN KEY (gesture_id) REFERENCES gestures(id)"
+                  ");"
+                  "CREATE INDEX idx_samples_gesture_id ON samples(gesture_id);");
 
     auto meta_insert = SQLite::Statement{database, "INSERT INTO meta(key, value) VALUES (?, ?)"};
     meta_insert.bind(1, "schema_version");
@@ -148,13 +147,12 @@ namespace signlang::signlang_manager {
 
   auto PrototypeDatabase::list_gestures() const -> std::vector<GestureInfo> {
     auto database = SQLite::Database{path_, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE};
-    auto query = SQLite::Statement{
-        database,
-        "SELECT g.id, g.name, g.enabled, COUNT(s.id) "
-        "FROM gestures g "
-        "LEFT JOIN samples s ON s.gesture_id = g.id "
-        "GROUP BY g.id, g.name, g.enabled "
-        "ORDER BY g.id"};
+    auto query = SQLite::Statement{database,
+                                   "SELECT g.id, g.name, g.enabled, COUNT(s.id) "
+                                   "FROM gestures g "
+                                   "LEFT JOIN samples s ON s.gesture_id = g.id "
+                                   "GROUP BY g.id, g.name, g.enabled "
+                                   "ORDER BY g.id"};
 
     auto gestures = std::vector<GestureInfo>{};
     while (query.executeStep()) {
@@ -199,10 +197,10 @@ namespace signlang::signlang_manager {
       enable_gesture.exec();
     }
 
-    auto insert_sample = SQLite::Statement{
-        database,
-        "INSERT INTO samples(gesture_id, frame_count, embedding_dim, dtype, data, weight) "
-        "VALUES (?, ?, ?, ?, ?, 1.0)"};
+    auto insert_sample =
+        SQLite::Statement{database,
+                          "INSERT INTO samples(gesture_id, frame_count, embedding_dim, dtype, data, weight) "
+                          "VALUES (?, ?, ?, ?, ?, 1.0)"};
     insert_sample.bind(1, gesture_id.value());
     insert_sample.bind(2, static_cast<std::uint32_t>(encoded_sample.size()));
     insert_sample.bind(3, embedding_dim_);

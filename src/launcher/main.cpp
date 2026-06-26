@@ -70,7 +70,7 @@ namespace {
 
   void warn_ipc_keys_in_config(const toml::table& config) {
     constexpr std::array kSections = {
-        "state_machine", "audio_frontend", "video_frontend", "speech_asr",
+        "state_machine", "audio_frontend", "video_frontend",   "speech_asr",
         "env_sound_det", "handpose_det",   "signlang_manager", "signlang_det",
     };
 
@@ -466,9 +466,17 @@ static auto build_handpose_det_args(const toml::table& cfg) -> std::vector<std::
 static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
-      kExeSignlangDet,  "--input-service",       kHandposeOutput, "--output-service",
-      kSignlangOutput,  "--prototype-control-service", kSignlangPrototypeControl,
-      "--state-event-service", kStateEvent,     "--state-blackboard-service", kStateBlackboard,
+      kExeSignlangDet,
+      "--input-service",
+      kHandposeOutput,
+      "--output-service",
+      kSignlangOutput,
+      "--prototype-control-service",
+      kSignlangPrototypeControl,
+      "--state-event-service",
+      kStateEvent,
+      "--state-blackboard-service",
+      kStateBlackboard,
   };
 
   if (const auto* tbl = cfg["signlang_det"].as_table()) {
@@ -490,8 +498,7 @@ static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::
 static auto build_signlang_manager_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
-      kExeSignlangManager, "--input-service", kHandposeOutput, "--signlang-control-service",
-      kSignlangPrototypeControl,
+      kExeSignlangManager, "--input-service", kHandposeOutput, "--signlang-control-service", kSignlangPrototypeControl,
   };
 
   if (const auto* tbl = cfg["signlang_manager"].as_table()) {
@@ -564,9 +571,12 @@ auto main(int argc, char** argv) -> int {
     };
 
     std::vector<ModuleEntry> modules = {
-        {"state_machine", build_state_machine_args(config)},   {"audio_frontend", build_audio_frontend_args(config)},
-        {"video_frontend", build_video_frontend_args(config)}, {"speech_asr", build_speech_asr_args(config)},
-        {"env_sound_det", build_env_sound_det_args(config)},   {"handpose_det", build_handpose_det_args(config)},
+        {"state_machine", build_state_machine_args(config)},
+        {"audio_frontend", build_audio_frontend_args(config)},
+        {"video_frontend", build_video_frontend_args(config)},
+        {"speech_asr", build_speech_asr_args(config)},
+        {"env_sound_det", build_env_sound_det_args(config)},
+        {"handpose_det", build_handpose_det_args(config)},
         {"signlang_manager", build_signlang_manager_args(config)},
         {"signlang_det", build_signlang_det_args(config)},
     };

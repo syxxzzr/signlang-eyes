@@ -81,9 +81,8 @@ namespace signlang::signlang_manager {
       throw std::runtime_error("rknn_query IN_OUT_NUM failed for gesture encoder, ret=" + std::to_string(ret));
     }
     if (io_num_.n_input != 1 || io_num_.n_output != 1) {
-      throw std::runtime_error("Gesture encoder expects 1 input and 1 output, got " +
-                               std::to_string(io_num_.n_input) + " inputs and " +
-                               std::to_string(io_num_.n_output) + " outputs");
+      throw std::runtime_error("Gesture encoder expects 1 input and 1 output, got " + std::to_string(io_num_.n_input) +
+                               " inputs and " + std::to_string(io_num_.n_output) + " outputs");
     }
 
     std::memset(&input_attr_, 0, sizeof(input_attr_));

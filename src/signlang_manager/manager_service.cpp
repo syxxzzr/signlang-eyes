@@ -110,9 +110,9 @@ namespace signlang::signlang_manager {
   ManagerService::ManagerService(const ProgramOptions& options) :
       encoder_{options.model_path, options.npu_core_mask, options.motion_weight},
       database_{options.prototypes_path, encoder_.embedding_dim()},
-      prototype_control_{options.signlang_control_service_name}, min_keypoint_confidence_{options.min_keypoint_confidence},
-      upload_window_overlap_{options.upload_window_overlap}, stream_fps_{options.stream_fps},
-      streaming_enabled_{options.enable_streaming_by_default} {
+      prototype_control_{options.signlang_control_service_name},
+      min_keypoint_confidence_{options.min_keypoint_confidence}, upload_window_overlap_{options.upload_window_overlap},
+      stream_fps_{options.stream_fps}, streaming_enabled_{options.enable_streaming_by_default} {
     database_.ensure_valid_empty_or_existing();
   }
 

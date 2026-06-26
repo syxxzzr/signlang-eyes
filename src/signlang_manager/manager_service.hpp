@@ -8,8 +8,8 @@
 #include "protocol.hpp"
 #include "prototype_database.hpp"
 
-#include <cstdint>
 #include <atomic>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -22,8 +22,8 @@ namespace signlang::signlang_manager {
 
     auto handle_packet_bytes(const std::vector<std::uint8_t>& bytes) -> std::vector<std::uint8_t>;
     auto build_stream_packet(const handpose_det::HandPoseFrameMetadata& metadata,
-                             const handpose_det::HandPoseDetection* detections,
-                             std::uint32_t detection_count) -> std::vector<std::uint8_t>;
+                             const handpose_det::HandPoseDetection* detections, std::uint32_t detection_count)
+        -> std::vector<std::uint8_t>;
 
     auto streaming_enabled() const -> bool;
     auto stream_interval_ns() const -> std::uint64_t;

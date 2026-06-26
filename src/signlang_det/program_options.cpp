@@ -41,12 +41,12 @@ namespace signlang::signlang_det {
     options.add_options()("i,input-service", "Input handpose iceoryx2 service name", cxxopts::value<std::string>())(
         "o,output-service", "Output signlang result iceoryx2 service name", cxxopts::value<std::string>())(
         "prototype-control-service", "iceoryx2 request-response service for prototype reload control",
-        cxxopts::value<std::string>())(
-        "state-event-service", "iceoryx2 event service name for global app state change notifications",
-        cxxopts::value<std::string>())("state-blackboard-service",
-                                       "iceoryx2 blackboard service name for global app state storage",
+        cxxopts::value<std::string>())("state-event-service",
+                                       "iceoryx2 event service name for global app state change notifications",
                                        cxxopts::value<std::string>())(
-        "m,model", "RKNN BiLSTM encoder model path", cxxopts::value<std::string>()->default_value(kDefaultModelPath))(
+        "state-blackboard-service", "iceoryx2 blackboard service name for global app state storage",
+        cxxopts::value<std::string>())("m,model", "RKNN BiLSTM encoder model path",
+                                       cxxopts::value<std::string>()->default_value(kDefaultModelPath))(
         "prototypes", "Gesture prototype SQLite database file",
         cxxopts::value<std::string>()->default_value(kDefaultPrototypesPath))(
         "sequence-length", "Sliding window frame count",

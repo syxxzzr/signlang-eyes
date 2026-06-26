@@ -96,7 +96,8 @@ namespace signlang::signlang_manager {
 
     auto bytes_from_variant(GVariant* value) -> std::vector<std::uint8_t> {
       gsize size = 0;
-      const auto* data = static_cast<const std::uint8_t*>(g_variant_get_fixed_array(value, &size, sizeof(std::uint8_t)));
+      const auto* data =
+          static_cast<const std::uint8_t*>(g_variant_get_fixed_array(value, &size, sizeof(std::uint8_t)));
       if (data == nullptr || size == 0) {
         return {};
       }
@@ -123,8 +124,7 @@ namespace signlang::signlang_manager {
       g_variant_builder_add(&props, "{sv}", "UUID", g_variant_new_string(uuid));
       g_variant_builder_add(&props, "{sv}", "Service", g_variant_new_object_path(kServicePath));
       g_variant_builder_add(&props, "{sv}", "Value", variant_from_bytes({}));
-      g_variant_builder_add(&props, "{sv}", "Flags",
-                            g_variant_new_strv(flags, static_cast<gssize>(flag_count)));
+      g_variant_builder_add(&props, "{sv}", "Flags", g_variant_new_strv(flags, static_cast<gssize>(flag_count)));
       g_variant_builder_add(ifaces, "{sa{sv}}", "org.bluez.GattCharacteristic1", &props);
     }
 
@@ -158,8 +158,9 @@ namespace signlang::signlang_manager {
       return g_variant_new("(a{sv})", &options);
     }
 
-    auto object_manager_method_call(GDBusConnection*, const gchar*, const gchar*, const gchar*, const gchar* method_name,
-                                    GVariant*, GDBusMethodInvocation* invocation, gpointer) -> void {
+    auto object_manager_method_call(GDBusConnection*, const gchar*, const gchar*, const gchar*,
+                                    const gchar* method_name, GVariant*, GDBusMethodInvocation* invocation, gpointer)
+        -> void {
       if (g_strcmp0(method_name, "GetManagedObjects") == 0) {
         g_dbus_method_invocation_return_value(invocation, build_managed_objects());
         return;
@@ -204,8 +205,8 @@ namespace signlang::signlang_manager {
       return nullptr;
     }
 
-    auto advertisement_get_property(GDBusConnection*, const gchar*, const gchar*, const gchar*, const gchar* property_name,
-                                    GError**, gpointer user_data) -> GVariant* {
+    auto advertisement_get_property(GDBusConnection*, const gchar*, const gchar*, const gchar*,
+                                    const gchar* property_name, GError**, gpointer user_data) -> GVariant* {
       const auto* server = static_cast<const BluetoothGattServer*>(user_data);
       if (g_strcmp0(property_name, "Type") == 0) {
         return g_variant_new_string("peripheral");
@@ -224,8 +225,8 @@ namespace signlang::signlang_manager {
     }
 
     auto characteristic_method_call(GDBusConnection*, const gchar*, const gchar* object_path, const gchar*,
-                                    const gchar* method_name, GVariant* parameters,
-                                    GDBusMethodInvocation* invocation, gpointer user_data) -> void {
+                                    const gchar* method_name, GVariant* parameters, GDBusMethodInvocation* invocation,
+                                    gpointer user_data) -> void {
       auto* server = static_cast<BluetoothGattServer*>(user_data);
       if (g_strcmp0(object_path, kRxPath) == 0 && g_strcmp0(method_name, "WriteValue") == 0) {
         auto* value = g_variant_get_child_value(parameters, 0);
@@ -273,8 +274,8 @@ namespace signlang::signlang_manager {
                                             "Unknown advertisement method");
     }
 
-    void name_owner_changed(GDBusConnection*, const gchar*, const gchar*, const gchar*, const gchar*, GVariant* parameters,
-                            gpointer user_data) {
+    void name_owner_changed(GDBusConnection*, const gchar*, const gchar*, const gchar*, const gchar*,
+                            GVariant* parameters, gpointer user_data) {
       auto* server = static_cast<BluetoothGattServer*>(user_data);
       const char* name = nullptr;
       const char* old_owner = nullptr;
@@ -384,8 +385,9 @@ namespace signlang::signlang_manager {
 
   void BluetoothGattServer::register_objects() {
     auto error = GErrorGuard{};
-    object_registration_ids_.push_back(g_dbus_connection_register_object(
-        connection_, kAppPath, object_manager_node_->interfaces[0], &kObjectManagerVtable, this, nullptr, &error.error));
+    object_registration_ids_.push_back(
+        g_dbus_connection_register_object(connection_, kAppPath, object_manager_node_->interfaces[0],
+                                          &kObjectManagerVtable, this, nullptr, &error.error));
     if (object_registration_ids_.back() == 0) {
       throw std::runtime_error(std::string{"Failed to register ObjectManager object: "} + error.error->message);
     }
@@ -396,28 +398,32 @@ namespace signlang::signlang_manager {
       throw std::runtime_error(std::string{"Failed to register GATT service object: "} + error.error->message);
     }
 
-    object_registration_ids_.push_back(g_dbus_connection_register_object(
-        connection_, kRxPath, characteristic_node_->interfaces[0], &kCharacteristicVtable, this, nullptr, &error.error));
+    object_registration_ids_.push_back(
+        g_dbus_connection_register_object(connection_, kRxPath, characteristic_node_->interfaces[0],
+                                          &kCharacteristicVtable, this, nullptr, &error.error));
     if (object_registration_ids_.back() == 0) {
-      throw std::runtime_error(std::string{"Failed to register GATT RX characteristic object: "} + error.error->message);
+      throw std::runtime_error(std::string{"Failed to register GATT RX characteristic object: "} +
+                               error.error->message);
     }
 
-    object_registration_ids_.push_back(g_dbus_connection_register_object(
-        connection_, kTxPath, characteristic_node_->interfaces[0], &kCharacteristicVtable, this, nullptr, &error.error));
+    object_registration_ids_.push_back(
+        g_dbus_connection_register_object(connection_, kTxPath, characteristic_node_->interfaces[0],
+                                          &kCharacteristicVtable, this, nullptr, &error.error));
     if (object_registration_ids_.back() == 0) {
-      throw std::runtime_error(std::string{"Failed to register GATT TX characteristic object: "} + error.error->message);
+      throw std::runtime_error(std::string{"Failed to register GATT TX characteristic object: "} +
+                               error.error->message);
     }
 
-    object_registration_ids_.push_back(g_dbus_connection_register_object(
-        connection_, kAdvertisementPath, advertisement_node_->interfaces[0], &kAdvertisementVtable, this, nullptr,
-        &error.error));
+    object_registration_ids_.push_back(
+        g_dbus_connection_register_object(connection_, kAdvertisementPath, advertisement_node_->interfaces[0],
+                                          &kAdvertisementVtable, this, nullptr, &error.error));
     if (object_registration_ids_.back() == 0) {
       throw std::runtime_error(std::string{"Failed to register BLE advertisement object: "} + error.error->message);
     }
 
     name_owner_watch_id_ = g_dbus_connection_signal_subscribe(
-        connection_, "org.freedesktop.DBus", "org.freedesktop.DBus", "NameOwnerChanged",
-        "/org/freedesktop/DBus", nullptr, G_DBUS_SIGNAL_FLAGS_NONE, name_owner_changed, this, nullptr);
+        connection_, "org.freedesktop.DBus", "org.freedesktop.DBus", "NameOwnerChanged", "/org/freedesktop/DBus",
+        nullptr, G_DBUS_SIGNAL_FLAGS_NONE, name_owner_changed, this, nullptr);
   }
 
   void BluetoothGattServer::unregister_objects() {
@@ -479,10 +485,9 @@ namespace signlang::signlang_manager {
     auto options = GVariantBuilder{};
     g_variant_builder_init(&options, G_VARIANT_TYPE("a{sv}"));
 
-    auto* result = g_dbus_connection_call_sync(connection_, kBluezBusName, options_.adapter_path.c_str(),
-                                              "org.bluez.GattManager1", "RegisterApplication",
-                                              g_variant_new("(oa{sv})", kAppPath, &options), nullptr,
-                                              G_DBUS_CALL_FLAGS_NONE, -1, nullptr, &error.error);
+    auto* result = g_dbus_connection_call_sync(
+        connection_, kBluezBusName, options_.adapter_path.c_str(), "org.bluez.GattManager1", "RegisterApplication",
+        g_variant_new("(oa{sv})", kAppPath, &options), nullptr, G_DBUS_CALL_FLAGS_NONE, -1, nullptr, &error.error);
     if (result == nullptr) {
       throw std::runtime_error(std::string{"Failed to register BLE GATT application with BlueZ: "} +
                                error.error->message);
@@ -509,10 +514,10 @@ namespace signlang::signlang_manager {
 
     {
       auto error = GErrorGuard{};
-      auto* result = g_dbus_connection_call_sync(
-          connection_, kBluezBusName, options_.adapter_path.c_str(), "org.bluez.LEAdvertisingManager1",
-          "UnregisterAdvertisement", g_variant_new("(o)", kAdvertisementPath), nullptr, G_DBUS_CALL_FLAGS_NONE, 2000,
-          nullptr, &error.error);
+      auto* result = g_dbus_connection_call_sync(connection_, kBluezBusName, options_.adapter_path.c_str(),
+                                                 "org.bluez.LEAdvertisingManager1", "UnregisterAdvertisement",
+                                                 g_variant_new("(o)", kAdvertisementPath), nullptr,
+                                                 G_DBUS_CALL_FLAGS_NONE, 2000, nullptr, &error.error);
       if (result != nullptr) {
         g_variant_unref(result);
       }

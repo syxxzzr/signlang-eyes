@@ -16,8 +16,7 @@ namespace signlang::signlang_manager {
 
   } // namespace
 
-  IpcHandposeSubscriber::IpcHandposeSubscriber(const std::string& service_name,
-                                               std::uint64_t subscriber_buffer_size) :
+  IpcHandposeSubscriber::IpcHandposeSubscriber(const std::string& service_name, std::uint64_t subscriber_buffer_size) :
       node_{create_node()}, subscriber_{create_subscriber(node_, service_name, subscriber_buffer_size)} {}
 
   auto IpcHandposeSubscriber::wait_for_work() -> bool {
@@ -79,13 +78,14 @@ namespace signlang::signlang_manager {
 
   auto IpcPrototypeControlClient::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
                                                  const std::string& service_name) -> PrototypeControlService {
-    auto service = node.service_builder(service_name_from_string(service_name))
-                       .request_response<signlang_det::PrototypeControlRequest, signlang_det::PrototypeControlResponse>()
-                       .max_servers(1)
-                       .max_clients(4)
-                       .max_active_requests_per_client(1)
-                       .max_response_buffer_size(1)
-                       .open_or_create();
+    auto service =
+        node.service_builder(service_name_from_string(service_name))
+            .request_response<signlang_det::PrototypeControlRequest, signlang_det::PrototypeControlResponse>()
+            .max_servers(1)
+            .max_clients(4)
+            .max_active_requests_per_client(1)
+            .max_response_buffer_size(1)
+            .open_or_create();
     if (!service.has_value()) {
       throw std::runtime_error("Failed to open signlang prototype control service in manager: " + service_name);
     }

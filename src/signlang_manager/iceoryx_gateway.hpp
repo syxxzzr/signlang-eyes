@@ -55,9 +55,8 @@ namespace signlang::signlang_manager {
     using PrototypeControlService =
         iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, signlang_det::PrototypeControlRequest, void,
                                          signlang_det::PrototypeControlResponse, void>;
-    using PrototypeControlClient =
-        iox2::Client<iox2::ServiceType::Ipc, signlang_det::PrototypeControlRequest, void,
-                     signlang_det::PrototypeControlResponse, void>;
+    using PrototypeControlClient = iox2::Client<iox2::ServiceType::Ipc, signlang_det::PrototypeControlRequest, void,
+                                                signlang_det::PrototypeControlResponse, void>;
 
     static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
     static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)

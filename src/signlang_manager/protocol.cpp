@@ -55,8 +55,7 @@ namespace signlang::signlang_manager {
     auto is_valid_packet_type(std::uint8_t type) -> bool {
       return type == static_cast<std::uint8_t>(PacketType::Request) ||
           type == static_cast<std::uint8_t>(PacketType::Response) ||
-          type == static_cast<std::uint8_t>(PacketType::Event) ||
-          type == static_cast<std::uint8_t>(PacketType::Stream);
+          type == static_cast<std::uint8_t>(PacketType::Event) || type == static_cast<std::uint8_t>(PacketType::Stream);
     }
 
   } // namespace

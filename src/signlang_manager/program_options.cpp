@@ -39,11 +39,9 @@ namespace signlang::signlang_manager {
 
     options.add_options()("i,input-service", "Input handpose iceoryx2 service name", cxxopts::value<std::string>())(
         "signlang-control-service", "signlang_det prototype reload request-response service name",
-        cxxopts::value<std::string>())(
-        "bluetooth-name", "BLE advertising local name",
-        cxxopts::value<std::string>()->default_value(kDefaultBluetoothName))(
-        "adapter-path", "BlueZ adapter object path",
-        cxxopts::value<std::string>()->default_value(kDefaultAdapterPath))(
+        cxxopts::value<std::string>())("bluetooth-name", "BLE advertising local name",
+                                       cxxopts::value<std::string>()->default_value(kDefaultBluetoothName))(
+        "adapter-path", "BlueZ adapter object path", cxxopts::value<std::string>()->default_value(kDefaultAdapterPath))(
         "m,model", "RKNN BiLSTM encoder model path", cxxopts::value<std::string>()->default_value(kDefaultModelPath))(
         "prototypes", "Gesture prototype SQLite database file",
         cxxopts::value<std::string>()->default_value(kDefaultPrototypesPath))(
@@ -61,8 +59,8 @@ namespace signlang::signlang_manager {
         cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultMaxNotifyPayload)))(
         "npu-core", "NPU core selection: auto,0,1,2,0_1,0_1_2,all",
         cxxopts::value<std::string>()->default_value("auto"))(
-        "enable-streaming-by-default", "Start handpose streaming as soon as a BLE client subscribes")(
-        "h,help", "Print usage");
+        "enable-streaming-by-default", "Start handpose streaming as soon as a BLE client subscribes")("h,help",
+                                                                                                      "Print usage");
     signlang::logging::add_cli_options(options);
 
     const auto parsed_options = options.parse(argc, argv);
