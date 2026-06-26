@@ -13,6 +13,7 @@
 #include <csignal>
 #include <exception>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
@@ -245,20 +246,49 @@ auto main(int argc, char** argv) -> int {
     const auto buffer_capacity = compute_buffer_capacity(options.sequence_length, options.overlap_ratio);
     auto ring_buffer = KeypointRingBuffer{buffer_capacity};
     auto should_stop = std::atomic<bool>{false};
+    auto worker_error = std::exception_ptr{nullptr};
+    auto worker_error_mutex = std::mutex{};
 
-    auto receiver_thread = std::thread{[&]() { receiver_loop(options, ring_buffer, should_stop); }};
+    auto record_worker_error = [&](std::exception_ptr error) {
+      {
+        const std::lock_guard lock{worker_error_mutex};
+        if (worker_error == nullptr) {
+          worker_error = error;
+        }
+      }
+      should_stop.store(true);
+      ring_buffer.notify_stop();
+    };
 
-    auto inference_thread = std::thread{[&]() { inference_loop(options, ring_buffer, should_stop); }};
+    auto receiver_thread = std::thread{[&]() {
+      try {
+        receiver_loop(options, ring_buffer, should_stop);
+      } catch (...) {
+        record_worker_error(std::current_exception());
+      }
+    }};
 
-    while (g_should_stop == 0) {
+    auto inference_thread = std::thread{[&]() {
+      try {
+        inference_loop(options, ring_buffer, should_stop);
+      } catch (...) {
+        record_worker_error(std::current_exception());
+      }
+    }};
+
+    while (g_should_stop == 0 && !should_stop.load()) {
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    should_stop = true;
+    should_stop.store(true);
     ring_buffer.notify_stop();
 
     receiver_thread.join();
     inference_thread.join();
+
+    if (worker_error != nullptr) {
+      std::rethrow_exception(worker_error);
+    }
 
     return 0;
   } catch (const std::exception& e) {
