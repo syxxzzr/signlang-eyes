@@ -50,7 +50,7 @@ namespace signlang::signlang_manager {
     IpcPrototypeControlClient(IpcPrototypeControlClient&&) = delete;
     auto operator=(IpcPrototypeControlClient&&) -> IpcPrototypeControlClient& = delete;
 
-    void request_reload() const;
+    auto request_reload() const -> signlang_det::PrototypeControlResponse;
 
   private:
     using PrototypeControlService =

@@ -1,6 +1,8 @@
 #include "iceoryx_gateway.hpp"
 
+#include <algorithm>
 #include <stdexcept>
+#include <string>
 #include <utility>
 
 namespace signlang::signlang_manager {
@@ -88,13 +90,46 @@ namespace signlang::signlang_manager {
   IpcPrototypeControlClient::IpcPrototypeControlClient(const std::string& service_name) :
       node_{create_node()}, service_{create_service(node_, service_name)}, client_{create_client(service_)} {}
 
-  void IpcPrototypeControlClient::request_reload() const {
+  auto IpcPrototypeControlClient::request_reload() const -> signlang_det::PrototypeControlResponse {
     static auto request_id = std::uint32_t{0};
     const auto request = signlang_det::PrototypeControlRequest{
         .command = signlang_det::PrototypeControlCommand::ReloadPrototypes,
         .request_id = request_id++,
     };
-    (void)client_.send_copy(request);
+    auto send_result = client_.send_copy(request);
+    if (!send_result.has_value()) {
+      throw std::runtime_error("Failed to send signlang prototype reload request");
+    }
+
+    auto pending_response = std::move(send_result.value());
+    if (pending_response.number_of_server_connections() == 0) {
+      throw std::runtime_error("No signlang prototype control server received reload request");
+    }
+
+    constexpr auto kMaxWaitAttempts = 100;
+    for (auto attempt = 0; attempt < kMaxWaitAttempts; ++attempt) {
+      auto receive_result = pending_response.receive();
+      if (!receive_result.has_value()) {
+        throw std::runtime_error("Failed to receive signlang prototype reload response");
+      }
+
+      if (receive_result.value().has_value()) {
+        const auto& response = receive_result.value().value().payload();
+        if (response.request_id != request.request_id) {
+          throw std::runtime_error("Received mismatched signlang prototype reload response");
+        }
+        if (response.status != signlang_det::PrototypeControlStatus::Ok) {
+          const auto message_end = std::find(response.message.begin(), response.message.end(), '\0');
+          const auto message = std::string{response.message.begin(), message_end};
+          throw std::runtime_error("Signlang prototype reload failed" + (message.empty() ? std::string{} : ": " + message));
+        }
+        return response;
+      }
+
+      (void)node_.wait(iox2::bb::Duration::from_millis(10));
+    }
+
+    throw std::runtime_error("Timed out waiting for signlang prototype reload response");
   }
 
   auto IpcPrototypeControlClient::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
