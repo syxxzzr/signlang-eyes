@@ -441,9 +441,7 @@ static auto build_video_frontend_args(const toml::table& cfg) -> std::vector<std
 static auto build_speech_asr_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
-      kExeSpeechAsr,    "--input-service",       kAudioService, "--output-service",
-      kSpeechAsrOutput, "--state-event-service", kStateEvent,   "--state-blackboard-service",
-      kStateBlackboard,
+      kExeSpeechAsr, "--input-service", kAudioService, "--output-service", kSpeechAsrOutput,
   };
 
   if (const auto* tbl = cfg["speech_asr"].as_table()) {
@@ -487,9 +485,7 @@ static auto build_env_sound_det_args(const toml::table& cfg) -> std::vector<std:
 static auto build_handpose_det_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
-      kExeHandposeDet,  "--input-service",       kVideoService, "--output-service",
-      kHandposeOutput,  "--state-event-service", kStateEvent,   "--state-blackboard-service",
-      kStateBlackboard,
+      kExeHandposeDet, "--input-service", kVideoService, "--output-service", kHandposeOutput,
   };
 
   if (const auto* tbl = cfg["handpose_det"].as_table()) {
@@ -533,10 +529,6 @@ static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::
       kSignlangOutput,
       "--prototype-control-service",
       kSignlangPrototypeControl,
-      "--state-event-service",
-      kStateEvent,
-      "--state-blackboard-service",
-      kStateBlackboard,
   };
 
   if (const auto* tbl = cfg["signlang_det"].as_table()) {

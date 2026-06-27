@@ -65,7 +65,6 @@ auto main(int argc, char** argv) -> int {
   using signlang::common::hop_samples_for_overlap;
   using signlang::common::samples_for_window_ms;
   using signlang::speech_asr::AsrLanguage;
-  using signlang::speech_asr::IpcAsrStateMonitor;
   using signlang::speech_asr::IpcAudioSubscriber;
   using signlang::speech_asr::IpcResultPublisher;
   using signlang::speech_asr::kWhisperSampleRateHz;
@@ -135,17 +134,6 @@ auto main(int argc, char** argv) -> int {
         spdlog::info("Whisper model loaded successfully");
 
         IpcResultPublisher result_publisher{options.result_service_name};
-        auto state_monitor = std::optional<IpcAsrStateMonitor>{};
-        if (options.state_event_service_name.has_value() && options.state_blackboard_service_name.has_value()) {
-          state_monitor.emplace(options.state_event_service_name.value(),
-                                options.state_blackboard_service_name.value());
-        }
-        auto gate_enabled = [&]() { return !state_monitor.has_value() || state_monitor->is_enabled(); };
-        auto poll_gate = [&]() {
-          if (state_monitor.has_value()) {
-            state_monitor->try_wait_for_state_change();
-          }
-        };
         AudioWindow audio_window;
         std::optional<std::uint64_t> next_window_start_sample;
         std::uint64_t result_sequence_number = 0;
@@ -165,49 +153,34 @@ auto main(int argc, char** argv) -> int {
             break;
           }
 
-          poll_gate();
+          const auto inference_result = model.infer(audio_window, options.language);
 
-          if (gate_enabled()) {
-            const auto inference_result = model.infer(audio_window, options.language);
-
-            if (!inference_result.transcript.empty()) {
-              spdlog::info("Transcript: {}", inference_result.transcript);
-            }
-
-            SpeechAsrResult result{};
-            result.sequence_number = result_sequence_number++;
-            result.timestamp_ns = steady_timestamp_ns();
-            result.audio_start_sample_index = audio_window.start_sample_index;
-            result.audio_end_sample_index = audio_window.end_sample_index;
-            result.latest_audio_sequence_number = audio_window.latest_audio_sequence_number;
-            result.latest_audio_timestamp_ns = audio_window.latest_audio_timestamp_ns;
-            result.latest_audio_sample_rate_hz = audio_window.latest_audio_sample_rate_hz;
-            result.latest_audio_publish_period_ms = audio_window.latest_audio_publish_period_ms;
-            result.latest_audio_frame_count = audio_window.latest_audio_frame_count;
-            result.latest_audio_channel_count = audio_window.latest_audio_channel_count;
-            result.latest_audio_bits_per_sample = audio_window.latest_audio_bits_per_sample;
-            result.audio_sample_rate_hz = kWhisperSampleRateHz;
-            result.window_ms = options.window_ms;
-            result.hop_ms = static_cast<std::uint32_t>((hop_sample_count * 1000) / kWhisperSampleRateHz);
-            result.language = options.language;
-            result.overlap_ratio = static_cast<float>(options.overlap_ratio);
-            copy_language_code(options.language, result.language_code);
-            copy_inference_result(inference_result, result);
-
-            result_publisher.publish(result);
-            next_window_start_sample = audio_window.start_sample_index + hop_sample_count;
-          } else {
-            // Poll for state change with stop check to avoid hang on shutdown
-            while (!should_stop.load() && !gate_enabled()) {
-              poll_gate();
-              if (!gate_enabled()) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-              }
-            }
-            // Discard stale audio accumulated during disabled period
-            audio_buffer.clear();
-            next_window_start_sample = std::nullopt;
+          if (!inference_result.transcript.empty()) {
+            spdlog::info("Transcript: {}", inference_result.transcript);
           }
+
+          SpeechAsrResult result{};
+          result.sequence_number = result_sequence_number++;
+          result.timestamp_ns = steady_timestamp_ns();
+          result.audio_start_sample_index = audio_window.start_sample_index;
+          result.audio_end_sample_index = audio_window.end_sample_index;
+          result.latest_audio_sequence_number = audio_window.latest_audio_sequence_number;
+          result.latest_audio_timestamp_ns = audio_window.latest_audio_timestamp_ns;
+          result.latest_audio_sample_rate_hz = audio_window.latest_audio_sample_rate_hz;
+          result.latest_audio_publish_period_ms = audio_window.latest_audio_publish_period_ms;
+          result.latest_audio_frame_count = audio_window.latest_audio_frame_count;
+          result.latest_audio_channel_count = audio_window.latest_audio_channel_count;
+          result.latest_audio_bits_per_sample = audio_window.latest_audio_bits_per_sample;
+          result.audio_sample_rate_hz = kWhisperSampleRateHz;
+          result.window_ms = options.window_ms;
+          result.hop_ms = static_cast<std::uint32_t>((hop_sample_count * 1000) / kWhisperSampleRateHz);
+          result.language = options.language;
+          result.overlap_ratio = static_cast<float>(options.overlap_ratio);
+          copy_language_code(options.language, result.language_code);
+          copy_inference_result(inference_result, result);
+
+          result_publisher.publish(result);
+          next_window_start_sample = audio_window.start_sample_index + hop_sample_count;
         }
       } catch (...) {
         record_worker_error(std::current_exception());

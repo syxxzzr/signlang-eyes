@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **handpose_det** module subscribes to RGB24 video frames, runs the MediaPipe dual-model pipeline (palm detector + hand landmark detector) using RKNN NPU inference, and publishes fixed-size hand pose payloads through iceoryx2. It supports state-based enable/disable control.
+The **handpose_det** module subscribes to RGB24 video frames, runs the MediaPipe dual-model pipeline (palm detector + hand landmark detector) using RKNN NPU inference, and publishes fixed-size hand pose payloads through iceoryx2.
 
 **Recent Optimizations (based on MediaPipe Web Samples)**:
 - ✅ **Three-tier confidence system**: Separate thresholds for palm detection, hand presence, and tracking
@@ -13,7 +13,7 @@ The **handpose_det** module subscribes to RGB24 video frames, runs the MediaPipe
 - ✅ **One Euro Filter smoothing**: Reduces keypoint jitter by 60-80%
 
 - **Executable**: `handpose_det` (installed under `bin/`)
-- **IPC Pattern**: Publish-Subscribe (video subscriber + hand pose publisher) + Event/Blackboard (state control)
+- **IPC Pattern**: Publish-Subscribe (video subscriber + hand pose publisher)
 - **Input**: RGB24 video frames with `VideoFrameMetadata` user header from iceoryx2
 - **Output**: `iox2::bb::Slice<HandPoseDetection>` with `HandPoseFrameMetadata` user header on iceoryx2
 - **Models**: Palm detector (192×192) + Hand landmarks detector (224×224), both RKNN-accelerated
@@ -116,25 +116,6 @@ install/bin/handpose_det \
   --single-hand=false \
   --confidence 0.5
 ```
-
-With state gating (only process frames when in sign language mode):
-
-```bash
-install/bin/handpose_det \
-  --input-service video_capture \
-  --output-service handpose_result \
-  --state-event-service app_state_event \
-  --state-blackboard-service app_state_blackboard
-```
-
-## State Control
-
-When both state gate services are provided, the module reads the current blackboard state at startup and uses the iceoryx2 Event + Blackboard pattern:
-- **Enabled states**: `SignLanguageChat`, `SignLanguageAi`
-- **Disabled states**: `Normal`, `Asr`, `DangerousSound`
-- **When disabled**: Event-driven idle, zero CPU usage while waiting for state changes
-- **When enabled**: Process every video frame
-- **Without state gate services**: Always enabled (no state control)
 
 ## Performance Characteristics
 

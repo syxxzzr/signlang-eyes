@@ -94,7 +94,6 @@ namespace {
                       signlang::signlang_det::KeypointRingBuffer& ring_buffer, const std::atomic<bool>& should_stop,
                       std::atomic<bool>& downstream_active) {
     using signlang::signlang_det::IpcPrototypeControlServer;
-    using signlang::signlang_det::IpcSignlangDetStateMonitor;
     using signlang::signlang_det::IpcSignlangPublisher;
     using signlang::signlang_det::PrototypeControlCommand;
     using signlang::signlang_det::PrototypeControlResponse;
@@ -146,17 +145,6 @@ namespace {
 
       return response;
     };
-    auto state_monitor = std::optional<IpcSignlangDetStateMonitor>{};
-    if (options.state_event_service_name.has_value() && options.state_blackboard_service_name.has_value()) {
-      state_monitor.emplace(options.state_event_service_name.value(), options.state_blackboard_service_name.value());
-    }
-    auto gate_enabled = [&]() { return !state_monitor.has_value() || state_monitor->is_enabled(); };
-    auto poll_gate = [&]() {
-      if (state_monitor.has_value()) {
-        state_monitor->try_wait_for_state_change();
-      }
-    };
-
     const auto hop_frames = std::max<std::uint32_t>(
         1, static_cast<std::uint32_t>(options.sequence_length * (1.0f - options.overlap_ratio)));
     auto next_window_end_seq = std::uint64_t{hop_frames};
@@ -165,8 +153,6 @@ namespace {
     const auto duplicate_suppression_window = std::chrono::milliseconds{options.duplicate_suppression_ms};
 
     while (!should_stop) {
-      // Check for state changes before waiting for buffer
-      poll_gate();
       if (prototype_control_server.has_value()) {
         prototype_control_server->process_pending_requests(control_response);
       }
@@ -181,27 +167,6 @@ namespace {
         continue;
       }
       downstream_active.store(true);
-
-      if (!gate_enabled()) {
-        // Poll for state change with stop check to avoid hang on shutdown
-        while (!should_stop.load() && !gate_enabled()) {
-          poll_gate();
-          if (prototype_control_server.has_value()) {
-            prototype_control_server->process_pending_requests(control_response);
-          }
-          if (!gate_enabled()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-          }
-        }
-        if (should_stop.load()) {
-          break;
-        }
-        // Discard stale data accumulated during disabled period
-        ring_buffer.clear();
-        next_window_end_seq = hop_frames;
-        last_published_gesture_id.reset();
-        continue;
-      }
 
       auto window = ring_buffer.wait_for_window(options.sequence_length, next_window_end_seq, should_stop);
       if (!window.has_value()) {

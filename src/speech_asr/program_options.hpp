@@ -6,7 +6,6 @@
 #include "speech_asr_result.hpp"
 
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <variant>
 
@@ -15,8 +14,6 @@ namespace signlang::speech_asr {
   struct ProgramOptions {
     std::string audio_service_name;
     std::string result_service_name;
-    std::optional<std::string> state_event_service_name;
-    std::optional<std::string> state_blackboard_service_name;
     std::string encoder_model_path;
     std::string decoder_model_path;
     std::string vocab_en_path;

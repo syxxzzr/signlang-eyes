@@ -2,10 +2,10 @@
 
 ## Overview
 
-The **speech_asr** module performs real-time speech-to-text recognition using an OpenAI Whisper base encoder-decoder model running on the RKNN NPU. It subscribes to audio frames, processes them through a sliding-window log-Mel spectrogram pipeline, runs encoder-decoder inference, and publishes transcription results. Supports English and Chinese languages with state-based enable/disable control.
+The **speech_asr** module performs real-time speech-to-text recognition using an OpenAI Whisper base encoder-decoder model running on the RKNN NPU. It subscribes to audio frames, processes them through a sliding-window log-Mel spectrogram pipeline, runs encoder-decoder inference, and publishes transcription results. Supports English and Chinese languages.
 
 - **Executable**: `speech_asr` (installed under `bin/`)
-- **IPC Pattern**: Publish-Subscribe (audio subscriber + result publisher) + Event/Blackboard (state control)
+- **IPC Pattern**: Publish-Subscribe (audio subscriber + result publisher)
 - **Input**: `signlang::audio_frontend::AudioFrame` from iceoryx2
 - **Output**: `signlang::speech_asr::SpeechAsrResult` on iceoryx2
 - **Model**: Whisper base (encoder + decoder, 15s window, RKNN-accelerated)
@@ -22,13 +22,6 @@ All module executables also accept `--log-file <path>` and `--log-rotate-size <b
 |-----------|-------------|
 | `--input-service` / `-i` | iceoryx2 audio input publish-subscribe service name |
 | `--output-service` / `-o` | iceoryx2 ASR result output service name |
-
-### State Gate (Optional)
-
-| Parameter | Description |
-|-----------|-------------|
-| `--state-event-service` | iceoryx2 event service name for global app state change notifications |
-| `--state-blackboard-service` | iceoryx2 blackboard service name for global app state storage |
 
 ### Model Paths
 
@@ -84,16 +77,6 @@ The module uses iceoryx2 `Node::wait()` for event-driven audio frame reception:
 - Zero CPU usage while waiting for frames
 - 5ms timeout for responsive shutdown
 - Replaces legacy polling loops for better power efficiency
-
-### State Control
-
-When both state gate services are provided, the module reads the current blackboard state at startup and uses the iceoryx2 Event + Blackboard pattern for enable/disable control:
-- **Enabled states**: `Asr` (speech recognition mode)
-- **Disabled states**: `Normal`, `SignLanguageChat`, `SignLanguageAi`, `DangerousSound`
-- **When disabled**: Polls for state changes via non-blocking event check, minimal CPU usage
-- **When enabled**: Non-blocking event check before each inference cycle
-- **Without state gate services**: Always enabled (no state control)
-- **Language**: Set at startup via `--language` flag (not runtime-switchable)
 
 ### ASR Window Strategy
 
@@ -161,18 +144,6 @@ install/bin/speech_asr \
     --overlap 0.2
 ```
 
-### With State Control
-
-```bash
-install/bin/speech_asr \
-    --input-service audio_capture \
-    --output-service speech_asr_result \
-    --state-event-service app_state_event \
-    --state-blackboard-service app_state_blackboard \
-    --language zh \
-    --npu-core 1
-```
-
 ### Multi-Core NPU
 
 ```bash
@@ -203,7 +174,7 @@ install/bin/speech_asr \
 | `main.cpp` | Entry point; dual-thread orchestration (receiver + inference) |
 | `program_options.{cpp,hpp}` | CLI argument parsing via cxxopts |
 | `whisper_model.{cpp,hpp}` | Whisper encoder/decoder RKNN model wrapper |
-| `iceoryx_gateway.{cpp,hpp}` | iceoryx2 subscriber, publisher, state control |
+| `iceoryx_gateway.{cpp,hpp}` | iceoryx2 subscriber and publisher |
 | `speech_asr_result.{cpp,hpp}` | `SpeechAsrResult` IPC message definition |
 
 Shared with other modules:

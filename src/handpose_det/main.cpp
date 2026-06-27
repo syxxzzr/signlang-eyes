@@ -6,14 +6,12 @@
 
 #include <array>
 #include <chrono>
-#include <optional>
 #include <thread>
 
 auto main(int argc, char** argv) -> int {
   using signlang::handpose_det::HandPoseDetection;
   using signlang::handpose_det::HandPoseModel;
   using signlang::handpose_det::HandPoseTransport;
-  using signlang::handpose_det::IpcHandPoseStateMonitor;
   using signlang::handpose_det::parse_program_options;
 
   return signlang::runtime::run_module(argc, argv, parse_program_options, [&](const auto& options) {
@@ -27,40 +25,13 @@ auto main(int argc, char** argv) -> int {
 
     HandPoseTransport transport{options.input_service_name, options.output_service_name, options.subscriber_buffer_size,
                                 hand_slots};
-    auto state_monitor = std::optional<IpcHandPoseStateMonitor>{};
-    if (options.state_event_service_name.has_value() && options.state_blackboard_service_name.has_value()) {
-      state_monitor.emplace(options.state_event_service_name.value(), options.state_blackboard_service_name.value());
-    }
-    auto gate_enabled = [&]() { return !state_monitor.has_value() || state_monitor->is_enabled(); };
-    auto poll_gate = [&]() {
-      if (state_monitor.has_value()) {
-        state_monitor->try_wait_for_state_change();
-      }
-    };
 
     std::uint64_t sequence_number = 0;
     std::array<HandPoseDetection, 2> detection_buffer{};
     while (!signlang::runtime::shutdown_requested()) {
-      poll_gate();
-
       if (!transport.has_subscribers()) {
         transport.detach_upstream();
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        continue;
-      }
-
-      if (!gate_enabled()) {
-        transport.detach_upstream();
-        // Poll for state change with stop check to avoid hang on shutdown
-        while (!signlang::runtime::shutdown_requested() && !gate_enabled()) {
-          poll_gate();
-          if (!gate_enabled()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-          }
-        }
-        if (signlang::runtime::shutdown_requested()) {
-          break;
-        }
         continue;
       }
 

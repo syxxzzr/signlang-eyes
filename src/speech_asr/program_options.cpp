@@ -71,10 +71,6 @@ namespace signlang::speech_asr {
     options.add_options()("i,input-service", "iceoryx2 audio input publish-subscribe service name",
                           cxxopts::value<std::string>())(
         "o,output-service", "iceoryx2 ASR result publish-subscribe service name", cxxopts::value<std::string>())(
-        "state-event-service", "iceoryx2 event service name for global app state change notifications",
-        cxxopts::value<std::string>())("state-blackboard-service",
-                                       "iceoryx2 blackboard service name for global app state storage",
-                                       cxxopts::value<std::string>())(
         "language", "ASR recognition language: en or zh", cxxopts::value<std::string>()->default_value("en"))(
         "encoder-model", "Whisper encoder RKNN model path",
         cxxopts::value<std::string>()->default_value(kDefaultEncoderModelPath))(
@@ -107,14 +103,6 @@ namespace signlang::speech_asr {
 
     if (parsed_options.count("input-service") == 0 || parsed_options.count("output-service") == 0) {
       throw std::runtime_error("Options --input-service and --output-service are required.\n\n" + options.help());
-    }
-
-    const auto has_state_event_service = parsed_options.count("state-event-service") != 0;
-    const auto has_state_blackboard_service = parsed_options.count("state-blackboard-service") != 0;
-    if (has_state_event_service != has_state_blackboard_service) {
-      throw std::runtime_error("Options --state-event-service and --state-blackboard-service must be provided "
-                               "together.\n\n" +
-                               options.help());
     }
 
     const auto window_ms = parsed_options["window-ms"].as<std::uint32_t>();
@@ -158,12 +146,6 @@ namespace signlang::speech_asr {
     return ProgramOptionsParseResult{ProgramOptions{
         .audio_service_name = parsed_options["input-service"].as<std::string>(),
         .result_service_name = parsed_options["output-service"].as<std::string>(),
-        .state_event_service_name = has_state_event_service
-            ? std::optional<std::string>{parsed_options["state-event-service"].as<std::string>()}
-            : std::nullopt,
-        .state_blackboard_service_name = has_state_blackboard_service
-            ? std::optional<std::string>{parsed_options["state-blackboard-service"].as<std::string>()}
-            : std::nullopt,
         .encoder_model_path = parsed_options["encoder-model"].as<std::string>(),
         .decoder_model_path = parsed_options["decoder-model"].as<std::string>(),
         .vocab_en_path = parsed_options["vocab-en"].as<std::string>(),

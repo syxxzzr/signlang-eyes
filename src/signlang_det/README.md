@@ -5,7 +5,7 @@
 The **signlang_det** module performs real-time dual-hand sign language recognition using a hybrid BiLSTM + DTW (Dynamic Time Warping) architecture. It subscribes to hand pose detection results, extracts 168-dimensional spatial-temporal features, encodes them with a BiLSTM on the RKNN NPU, and matches the resulting embeddings against pre-recorded gesture prototypes stored in an SQLite database using DTW for speed-invariant recognition.
 
 - **Executable**: `signlang_det` (installed under `bin/`)
-- **IPC Pattern**: Publish-Subscribe (handpose subscriber + result publisher) + Event/Blackboard (state control)
+- **IPC Pattern**: Publish-Subscribe (handpose subscriber + result publisher)
 - **Input**: `iox2::bb::Slice<signlang::handpose_det::HandPoseDetection>` with `HandPoseFrameMetadata` user header from iceoryx2
 - **Output**: `signlang::signlang_det::SignlangResult` on iceoryx2
 - **Model**: BiLSTM encoder (128-dim embeddings, RKNN NPU) + DTW matching (CPU) against SQLite prototype database
@@ -22,15 +22,6 @@ All module executables also accept `--log-file <path>` and `--log-rotate-size <b
 |-----------|-------------|
 | `--input-service` / `-i` | iceoryx2 handpose detection input service name |
 | `--output-service` / `-o` | iceoryx2 sign language recognition result output service name |
-
-### State Gate (Optional)
-
-| Parameter | Description |
-|-----------|-------------|
-| `--state-event-service` | iceoryx2 event service for global app state change notifications |
-| `--state-blackboard-service` | iceoryx2 blackboard service for global app state storage |
-
-When both state gate services are provided, sign language recognition reads the current blackboard state at startup and follows subsequent app state events. Without state gate services, it stays enabled.
 
 ### Model Paths
 
@@ -144,9 +135,6 @@ The module uses iceoryx2 `Node::wait()` for event-driven handpose frame receptio
 Handpose Subscriber (iceoryx2)
     │ [event-driven via Node::wait()]
     ▼
-State Gate (optional)
-    │
-    ▼ [enabled]
 FeatureExtractor
     │
     ├─► Hand Tracking (L→R ordering)
@@ -205,16 +193,6 @@ install/bin/signlang_det \
     --output-service signlang_result
 ```
 
-### With State Control
-
-```bash
-install/bin/signlang_det \
-    --input-service handpose_result \
-    --output-service signlang_result \
-    --state-event-service app_state_event \
-    --state-blackboard-service app_state_blackboard
-```
-
 ### Custom Recognition Parameters
 
 ```bash
@@ -258,7 +236,7 @@ install/bin/signlang_det \
 | `signlang_model.{cpp,hpp}` | BiLSTM RKNN model + DTW matching engine |
 | `feature_extractor.{cpp,hpp}` | Hand tracking and 168-dim feature extraction |
 | `keypoint_ring_buffer.{cpp,hpp}` | Thread-safe circular buffer for sliding windows |
-| `iceoryx_gateway.{cpp,hpp}` | iceoryx2 subscriber, publisher, state control |
+| `iceoryx_gateway.{cpp,hpp}` | iceoryx2 subscriber and publishers |
 | `signlang_result.{cpp,hpp}` | IPC message definitions |
 
 ## IPC Data Structures

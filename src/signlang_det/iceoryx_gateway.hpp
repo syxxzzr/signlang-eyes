@@ -6,7 +6,6 @@
 #include "signlang_result.hpp"
 
 #include "iox2/iceoryx2.hpp"
-#include "state_machine/app_state.hpp"
 
 #include <cstdint>
 #include <string>
@@ -93,41 +92,6 @@ namespace signlang::signlang_det {
                                      void>
         service_;
     iox2::Server<iox2::ServiceType::Ipc, PrototypeControlRequest, void, PrototypeControlResponse, void> server_;
-  };
-
-  /// Event-driven sign language detection state monitor
-  class IpcSignlangDetStateMonitor {
-  public:
-    IpcSignlangDetStateMonitor(const std::string& event_service_name, const std::string& blackboard_service_name);
-
-    IpcSignlangDetStateMonitor(const IpcSignlangDetStateMonitor&) = delete;
-    auto operator=(const IpcSignlangDetStateMonitor&) -> IpcSignlangDetStateMonitor& = delete;
-    IpcSignlangDetStateMonitor(IpcSignlangDetStateMonitor&&) = delete;
-    auto operator=(IpcSignlangDetStateMonitor&&) -> IpcSignlangDetStateMonitor& = delete;
-
-    auto is_enabled() const -> bool;
-
-    void wait_for_state_change_blocking();
-
-    auto try_wait_for_state_change() -> bool;
-
-  private:
-    static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
-    static auto create_listener(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
-        -> iox2::Listener<iox2::ServiceType::Ipc>;
-    static auto open_blackboard_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
-        -> iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey>;
-    static auto create_reader(
-        const iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey>& service)
-        -> iox2::Reader<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey>;
-
-    auto read_state_from_blackboard() -> signlang::state_machine::AppState;
-
-    iox2::Node<iox2::ServiceType::Ipc> node_;
-    iox2::Listener<iox2::ServiceType::Ipc> listener_;
-    iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey> blackboard_service_;
-    iox2::Reader<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey> reader_;
-    signlang::state_machine::AppState cached_state_;
   };
 
   template <typename Handler>

@@ -49,8 +49,8 @@ video_capture          → video_frontend → handpose_det
 speech_asr_result      ← speech_asr
 handpose_result        ← handpose_det → signlang_det
 signlang_result        ← signlang_det
-app_state_event        ↔ state_machine → speech_asr, handpose_det, signlang_det
-app_state_blackboard   ↔ state_machine → speech_asr, handpose_det, signlang_det
+app_state_event        ↔ state_machine
+app_state_blackboard   ↔ state_machine
 app_state_control      ↔ state_machine ← env_sound_det
 signlang_prototype_control ↔ signlang_manager → signlang_det
 audio_source_localization ↔ audio_frontend (sound source localization blackboard)
@@ -108,8 +108,6 @@ Becomes:
 ```bash
 bin/speech_asr --input-service audio_capture \
                --output-service speech_asr_result \
-               --state-event-service app_state_event \
-               --state-blackboard-service app_state_blackboard \
                --language zh \
                --window-ms 15000 \
                --npu-core 1

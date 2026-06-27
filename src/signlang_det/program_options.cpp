@@ -41,10 +41,6 @@ namespace signlang::signlang_det {
     options.add_options()("i,input-service", "Input handpose iceoryx2 service name", cxxopts::value<std::string>())(
         "o,output-service", "Output signlang result iceoryx2 service name", cxxopts::value<std::string>())(
         "prototype-control-service", "iceoryx2 request-response service for prototype reload control",
-        cxxopts::value<std::string>())("state-event-service",
-                                       "iceoryx2 event service name for global app state change notifications",
-                                       cxxopts::value<std::string>())(
-        "state-blackboard-service", "iceoryx2 blackboard service name for global app state storage",
         cxxopts::value<std::string>())("m,model", "RKNN BiLSTM encoder model path",
                                        cxxopts::value<std::string>()->default_value(kDefaultModelPath))(
         "prototypes", "Gesture prototype SQLite database file",
@@ -79,14 +75,6 @@ namespace signlang::signlang_det {
 
     if (parsed_options.count("input-service") == 0 || parsed_options.count("output-service") == 0) {
       throw std::runtime_error("Options --input-service and --output-service are required.\n\n" + options.help());
-    }
-
-    const auto has_state_event_service = parsed_options.count("state-event-service") != 0;
-    const auto has_state_blackboard_service = parsed_options.count("state-blackboard-service") != 0;
-    if (has_state_event_service != has_state_blackboard_service) {
-      throw std::runtime_error("Options --state-event-service and --state-blackboard-service must be provided "
-                               "together.\n\n" +
-                               options.help());
     }
 
     const auto sequence_length = parsed_options["sequence-length"].as<std::uint32_t>();
@@ -139,12 +127,6 @@ namespace signlang::signlang_det {
         .output_service_name = parsed_options["output-service"].as<std::string>(),
         .prototype_control_service_name = parsed_options.count("prototype-control-service") != 0
             ? std::optional<std::string>{parsed_options["prototype-control-service"].as<std::string>()}
-            : std::nullopt,
-        .state_event_service_name = has_state_event_service
-            ? std::optional<std::string>{parsed_options["state-event-service"].as<std::string>()}
-            : std::nullopt,
-        .state_blackboard_service_name = has_state_blackboard_service
-            ? std::optional<std::string>{parsed_options["state-blackboard-service"].as<std::string>()}
             : std::nullopt,
         .model_path = parsed_options["model"].as<std::string>(),
         .prototypes_path = parsed_options["prototypes"].as<std::string>(),
