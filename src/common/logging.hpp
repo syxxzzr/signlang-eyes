@@ -24,7 +24,8 @@ namespace signlang::logging {
     std::uint64_t rotate_size = kDefaultRotateSize;
   };
 
-  inline void initialize(const Options& options = {}, std::uint64_t retain_files = kDefaultRetainFiles) {
+  inline void initialize(const Options& options = {}, std::uint64_t retain_files = kDefaultRetainFiles,
+                         const std::string& module_name = "signlang") {
     using SinkPtr = spdlog::sink_ptr;
 
     std::vector<SinkPtr> sinks;
@@ -43,10 +44,11 @@ namespace signlang::logging {
           static_cast<std::size_t>(max_rotated_files)));
     }
 
-    auto logger = std::make_shared<spdlog::logger>("signlang", sinks.begin(), sinks.end());
+    auto logger =
+        std::make_shared<spdlog::logger>(module_name.empty() ? "signlang" : module_name, sinks.begin(), sinks.end());
     logger->set_level(spdlog::level::info);
     logger->flush_on(spdlog::level::info);
-    logger->set_pattern("[%Y-%m-%dT%H:%M:%S.%e%z] [%l] %v");
+    logger->set_pattern("[%Y-%m-%dT%H:%M:%S.%e%z] [%l] [%n] %v");
     spdlog::set_default_logger(std::move(logger));
   }
 

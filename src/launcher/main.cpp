@@ -543,7 +543,7 @@ auto main(int argc, char** argv) -> int {
   using signlang::launcher::ProgramOptions;
   using signlang::launcher::ProgramUsage;
 
-  signlang::logging::initialize();
+  signlang::logging::initialize({}, signlang::logging::kDefaultRetainFiles, "launcher");
 
   try {
     const auto parse_result = parse_program_options(argc, argv);
@@ -575,7 +575,7 @@ auto main(int argc, char** argv) -> int {
             .log_file = log_path_for(start_timestamp, "launcher"),
             .rotate_size = logging_config.rotate_size,
         },
-        logging_config.retain_files);
+        logging_config.retain_files, "launcher");
     cleanup_old_log_files(logging_config.retain_files);
 
     spdlog::info("[launcher] loaded config: {}", config_path.string());

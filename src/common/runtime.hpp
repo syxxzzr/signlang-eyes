@@ -64,9 +64,18 @@ namespace signlang::runtime {
 
   inline void enter_runtime_root() { std::filesystem::current_path(runtime_root()); }
 
+  inline auto module_name_from_argv(int argc, char** argv) -> std::string {
+    if (argc <= 0 || argv == nullptr || argv[0] == nullptr || std::string{argv[0]}.empty()) {
+      return "signlang";
+    }
+
+    return std::filesystem::path{argv[0]}.filename().string();
+  }
+
   template <typename ParseOptions, typename RunModule>
   auto run_module(int argc, char** argv, ParseOptions&& parse_options, RunModule&& run_module) -> int {
-    signlang::logging::initialize();
+    const auto module_name = module_name_from_argv(argc, argv);
+    signlang::logging::initialize({}, signlang::logging::kDefaultRetainFiles, module_name);
 
     try {
       auto parse_result = std::forward<ParseOptions>(parse_options)(argc, argv);
@@ -80,7 +89,7 @@ namespace signlang::runtime {
               std::cout << result.text << '\n';
             } else {
               static_assert(detail::RuntimeOptions<Result>, "Runtime options must expose a logging field");
-              signlang::logging::initialize(result.logging);
+              signlang::logging::initialize(result.logging, signlang::logging::kDefaultRetainFiles, module_name);
               install_shutdown_signal_handlers();
               exit_code = std::forward<RunModule>(run_module)(result);
             }
