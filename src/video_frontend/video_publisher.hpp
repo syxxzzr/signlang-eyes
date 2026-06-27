@@ -25,14 +25,20 @@ namespace signlang::video_frontend {
 
     void publish(const CapturedVideoFrame& captured_frame, const VideoProcessor& video_processor, std::uint32_t fps,
                  std::uint64_t sequence_number);
+    auto has_subscribers() const -> bool;
 
   private:
+    using VideoService =
+        iox2::PortFactoryPublishSubscribe<iox2::ServiceType::Ipc, iox2::bb::Slice<std::uint8_t>, VideoFrameMetadata>;
+
     static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
-    static auto create_publisher(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name,
-                                 std::uint32_t max_payload_size_bytes)
+    static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+        -> VideoService;
+    static auto create_publisher(const VideoService& service, std::uint32_t max_payload_size_bytes)
         -> iox2::Publisher<iox2::ServiceType::Ipc, iox2::bb::Slice<std::uint8_t>, VideoFrameMetadata>;
 
     iox2::Node<iox2::ServiceType::Ipc> node_;
+    VideoService service_;
     iox2::Publisher<iox2::ServiceType::Ipc, iox2::bb::Slice<std::uint8_t>, VideoFrameMetadata> publisher_;
     std::uint32_t max_payload_size_bytes_;
   };

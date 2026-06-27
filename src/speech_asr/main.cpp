@@ -88,6 +88,7 @@ auto main(int argc, char** argv) -> int {
 
     AudioRingBuffer audio_buffer{ring_capacity_samples(window_sample_count, hop_sample_count), kWhisperSampleRateHz};
     std::atomic_bool should_stop{false};
+    std::atomic_bool downstream_active{false};
     std::exception_ptr worker_error = nullptr;
     std::mutex worker_error_mutex;
 
@@ -104,11 +105,22 @@ auto main(int argc, char** argv) -> int {
 
     std::thread receiver_thread{[&] {
       try {
-        IpcAudioSubscriber audio_subscriber{options.audio_service_name, options.subscriber_buffer_size};
+        auto audio_subscriber = std::optional<IpcAudioSubscriber>{};
 
-        while (!should_stop.load() && audio_subscriber.wait_for_work()) {
-          if (!should_stop.load()) {
-            audio_subscriber.receive_available(audio_buffer);
+        while (!should_stop.load()) {
+          if (!downstream_active.load()) {
+            audio_subscriber.reset();
+            audio_buffer.clear();
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            continue;
+          }
+
+          if (!audio_subscriber.has_value()) {
+            audio_subscriber.emplace(options.audio_service_name, options.subscriber_buffer_size);
+          }
+
+          if (audio_subscriber->wait_for_work() && !should_stop.load() && downstream_active.load()) {
+            audio_subscriber->receive_available(audio_buffer);
           }
         }
       } catch (...) {
@@ -138,8 +150,21 @@ auto main(int argc, char** argv) -> int {
         std::optional<std::uint64_t> next_window_start_sample;
         std::uint64_t result_sequence_number = 0;
 
-        while (audio_buffer.wait_for_window(next_window_start_sample, window_sample_count, hop_sample_count,
+        while (!should_stop.load()) {
+          const auto has_downstream = result_publisher.has_subscribers();
+          downstream_active.store(has_downstream);
+          if (!has_downstream) {
+            audio_buffer.clear();
+            next_window_start_sample = std::nullopt;
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            continue;
+          }
+
+          if (!audio_buffer.wait_for_window(next_window_start_sample, window_sample_count, hop_sample_count,
                                             should_stop, audio_window)) {
+            break;
+          }
+
           poll_gate();
 
           if (gate_enabled()) {

@@ -1,5 +1,7 @@
 #include "iceoryx_gateway.hpp"
 
+#include "common/ipc_utils.hpp"
+
 #include <stdexcept>
 #include <utility>
 
@@ -63,9 +65,8 @@ namespace signlang::signlang_det {
     return std::move(node_result.value());
   }
 
-  auto IpcSignlangPublisher::create_publisher(const iox2::Node<iox2::ServiceType::Ipc>& node,
-                                              const std::string& service_name)
-      -> iox2::Publisher<iox2::ServiceType::Ipc, SignlangResult, void> {
+  auto IpcSignlangPublisher::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                            const std::string& service_name) -> ResultService {
     auto service_result = node.service_builder(service_name_from_string(service_name))
                               .publish_subscribe<SignlangResult>()
                               .open_or_create();
@@ -73,9 +74,12 @@ namespace signlang::signlang_det {
     if (!service_result.has_value()) {
       throw std::runtime_error("Failed to open signlang result service: " + service_name);
     }
+    return std::move(service_result.value());
+  }
 
-    auto publisher_result = service_result.value().publisher_builder().create();
-
+  auto IpcSignlangPublisher::create_publisher(const ResultService& service)
+      -> iox2::Publisher<iox2::ServiceType::Ipc, SignlangResult, void> {
+    auto publisher_result = service.publisher_builder().create();
     if (!publisher_result.has_value()) {
       throw std::runtime_error("Failed to create signlang result publisher");
     }
@@ -84,7 +88,9 @@ namespace signlang::signlang_det {
   }
 
   IpcSignlangPublisher::IpcSignlangPublisher(const std::string& service_name) :
-      node_(create_node()), publisher_(create_publisher(node_, service_name)) {}
+      node_(create_node()), service_(create_service(node_, service_name)), publisher_(create_publisher(service_)) {}
+
+  auto IpcSignlangPublisher::has_subscribers() const -> bool { return signlang::common::ipc::has_subscribers(service_); }
 
   void IpcSignlangPublisher::publish(const SignlangResult& result) {
     auto loan_result = publisher_.loan_uninit();

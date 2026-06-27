@@ -1,6 +1,7 @@
 #include "audio_publisher.hpp"
 
 #include "audio_processor.hpp"
+#include "common/ipc_utils.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -21,7 +22,9 @@ namespace signlang::audio_frontend {
   } // namespace
 
   AudioPublisher::AudioPublisher(const std::string& service_name) :
-      node_{create_node()}, publisher_{create_publisher(node_, service_name)} {}
+      node_{create_node()}, service_{create_service(node_, service_name)}, publisher_{create_publisher(service_)} {}
+
+  auto AudioPublisher::has_subscribers() const -> bool { return signlang::common::ipc::has_subscribers(service_); }
 
   void AudioPublisher::publish(const std::vector<std::int16_t>& input_samples, AudioProcessor& audio_processor,
                                std::uint64_t sequence_number) {
@@ -63,21 +66,20 @@ namespace signlang::audio_frontend {
     return std::move(node.value());
   }
 
-  auto AudioPublisher::create_publisher(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
-      -> iox2::Publisher<iox2::ServiceType::Ipc, AudioFrame, void> {
-    const auto parsed_service_name = iox2::ServiceName::create(service_name.c_str());
-    if (!parsed_service_name.has_value()) {
-      throw std::runtime_error("Invalid iceoryx2 service name: " + service_name);
-    }
-
-    auto service = node.service_builder(parsed_service_name.value()).publish_subscribe<AudioFrame>().open_or_create();
+  auto AudioPublisher::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+      -> AudioService {
+    auto service =
+        node.service_builder(signlang::common::ipc::service_name_from_string(service_name)).publish_subscribe<AudioFrame>().open_or_create();
     if (!service.has_value()) {
       throw std::runtime_error("Failed to open or create iceoryx2 service: " + service_name);
     }
+    return std::move(service.value());
+  }
 
-    auto publisher = service.value().publisher_builder().create();
+  auto AudioPublisher::create_publisher(const AudioService& service) -> iox2::Publisher<iox2::ServiceType::Ipc, AudioFrame, void> {
+    auto publisher = service.publisher_builder().create();
     if (!publisher.has_value()) {
-      throw std::runtime_error("Failed to create iceoryx2 publisher for service: " + service_name);
+      throw std::runtime_error("Failed to create iceoryx2 audio publisher");
     }
 
     return std::move(publisher.value());

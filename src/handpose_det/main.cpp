@@ -40,10 +40,17 @@ auto main(int argc, char** argv) -> int {
 
     std::uint64_t sequence_number = 0;
     std::array<HandPoseDetection, 2> detection_buffer{};
-    while (!signlang::runtime::shutdown_requested() && transport.wait_for_work()) {
+    while (!signlang::runtime::shutdown_requested()) {
       poll_gate();
 
+      if (!transport.has_subscribers()) {
+        transport.detach_upstream();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        continue;
+      }
+
       if (!gate_enabled()) {
+        transport.detach_upstream();
         // Poll for state change with stop check to avoid hang on shutdown
         while (!signlang::runtime::shutdown_requested() && !gate_enabled()) {
           poll_gate();
@@ -54,6 +61,11 @@ auto main(int argc, char** argv) -> int {
         if (signlang::runtime::shutdown_requested()) {
           break;
         }
+        continue;
+      }
+
+      transport.ensure_upstream_attached();
+      if (!transport.wait_for_work()) {
         continue;
       }
 

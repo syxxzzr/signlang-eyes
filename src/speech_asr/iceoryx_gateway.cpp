@@ -1,5 +1,7 @@
 #include "iceoryx_gateway.hpp"
 
+#include "common/ipc_utils.hpp"
+
 #include <chrono>
 #include <new>
 #include <stdexcept>
@@ -85,7 +87,9 @@ namespace signlang::speech_asr {
   }
 
   IpcResultPublisher::IpcResultPublisher(const std::string& service_name) :
-      node_{create_node()}, publisher_{create_publisher(node_, service_name)} {}
+      node_{create_node()}, service_{create_service(node_, service_name)}, publisher_{create_publisher(service_)} {}
+
+  auto IpcResultPublisher::has_subscribers() const -> bool { return signlang::common::ipc::has_subscribers(service_); }
 
   void IpcResultPublisher::publish(const SpeechAsrResult& result) {
     auto loan_result = publisher_.loan_uninit();
@@ -113,19 +117,22 @@ namespace signlang::speech_asr {
     return std::move(node.value());
   }
 
-  auto IpcResultPublisher::create_publisher(const iox2::Node<iox2::ServiceType::Ipc>& node,
-                                            const std::string& service_name)
-      -> iox2::Publisher<iox2::ServiceType::Ipc, SpeechAsrResult, void> {
-    auto service = node.service_builder(service_name_from_string(service_name))
+  auto IpcResultPublisher::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                          const std::string& service_name) -> ResultService {
+    auto service = node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
                        .publish_subscribe<SpeechAsrResult>()
                        .open_or_create();
     if (!service.has_value()) {
       throw std::runtime_error("Failed to open or create iceoryx2 speech ASR result service: " + service_name);
     }
+    return std::move(service.value());
+  }
 
-    auto publisher = service.value().publisher_builder().create();
+  auto IpcResultPublisher::create_publisher(const ResultService& service)
+      -> iox2::Publisher<iox2::ServiceType::Ipc, SpeechAsrResult, void> {
+    auto publisher = service.publisher_builder().create();
     if (!publisher.has_value()) {
-      throw std::runtime_error("Failed to create iceoryx2 speech ASR result publisher for service: " + service_name);
+      throw std::runtime_error("Failed to create iceoryx2 speech ASR result publisher");
     }
 
     return std::move(publisher.value());

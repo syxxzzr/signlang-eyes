@@ -10,6 +10,7 @@
 #include <chrono>
 #include <memory>
 #include <stdexcept>
+#include <thread>
 
 namespace {
 
@@ -72,6 +73,11 @@ auto main(int argc, char** argv) -> int {
 
     std::uint64_t sequence_number = 0;
     while (!signlang::runtime::shutdown_requested()) {
+      if (!publisher.has_subscribers()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        continue;
+      }
+
       const auto& input_samples = capture_device.capture_samples();
       const auto current_sequence_number = sequence_number++;
       if (sound_source_blackboard != nullptr) {

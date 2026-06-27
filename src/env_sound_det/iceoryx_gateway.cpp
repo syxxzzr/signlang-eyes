@@ -1,5 +1,7 @@
 #include "iceoryx_gateway.hpp"
 
+#include "common/ipc_utils.hpp"
+
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -94,6 +96,8 @@ namespace signlang::env_sound_det {
 
     (void)client_.send_copy(request);
   }
+
+  auto IpcStateControlClient::has_server() const -> bool { return signlang::common::ipc::has_servers(service_); }
 
   auto IpcStateControlClient::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);

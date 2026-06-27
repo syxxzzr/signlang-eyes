@@ -38,22 +38,41 @@ auto main(int argc, char** argv) -> int {
     }};
     bluetooth.start([&manager](const auto& request) { return manager.handle_packet_bytes(request); });
 
-    auto subscriber = IpcHandposeSubscriber{options.input_service_name, options.subscriber_buffer_size};
-    auto signlang_subscriber =
-        IpcSignlangResultSubscriber{options.signlang_result_service_name, options.subscriber_buffer_size};
+    auto subscriber = std::optional<IpcHandposeSubscriber>{};
+    auto signlang_subscriber = std::optional<IpcSignlangResultSubscriber>{};
     auto next_stream_time_ns = std::uint64_t{0};
     auto pending_signlang_result = std::optional<SignlangResult>{};
 
-    while (!signlang::runtime::shutdown_requested() && subscriber.wait_for_work()) {
-      signlang_subscriber.receive_latest([&](const auto& result) {
+    while (!signlang::runtime::shutdown_requested()) {
+      const auto stream_active = manager.streaming_enabled() && bluetooth.notifications_enabled();
+      if (!stream_active) {
+        subscriber.reset();
+        signlang_subscriber.reset();
+        pending_signlang_result.reset();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        continue;
+      }
+
+      if (!subscriber.has_value()) {
+        subscriber.emplace(options.input_service_name, options.subscriber_buffer_size);
+      }
+      if (!signlang_subscriber.has_value()) {
+        signlang_subscriber.emplace(options.signlang_result_service_name, options.subscriber_buffer_size);
+      }
+
+      signlang_subscriber->receive_latest([&](const auto& result) {
         if (result.recognized) {
           pending_signlang_result = result;
         }
       });
 
-      subscriber.receive_latest([&](const auto& metadata, const auto* detections, auto count) {
+      if (!subscriber->wait_for_work()) {
+        continue;
+      }
+
+      subscriber->receive_latest([&](const auto& metadata, const auto* detections, auto count) {
         const auto now_ns = steady_timestamp_ns();
-        if (!manager.streaming_enabled() || !bluetooth.notifications_enabled() || now_ns < next_stream_time_ns) {
+        if (now_ns < next_stream_time_ns) {
           return;
         }
 

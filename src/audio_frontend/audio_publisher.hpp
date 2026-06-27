@@ -24,13 +24,18 @@ namespace signlang::audio_frontend {
 
     void publish(const std::vector<std::int16_t>& input_samples, AudioProcessor& audio_processor,
                  std::uint64_t sequence_number);
+    auto has_subscribers() const -> bool;
 
   private:
+    using AudioService = iox2::PortFactoryPublishSubscribe<iox2::ServiceType::Ipc, AudioFrame, void>;
+
     static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
-    static auto create_publisher(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
-        -> iox2::Publisher<iox2::ServiceType::Ipc, AudioFrame, void>;
+    static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+        -> AudioService;
+    static auto create_publisher(const AudioService& service) -> iox2::Publisher<iox2::ServiceType::Ipc, AudioFrame, void>;
 
     iox2::Node<iox2::ServiceType::Ipc> node_;
+    AudioService service_;
     iox2::Publisher<iox2::ServiceType::Ipc, AudioFrame, void> publisher_;
   };
 

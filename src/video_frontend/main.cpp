@@ -5,7 +5,9 @@
 #include "video_processor.hpp"
 #include "video_publisher.hpp"
 
+#include <chrono>
 #include <stdexcept>
+#include <thread>
 
 namespace {
 
@@ -54,6 +56,11 @@ auto main(int argc, char** argv) -> int {
 
     std::uint64_t sequence_number = 0;
     while (!signlang::runtime::shutdown_requested()) {
+      if (!publisher.has_subscribers()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        continue;
+      }
+
       const auto frame = capture_device.capture_frame();
       publisher.publish(frame, video_processor, capture_device.fps(), sequence_number++);
       capture_device.release_frame();

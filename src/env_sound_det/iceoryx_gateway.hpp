@@ -52,6 +52,7 @@ namespace signlang::env_sound_det {
     auto operator=(IpcStateControlClient&&) -> IpcStateControlClient& = delete;
 
     void enter_dangerous_sound_state() const;
+    auto has_server() const -> bool;
 
   private:
     using StateControlService =

@@ -60,16 +60,28 @@ namespace {
   }
 
   void receiver_loop(const signlang::signlang_det::ProgramOptions& options,
-                     signlang::signlang_det::KeypointRingBuffer& ring_buffer, const std::atomic<bool>& should_stop) {
+                     signlang::signlang_det::KeypointRingBuffer& ring_buffer, const std::atomic<bool>& should_stop,
+                     const std::atomic<bool>& downstream_active) {
     using signlang::signlang_det::FeatureExtractor;
     using signlang::signlang_det::IpcHandposeSubscriber;
 
-    auto subscriber = IpcHandposeSubscriber{options.input_service_name, options.subscriber_buffer_size};
+    auto subscriber = std::optional<IpcHandposeSubscriber>{};
     auto extractor = FeatureExtractor{options.min_keypoint_confidence};
 
-    while (!should_stop && subscriber.wait_for_work()) {
-      if (!should_stop) {
-        subscriber.receive_latest([&](const auto& metadata, const auto* detections, auto count) {
+    while (!should_stop) {
+      if (!downstream_active.load()) {
+        subscriber.reset();
+        ring_buffer.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        continue;
+      }
+
+      if (!subscriber.has_value()) {
+        subscriber.emplace(options.input_service_name, options.subscriber_buffer_size);
+      }
+
+      if (subscriber->wait_for_work() && !should_stop && downstream_active.load()) {
+        subscriber->receive_latest([&](const auto& metadata, const auto* detections, auto count) {
           if (auto feature = extractor.extract(metadata, detections, count)) {
             ring_buffer.push(*feature);
           }
@@ -79,7 +91,8 @@ namespace {
   }
 
   void inference_loop(const signlang::signlang_det::ProgramOptions& options,
-                      signlang::signlang_det::KeypointRingBuffer& ring_buffer, const std::atomic<bool>& should_stop) {
+                      signlang::signlang_det::KeypointRingBuffer& ring_buffer, const std::atomic<bool>& should_stop,
+                      std::atomic<bool>& downstream_active) {
     using signlang::signlang_det::IpcPrototypeControlServer;
     using signlang::signlang_det::IpcSignlangDetStateMonitor;
     using signlang::signlang_det::IpcSignlangPublisher;
@@ -157,6 +170,17 @@ namespace {
       if (prototype_control_server.has_value()) {
         prototype_control_server->process_pending_requests(control_response);
       }
+
+      const auto has_downstream = publisher.has_subscribers();
+      if (!has_downstream) {
+        ring_buffer.clear();
+        downstream_active.store(false);
+        next_window_end_seq = hop_frames;
+        last_published_gesture_id.reset();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        continue;
+      }
+      downstream_active.store(true);
 
       if (!gate_enabled()) {
         // Poll for state change with stop check to avoid hang on shutdown
@@ -240,6 +264,7 @@ auto main(int argc, char** argv) -> int {
     const auto buffer_capacity = compute_buffer_capacity(options.sequence_length, options.overlap_ratio);
     auto ring_buffer = KeypointRingBuffer{buffer_capacity};
     auto should_stop = std::atomic<bool>{false};
+    auto downstream_active = std::atomic<bool>{false};
     auto worker_error = std::exception_ptr{nullptr};
     auto worker_error_mutex = std::mutex{};
 
@@ -256,7 +281,7 @@ auto main(int argc, char** argv) -> int {
 
     auto receiver_thread = std::thread{[&]() {
       try {
-        receiver_loop(options, ring_buffer, should_stop);
+        receiver_loop(options, ring_buffer, should_stop, downstream_active);
       } catch (...) {
         record_worker_error(std::current_exception());
       }
@@ -264,7 +289,7 @@ auto main(int argc, char** argv) -> int {
 
     auto inference_thread = std::thread{[&]() {
       try {
-        inference_loop(options, ring_buffer, should_stop);
+        inference_loop(options, ring_buffer, should_stop, downstream_active);
       } catch (...) {
         record_worker_error(std::current_exception());
       }

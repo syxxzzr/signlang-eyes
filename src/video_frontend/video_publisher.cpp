@@ -1,5 +1,6 @@
 #include "video_publisher.hpp"
 
+#include "common/ipc_utils.hpp"
 #include "v4l2_capture_device.hpp"
 #include "video_processor.hpp"
 
@@ -21,8 +22,11 @@ namespace signlang::video_frontend {
   } // namespace
 
   VideoPublisher::VideoPublisher(const std::string& service_name, std::uint32_t max_payload_size_bytes) :
-      node_{create_node()}, publisher_{create_publisher(node_, service_name, max_payload_size_bytes)},
+      node_{create_node()}, service_{create_service(node_, service_name)},
+      publisher_{create_publisher(service_, max_payload_size_bytes)},
       max_payload_size_bytes_{max_payload_size_bytes} {}
+
+  auto VideoPublisher::has_subscribers() const -> bool { return signlang::common::ipc::has_subscribers(service_); }
 
   void VideoPublisher::publish(const CapturedVideoFrame& captured_frame, const VideoProcessor& video_processor,
                                std::uint32_t fps, std::uint64_t sequence_number) {
@@ -72,29 +76,26 @@ namespace signlang::video_frontend {
     return std::move(node.value());
   }
 
-  auto VideoPublisher::create_publisher(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name,
-                                        std::uint32_t max_payload_size_bytes)
-      -> iox2::Publisher<iox2::ServiceType::Ipc, iox2::bb::Slice<std::uint8_t>, VideoFrameMetadata> {
-    const auto parsed_service_name = iox2::ServiceName::create(service_name.c_str());
-    if (!parsed_service_name.has_value()) {
-      throw std::runtime_error("Invalid iceoryx2 service name: " + service_name);
-    }
-
-    auto service = node.service_builder(parsed_service_name.value())
+  auto VideoPublisher::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+      -> VideoService {
+    auto service = node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
                        .publish_subscribe<iox2::bb::Slice<std::uint8_t>>()
                        .user_header<VideoFrameMetadata>()
                        .open_or_create();
     if (!service.has_value()) {
       throw std::runtime_error("Failed to open or create iceoryx2 service: " + service_name);
     }
+    return std::move(service.value());
+  }
 
-    auto publisher = service.value()
-                         .publisher_builder()
+  auto VideoPublisher::create_publisher(const VideoService& service, std::uint32_t max_payload_size_bytes)
+      -> iox2::Publisher<iox2::ServiceType::Ipc, iox2::bb::Slice<std::uint8_t>, VideoFrameMetadata> {
+    auto publisher = service.publisher_builder()
                          .initial_max_slice_len(max_payload_size_bytes)
                          .allocation_strategy(iox2::AllocationStrategy::Static)
                          .create();
     if (!publisher.has_value()) {
-      throw std::runtime_error("Failed to create iceoryx2 publisher for service: " + service_name);
+      throw std::runtime_error("Failed to create iceoryx2 video publisher");
     }
 
     return std::move(publisher.value());

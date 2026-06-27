@@ -50,13 +50,19 @@ namespace signlang::signlang_det {
     auto operator=(IpcSignlangPublisher&&) -> IpcSignlangPublisher& = delete;
 
     void publish(const SignlangResult& result);
+    auto has_subscribers() const -> bool;
 
   private:
+    using ResultService = iox2::PortFactoryPublishSubscribe<iox2::ServiceType::Ipc, SignlangResult, void>;
+
     static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
-    static auto create_publisher(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+    static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+        -> ResultService;
+    static auto create_publisher(const ResultService& service)
         -> iox2::Publisher<iox2::ServiceType::Ipc, SignlangResult, void>;
 
     iox2::Node<iox2::ServiceType::Ipc> node_;
+    ResultService service_;
     iox2::Publisher<iox2::ServiceType::Ipc, SignlangResult, void> publisher_;
     std::uint64_t sequence_number_{0};
   };
