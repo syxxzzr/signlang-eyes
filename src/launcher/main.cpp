@@ -1,5 +1,6 @@
 #include "program_options.hpp"
 
+#include "audio_frontend/audio_format.hpp"
 #include "common/runtime.hpp"
 #include "spdlog/spdlog.h"
 #include "toml.hpp"
@@ -190,6 +191,29 @@ namespace {
       return node->get();
     }
     return std::nullopt;
+  }
+
+  void warn_audio_downstream_config(const toml::table& config) {
+    const auto* audio_table = config["audio_frontend"].as_table();
+    if (audio_table == nullptr) {
+      return;
+    }
+
+    const auto publish_rate = opt_int(*audio_table, "publish_rate");
+    if (publish_rate.has_value() &&
+        *publish_rate != static_cast<std::int64_t>(signlang::audio_frontend::kDefaultSampleRateHz)) {
+      spdlog::warn("[audio_frontend].publish_rate={} may starve speech_asr/env_sound_det; downstream audio "
+                   "buffers currently accept only {} Hz",
+                   *publish_rate, signlang::audio_frontend::kDefaultSampleRateHz);
+    }
+
+    const auto publish_channels = opt_int(*audio_table, "publish_channels");
+    if (publish_channels.has_value() &&
+        *publish_channels != static_cast<std::int64_t>(signlang::audio_frontend::kDefaultChannelCount)) {
+      spdlog::warn("[audio_frontend].publish_channels={} may starve speech_asr/env_sound_det; downstream audio "
+                   "buffers currently accept only {} channel(s)",
+                   *publish_channels, signlang::audio_frontend::kDefaultChannelCount);
+    }
   }
 
   void add_opt_str(std::vector<std::string>& args, const char* flag, const std::optional<std::string>& val) {
@@ -706,8 +730,9 @@ auto main(int argc, char** argv) -> int {
 
     spdlog::info("loaded config: {}", config_path.string());
 
-    // Warn about any IPC service keys in the TOML
-    warn_ipc_keys_in_config(config);
+	    // Warn about any IPC service keys in the TOML
+	    warn_ipc_keys_in_config(config);
+	    warn_audio_downstream_config(config);
 
     signlang::runtime::install_shutdown_signal_handlers();
     std::signal(SIGCHLD, SIG_DFL);
