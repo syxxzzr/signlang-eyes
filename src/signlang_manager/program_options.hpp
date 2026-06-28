@@ -19,6 +19,7 @@ namespace signlang::signlang_manager {
   constexpr auto kDefaultSubscriberBufferSize = std::uint64_t{2};
   constexpr auto kDefaultStreamFps = std::uint32_t{30};
   constexpr auto kDefaultMaxNotifyPayload = std::uint32_t{180};
+  constexpr auto kDefaultMaxUploadBytes = std::uint32_t{8U * 1024U * 1024U};
   constexpr auto kDefaultUploadWindowOverlap = float{0.5F};
 
   struct ProgramOptions {
@@ -35,6 +36,7 @@ namespace signlang::signlang_manager {
     std::uint64_t subscriber_buffer_size;
     std::uint32_t stream_fps;
     std::uint32_t max_notify_payload;
+    std::uint32_t max_upload_bytes;
     rknn_core_mask npu_core_mask;
     bool enable_streaming_by_default;
     signlang::logging::Options logging;

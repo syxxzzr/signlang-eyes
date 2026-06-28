@@ -58,6 +58,8 @@ namespace signlang::signlang_manager {
         cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultStreamFps)))(
         "max-notify-payload", "Maximum BLE notification payload chunk size",
         cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultMaxNotifyPayload)))(
+        "max-upload-bytes", "Maximum BLE gesture upload size in bytes",
+        cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultMaxUploadBytes)))(
         "npu-core", "NPU core selection: auto,0,1,2,0_1,0_1_2,all",
         cxxopts::value<std::string>()->default_value("auto"))(
         "enable-streaming-by-default", "Start handpose streaming as soon as a BLE client subscribes")("h,help",
@@ -106,6 +108,11 @@ namespace signlang::signlang_manager {
       throw std::runtime_error("--max-notify-payload must be at least 20");
     }
 
+    const auto max_upload_bytes = parsed_options["max-upload-bytes"].as<std::uint32_t>();
+    if (max_upload_bytes == 0) {
+      throw std::runtime_error("--max-upload-bytes must be greater than 0");
+    }
+
     return ProgramOptions{
         .input_service_name = parsed_options["input-service"].as<std::string>(),
         .signlang_result_service_name = parsed_options["signlang-result-service"].as<std::string>(),
@@ -120,6 +127,7 @@ namespace signlang::signlang_manager {
         .subscriber_buffer_size = subscriber_buffer_size,
         .stream_fps = stream_fps,
         .max_notify_payload = max_notify_payload,
+        .max_upload_bytes = max_upload_bytes,
         .npu_core_mask = parse_npu_core_mask(parsed_options["npu-core"].as<std::string>()),
         .enable_streaming_by_default = parsed_options.count("enable-streaming-by-default") != 0,
         .logging = signlang::logging::parse_cli_options(parsed_options),

@@ -60,6 +60,7 @@ namespace signlang::signlang_manager {
     float min_keypoint_confidence_;
     float upload_window_overlap_;
     std::uint32_t stream_fps_;
+    std::uint32_t max_upload_bytes_;
     std::atomic_bool streaming_enabled_;
     std::optional<UploadSession> upload_;
   };

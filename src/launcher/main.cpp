@@ -600,6 +600,7 @@ static auto build_signlang_manager_args(const toml::table& cfg) -> std::vector<s
     add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
     add_opt_int(args, "--stream-fps", opt_int(*tbl, "stream_fps"));
     add_opt_int(args, "--max-notify-payload", opt_int(*tbl, "max_notify_payload"));
+    add_opt_int(args, "--max-upload-bytes", opt_int(*tbl, "max_upload_bytes"));
     add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
     add_opt_bool_true(args, "--enable-streaming-by-default", opt_bool(*tbl, "enable_streaming_by_default"));
   }
