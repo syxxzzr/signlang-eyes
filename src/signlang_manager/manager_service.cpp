@@ -5,8 +5,12 @@
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
+#include <utility>
 
 namespace signlang::signlang_manager {
   namespace {
@@ -17,6 +21,7 @@ namespace signlang::signlang_manager {
     constexpr auto kStatusInternalError = std::uint16_t{3};
     constexpr auto kStatusUnsupported = std::uint16_t{4};
     constexpr auto kStreamPayloadVersionWithSignlang = std::uint8_t{2};
+    constexpr auto kMaxRepresentativeSamples = std::size_t{3};
 
     void append_u8(std::vector<std::uint8_t>& out, std::uint8_t value) { out.push_back(value); }
 
@@ -100,6 +105,161 @@ namespace signlang::signlang_manager {
     auto fixed_cstr(const std::array<char, signlang_det::kMaxGestureNameLength>& value) -> std::string {
       const auto end = std::find(value.begin(), value.end(), '\0');
       return std::string{value.begin(), end};
+    }
+
+    auto frame_distance(const std::vector<float>& lhs, const std::vector<float>& rhs) -> float {
+      if (lhs.size() != rhs.size() || lhs.empty()) {
+        return std::numeric_limits<float>::infinity();
+      }
+
+      auto sum_sq_diff = 0.0F;
+      for (std::size_t i = 0; i < lhs.size(); ++i) {
+        const auto diff = lhs[i] - rhs[i];
+        sum_sq_diff += diff * diff;
+      }
+      return std::sqrt(sum_sq_diff / static_cast<float>(lhs.size()));
+    }
+
+    auto dtw_distance(const EncodedSequence& lhs, const EncodedSequence& rhs) -> float {
+      if (lhs.empty() || rhs.empty()) {
+        return std::numeric_limits<float>::infinity();
+      }
+
+      const auto lhs_length = lhs.size();
+      const auto rhs_length = rhs.size();
+      auto prev_cost = std::vector<float>(rhs_length + 1U, std::numeric_limits<float>::infinity());
+      auto prev_steps = std::vector<std::uint32_t>(rhs_length + 1U, 0);
+      prev_cost[0] = 0.0F;
+
+      for (std::size_t i = 1; i <= lhs_length; ++i) {
+        auto curr_cost = std::vector<float>(rhs_length + 1U, std::numeric_limits<float>::infinity());
+        auto curr_steps = std::vector<std::uint32_t>(rhs_length + 1U, 0);
+
+        for (std::size_t j = 1; j <= rhs_length; ++j) {
+          const auto candidates = std::array<std::pair<float, std::uint32_t>, 3>{{
+              {prev_cost[j], prev_steps[j]},
+              {curr_cost[j - 1U], curr_steps[j - 1U]},
+              {prev_cost[j - 1U], prev_steps[j - 1U]},
+          }};
+          const auto best = *std::min_element(candidates.begin(), candidates.end(),
+                                              [](const auto& left, const auto& right) {
+                                                return left.first < right.first;
+                                              });
+
+          curr_cost[j] = best.first + frame_distance(lhs[i - 1U], rhs[j - 1U]);
+          curr_steps[j] = best.second + 1U;
+        }
+
+        prev_cost = std::move(curr_cost);
+        prev_steps = std::move(curr_steps);
+      }
+
+      if (!std::isfinite(prev_cost[rhs_length]) || prev_steps[rhs_length] == 0) {
+        return std::numeric_limits<float>::infinity();
+      }
+      return prev_cost[rhs_length] / static_cast<float>(prev_steps[rhs_length]);
+    }
+
+    auto select_representative_samples(const std::vector<EncodedSequence>& samples, std::size_t max_samples)
+        -> std::vector<EncodedSequence> {
+      if (samples.size() <= max_samples) {
+        return samples;
+      }
+
+      const auto count = samples.size();
+      auto distances = std::vector<std::vector<float>>(count, std::vector<float>(count, 0.0F));
+      for (std::size_t i = 0; i < count; ++i) {
+        for (std::size_t j = i + 1U; j < count; ++j) {
+          const auto distance = dtw_distance(samples[i], samples[j]);
+          distances[i][j] = distance;
+          distances[j][i] = distance;
+        }
+      }
+
+      auto cluster_cost = [&](const std::vector<std::size_t>& medoids) {
+        auto cost = 0.0F;
+        for (std::size_t sample_index = 0; sample_index < count; ++sample_index) {
+          auto nearest = std::numeric_limits<float>::infinity();
+          for (const auto medoid : medoids) {
+            nearest = std::min(nearest, distances[sample_index][medoid]);
+          }
+          cost += nearest;
+        }
+        return cost;
+      };
+
+      auto medoids = std::vector<std::size_t>{};
+      while (medoids.size() < max_samples) {
+        auto best_index = std::size_t{0};
+        auto best_cost = std::numeric_limits<float>::infinity();
+        for (std::size_t candidate = 0; candidate < count; ++candidate) {
+          if (std::find(medoids.begin(), medoids.end(), candidate) != medoids.end()) {
+            continue;
+          }
+          auto trial = medoids;
+          trial.push_back(candidate);
+          const auto cost = cluster_cost(trial);
+          if (cost < best_cost) {
+            best_cost = cost;
+            best_index = candidate;
+          }
+        }
+        medoids.push_back(best_index);
+      }
+
+      for (auto iteration = 0; iteration < 4; ++iteration) {
+        auto clusters = std::vector<std::vector<std::size_t>>(medoids.size());
+        for (std::size_t sample_index = 0; sample_index < count; ++sample_index) {
+          auto best_cluster = std::size_t{0};
+          auto best_distance = std::numeric_limits<float>::infinity();
+          for (std::size_t medoid_index = 0; medoid_index < medoids.size(); ++medoid_index) {
+            const auto distance = distances[sample_index][medoids[medoid_index]];
+            if (distance < best_distance) {
+              best_distance = distance;
+              best_cluster = medoid_index;
+            }
+          }
+          clusters[best_cluster].push_back(sample_index);
+        }
+
+        auto changed = false;
+        for (std::size_t cluster_index = 0; cluster_index < clusters.size(); ++cluster_index) {
+          const auto& cluster = clusters[cluster_index];
+          if (cluster.empty()) {
+            continue;
+          }
+
+          auto best_member = medoids[cluster_index];
+          auto best_cost = std::numeric_limits<float>::infinity();
+          for (const auto candidate : cluster) {
+            auto cost = 0.0F;
+            for (const auto member : cluster) {
+              cost += distances[candidate][member];
+            }
+            if (cost < best_cost) {
+              best_cost = cost;
+              best_member = candidate;
+            }
+          }
+
+          if (best_member != medoids[cluster_index]) {
+            medoids[cluster_index] = best_member;
+            changed = true;
+          }
+        }
+
+        if (!changed) {
+          break;
+        }
+      }
+
+      std::sort(medoids.begin(), medoids.end());
+      auto representatives = std::vector<EncodedSequence>{};
+      representatives.reserve(medoids.size());
+      for (const auto medoid : medoids) {
+        representatives.push_back(samples[medoid]);
+      }
+      return representatives;
     }
 
     auto encode_stream_payload(const handpose_det::HandPoseFrameMetadata& metadata,
@@ -390,17 +550,23 @@ namespace signlang::signlang_manager {
 
     const auto hop = std::max<std::uint32_t>(
         1, static_cast<std::uint32_t>(static_cast<float>(sequence_length) * (1.0F - upload_window_overlap_)));
-    auto gesture_id = std::uint32_t{0};
-    auto replace_next = session.replace_existing;
+    auto uploaded_samples = std::vector<EncodedSequence>{};
     for (std::size_t start = 0; start + sequence_length <= features.size(); start += hop) {
       auto window = std::vector<FeatureVector>{features.begin() + static_cast<std::ptrdiff_t>(start),
                                                features.begin() + static_cast<std::ptrdiff_t>(start + sequence_length)};
-      const auto encoded = encoder_.encode(window);
-      gesture_id = database_.add_gesture_sample(session.gesture_name, encoded, replace_next);
-      replace_next = false;
+      uploaded_samples.push_back(encoder_.encode(window));
     }
 
-    spdlog::info("Stored uploaded gesture '{}' as id {}", session.gesture_name, gesture_id);
+    auto candidate_samples = session.replace_existing ? std::vector<EncodedSequence>{}
+                                                      : database_.load_gesture_samples(session.gesture_name);
+    const auto existing_sample_count = candidate_samples.size();
+    candidate_samples.insert(candidate_samples.end(), uploaded_samples.begin(), uploaded_samples.end());
+
+    const auto representative_samples = select_representative_samples(candidate_samples, kMaxRepresentativeSamples);
+    const auto gesture_id = database_.replace_gesture_samples(session.gesture_name, representative_samples);
+    spdlog::info("Stored uploaded gesture '{}' as id {}; uploaded_windows={}, existing_samples={}, stored_representatives={}",
+                 session.gesture_name, gesture_id, uploaded_samples.size(), existing_sample_count,
+                 representative_samples.size());
     return gesture_id;
   }
 

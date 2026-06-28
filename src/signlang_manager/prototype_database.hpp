@@ -21,8 +21,11 @@ namespace signlang::signlang_manager {
     void ensure_valid_empty_or_existing();
 
     auto list_gestures() const -> std::vector<GestureInfo>;
+    auto load_gesture_samples(const std::string& gesture_name) const -> std::vector<EncodedSequence>;
     auto add_gesture_sample(const std::string& gesture_name, const EncodedSequence& encoded_sample,
                             bool replace_existing) -> std::uint32_t;
+    auto replace_gesture_samples(const std::string& gesture_name, const std::vector<EncodedSequence>& samples)
+        -> std::uint32_t;
     auto delete_gesture(std::uint32_t gesture_id) -> bool;
     auto delete_gesture(const std::string& gesture_name) -> bool;
 
