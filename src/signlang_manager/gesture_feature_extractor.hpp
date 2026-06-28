@@ -30,9 +30,6 @@ namespace signlang::signlang_manager {
         -> std::vector<const handpose_det::HandPoseDetection*>;
     auto assign_hands_to_slots(const std::vector<const handpose_det::HandPoseDetection*>& hands)
         -> std::array<const handpose_det::HandPoseDetection*, kMaxHandCount>;
-    auto compute_hand_center(const handpose_det::HandPoseDetection& hand) const -> float;
-    auto compute_center_distance(const handpose_det::HandPoseDetection& current, const HandSlot& previous) const
-        -> float;
     auto extract_single_hand(const handpose_det::HandPoseDetection& hand, std::uint32_t hand_index,
                              bool sequence_continuous) -> HandFeatures;
     auto compute_bounding_box_scale(

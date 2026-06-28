@@ -21,7 +21,7 @@ The **handpose_det** module subscribes to RGB24 video frames, runs the MediaPipe
 
 ## Output Semantics
 
-The module publishes two hand slots by default. `--single-hand` switches recognition and output to one hand slot.
+The module publishes up to two valid hands by default. `--single-hand` limits output to one hand.
 
 **Detection pipeline:**
 1. Try tracking from previous frame ROIs using landmark model only
@@ -30,12 +30,11 @@ The module publishes two hand slots by default. `--single-hand` switches recogni
 4. For new detections: compute adaptive ROI from palm keypoints, run landmark model
 5. Filter by presence confidence; extract handedness classification
 6. Apply One Euro Filter temporal smoothing to all tracked keypoints
-7. Output the configured hand slots; zero-fill remaining slots with `present = false`
+7. Select the highest-confidence reliable left hand and right hand, then publish only those valid hands
 
 **Key properties:**
-- `HandPoseFrameMetadata::detection_count` and `payload_count` are always 1 in single-hand mode and 2 in dual-hand mode
-- Zero-filled slots have `present = false` in the detection structure
-- Consistent slot ordering (left-to-right) enables temporal hand tracking in downstream modules
+- `HandPoseFrameMetadata::detection_count` reports the actual valid hand count: 0, 1, or 2
+- Reliable handedness ordering is left hand first, then right hand; missing reliable sides are not published
 - Output keypoints: 21 landmarks per hand with `x`, `y`, `z` (relative depth), and `confidence`
 
 ## Command-Line Parameters
@@ -68,6 +67,7 @@ All module executables also accept `--log-file <path>` and `--log-rotate-size <b
 | `--euro-beta`            | `0.007` | `>= 0`   | One Euro Filter speed coefficient                    |
 | `--euro-d-cutoff`        | `1.0`   | `> 0`    | One Euro Filter derivative cutoff frequency (Hz)     |
 | `--handedness-threshold` | `0.5`   | `(0, 1)` | Threshold for left/right hand classification         |
+| `--swap-handedness`      | `false` | –        | Swap left/right handedness interpretation for mirrored cameras |
 | `--max-tracking-gap`     | `2`     | `>= 1`   | Max frame gap before tracking is considered lost     |
 | `--max-stale-frames`     | `5`     | `>= 1`   | Max frames before stale track slot is reclaimed      |
 | `--npu-core`             | `auto`                                          | auto,0,1,2,0_1,0_1_2,all | RK3588 NPU core mask                                 |

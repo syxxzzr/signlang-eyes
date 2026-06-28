@@ -7,6 +7,7 @@ set(HANDPOSE_DET_INSTALL_MODEL_DIR models/mediapipe)
 
 add_executable(signlang_eyes_handpose_det
         handpose_model.cpp
+        handpose_selection.cpp
         handpose_transport.cpp
         program_options.cpp
         main.cpp)

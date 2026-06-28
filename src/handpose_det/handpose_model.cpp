@@ -368,9 +368,10 @@ namespace signlang::handpose_det {
       large_hand_threshold_{options.large_hand_threshold}, boundary_margin_{options.boundary_margin},
       boundary_min_factor_{options.boundary_min_factor}, euro_min_cutoff_{options.euro_min_cutoff},
       euro_beta_{options.euro_beta}, euro_d_cutoff_{options.euro_d_cutoff},
-      handedness_threshold_{options.handedness_threshold}, max_tracking_gap_{options.max_tracking_gap},
-      max_stale_frames_{options.max_stale_frames}, hand_slots_{hand_slots}, model_width_{kPalmInputSize},
-      model_height_{kPalmInputSize}, source_dma_fd_{-1}, source_dma_data_{nullptr}, source_dma_capacity_{0} {
+      handedness_threshold_{options.handedness_threshold}, swap_handedness_{options.swap_handedness},
+      max_tracking_gap_{options.max_tracking_gap}, max_stale_frames_{options.max_stale_frames},
+      hand_slots_{hand_slots}, model_width_{kPalmInputSize}, model_height_{kPalmInputSize}, source_dma_fd_{-1},
+      source_dma_data_{nullptr}, source_dma_capacity_{0} {
     initialize_models(options);
     validate_models();
     build_palm_anchors();
@@ -526,9 +527,26 @@ namespace signlang::handpose_det {
       }
     }
 
+    auto handedness_candidates = std::vector<HandednessCandidate>{};
+    handedness_candidates.reserve(tracked_hands_.size());
+    for (std::size_t i = 0; i < tracked_hands_.size(); ++i) {
+      const auto& tracked = tracked_hands_[i];
+      if (tracked.last_seen_frame == current_frame_number_) {
+        handedness_candidates.push_back(HandednessCandidate{
+            .index = static_cast<std::uint32_t>(i),
+            .confidence = tracked.palm_confidence,
+            .handedness_score = tracked.handedness_score,
+        });
+      }
+    }
+
+    const auto selections =
+        select_handedness_detections(handedness_candidates, handedness_threshold_, swap_handedness_, hand_slots_);
+
     auto output_idx = std::uint32_t{0};
-    for (const auto& tracked : tracked_hands_) {
-      if (tracked.last_seen_frame == current_frame_number_ && output_idx < hand_slots_) {
+    for (const auto& selection : selections) {
+      if (selection.candidate_index < tracked_hands_.size() && output_idx < hand_slots_) {
+        const auto& tracked = tracked_hands_[selection.candidate_index];
         detections[output_idx] = HandPoseDetection{
             .box = tracked.roi,
             .keypoints = tracked.smoothed_keypoints,
@@ -536,14 +554,14 @@ namespace signlang::handpose_det {
             .presence_confidence = tracked.presence_confidence,
             .class_id = 0,
             .present = true,
-            .is_left_hand = tracked.is_left_hand,
+            .is_left_hand = selection.is_left_hand,
         };
         output_idx++;
       }
     }
 
     return InferenceResult{
-        .detection_count = hand_slots_,
+        .detection_count = output_idx,
         .image_width = metadata.output_width,
         .image_height = metadata.output_height,
         .model_width = palm_detector_->width(),
@@ -659,6 +677,7 @@ namespace signlang::handpose_det {
       };
       candidate.detection.confidence = score;
       candidate.detection.class_id = 0;
+      candidate.handedness_score = 0.5F;
 
       for (std::uint32_t k = 0; k < kPalmKeypointValueCount; k += 2) {
         candidate.palm_keypoints[k] =
@@ -695,7 +714,7 @@ namespace signlang::handpose_det {
                                         const std::uint8_t* payload, std::uint64_t payload_size,
                                         const CropTransform& transform,
                                         std::array<HandPoseKeypoint, kHandPoseKeypointCount>& out, float& out_presence,
-                                        bool& out_is_left) const -> bool {
+                                        bool& out_is_left, float& out_handedness_score) const -> bool {
     const auto src_rect = im_rect{
         .x = static_cast<int>(std::floor(transform.left)),
         .y = static_cast<int>(std::floor(transform.top)),
@@ -715,8 +734,11 @@ namespace signlang::handpose_det {
     }
 
     if (landmark_model_->output_attrs.size() >= 3 && output_element_count(landmark_model_->output_attrs[2]) >= 1) {
-      out_is_left = landmark_model_->output_value(2, 0) > handedness_threshold_;
+      out_handedness_score = std::clamp(landmark_model_->output_value(2, 0), 0.0F, 1.0F);
+      const auto left_score = swap_handedness_ ? 1.0F - out_handedness_score : out_handedness_score;
+      out_is_left = left_score > handedness_threshold_;
     } else {
+      out_handedness_score = 0.5F;
       out_is_left = false;
     }
 
@@ -744,8 +766,10 @@ namespace signlang::handpose_det {
     std::array<HandPoseKeypoint, kHandPoseKeypointCount> keypoints{};
     float presence = 0.0F;
     bool is_left = false;
+    float handedness_score = 0.5F;
 
-    if (!extract_landmarks(metadata, payload, payload_size, transform, keypoints, presence, is_left)) {
+    if (!extract_landmarks(metadata, payload, payload_size, transform, keypoints, presence, is_left,
+                           handedness_score)) {
       candidate.detection.present = false;
       candidate.detection.presence_confidence = presence;
       return;
@@ -756,6 +780,7 @@ namespace signlang::handpose_det {
     candidate.detection.confidence = std::min(candidate.detection.confidence, presence);
     candidate.detection.present = true;
     candidate.detection.is_left_hand = is_left;
+    candidate.handedness_score = handedness_score;
 
     auto left = std::numeric_limits<float>::max();
     auto top = std::numeric_limits<float>::max();
@@ -855,6 +880,7 @@ namespace signlang::handpose_det {
         weighted.detection.present = candidates_[i].detection.present;
         weighted.detection.is_left_hand = candidates_[i].detection.is_left_hand;
         weighted.detection.presence_confidence = candidates_[i].detection.presence_confidence;
+        weighted.handedness_score = candidates_[i].handedness_score;
 
         merged.push_back(weighted);
       }
@@ -937,8 +963,10 @@ namespace signlang::handpose_det {
       std::array<HandPoseKeypoint, kHandPoseKeypointCount> keypoints{};
       float presence = 0.0F;
       bool is_left = false;
+      float handedness_score = 0.5F;
 
-      if (!extract_landmarks(metadata, payload, payload_size, transform, keypoints, presence, is_left)) {
+      if (!extract_landmarks(metadata, payload, payload_size, transform, keypoints, presence, is_left,
+                             handedness_score)) {
         continue;
       }
 
@@ -946,6 +974,7 @@ namespace signlang::handpose_det {
       tracked.palm_confidence = std::min(tracked.palm_confidence, presence);
       tracked.presence_confidence = presence;
       tracked.is_left_hand = is_left;
+      tracked.handedness_score = handedness_score;
       tracked.last_seen_frame = current_frame_number_;
 
       auto left = std::numeric_limits<float>::max();
@@ -989,6 +1018,7 @@ namespace signlang::handpose_det {
         t.palm_confidence = detected.detection.confidence;
         t.presence_confidence = detected.detection.presence_confidence;
         t.is_left_hand = detected.detection.is_left_hand;
+        t.handedness_score = detected.handedness_score;
       } else {
         auto new_hand = TrackedHand{
             .roi = detected.detection.box,
@@ -996,6 +1026,7 @@ namespace signlang::handpose_det {
             .presence_confidence = detected.detection.presence_confidence,
             .last_seen_frame = current_frame_number_,
             .is_left_hand = detected.detection.is_left_hand,
+            .handedness_score = detected.handedness_score,
             .smoothed_keypoints = detected.detection.keypoints,
         };
 

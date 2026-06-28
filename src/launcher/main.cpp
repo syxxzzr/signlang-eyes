@@ -535,6 +535,7 @@ static auto build_handpose_det_args(const toml::table& cfg) -> std::vector<std::
     add_opt_double(args, "--euro-beta", opt_double(*tbl, "euro_beta"));
     add_opt_double(args, "--euro-d-cutoff", opt_double(*tbl, "euro_d_cutoff"));
     add_opt_double(args, "--handedness-threshold", opt_double(*tbl, "handedness_threshold"));
+    add_opt_bool_assignment(args, "--swap-handedness", opt_bool(*tbl, "swap_handedness"));
     add_opt_int(args, "--max-tracking-gap", opt_int(*tbl, "max_tracking_gap"));
     add_opt_int(args, "--max-stale-frames", opt_int(*tbl, "max_stale_frames"));
     add_opt_bool_assignment(args, "--single-hand", opt_bool(*tbl, "single_hand"));

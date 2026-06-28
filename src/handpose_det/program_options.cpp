@@ -68,6 +68,7 @@ namespace signlang::handpose_det {
       ("max-stale-frames",             "Max frames before a stale tracked hand slot is reclaimed",  cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultMaxStaleFrames)))
       ("subscriber-buffer",            "iceoryx2 subscriber queue size",                            cxxopts::value<std::uint64_t>()->default_value(std::to_string(kDefaultSubscriberBufferSize)))
       ("single-hand",                  "Recognize and publish one hand slot instead of two",        cxxopts::value<bool>()->default_value(kDefaultSingleHand ? "true" : "false")->implicit_value("true"))
+      ("swap-handedness",              "Swap left/right handedness classification for mirrored cameras", cxxopts::value<bool>()->default_value(kDefaultSwapHandedness ? "true" : "false")->implicit_value("true"))
       ("npu-core",                     "RK3588 NPU core mask: auto,0,1,2,0_1,0_1_2,all",           cxxopts::value<std::string>()->default_value("auto"))
       ("palm-npu-core",                "Palm detector NPU core mask; defaults to --npu-core",       cxxopts::value<std::string>())
       ("landmark-npu-core",            "Hand landmark NPU core mask; defaults to --npu-core",       cxxopts::value<std::string>())
@@ -126,6 +127,7 @@ namespace signlang::handpose_det {
         .max_stale_frames = parsed_options["max-stale-frames"].as<std::uint32_t>(),
         .subscriber_buffer_size = subscriber_buffer_size,
         .single_hand = single_hand,
+        .swap_handedness = parsed_options["swap-handedness"].as<bool>(),
         .palm_detector_npu_core_mask = parse_core_mask(palm_npu_core),
         .landmark_npu_core_mask = parse_core_mask(landmark_npu_core),
         .verbose = parsed_options.count("verbose") != 0,

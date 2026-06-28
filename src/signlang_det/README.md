@@ -80,8 +80,8 @@ Each frame produces a 168-dim feature vector (2 hands × 21 keypoints × 4 chann
 
 ### Hand Tracking
 
-- **Left-to-Right Ordering**: Hands sorted by x-coordinate per frame (`hands[0]` = left, `hands[1]` = right)
-- **Slot-Based Tracking**: Hands matched to previous-frame slots by center-point distance
+- **Upstream Handedness Ordering**: `handpose_det` assigns `is_left_hand`; `hands[0]` is left and `hands[1]` is right
+- **No Local Left/Right Reassignment**: Sign recognition does not sort hands by x-coordinate or reclassify handedness
 - **Occlusion Handling**: Zero-padding for missing hand slots (`present = false`)
 - **Confidence Filtering**: Hands below `min_confidence` are zero-padded
 

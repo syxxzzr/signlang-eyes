@@ -2,6 +2,7 @@
 #define SIGNLANG_EYES_HANDPOSE_DET_HANDPOSE_MODEL_HPP
 
 #include "handpose_frame.hpp"
+#include "handpose_selection.hpp"
 #include "program_options.hpp"
 #include "rknn_api.h"
 #include "video_frontend/video_frame.hpp"
@@ -44,6 +45,7 @@ namespace signlang::handpose_det {
     struct PalmCandidate {
       HandPoseDetection detection;
       std::array<float, 14> palm_keypoints;
+      float handedness_score;
     };
     struct CropTransform {
       float left;
@@ -56,6 +58,7 @@ namespace signlang::handpose_det {
       float presence_confidence;
       std::uint64_t last_seen_frame;
       bool is_left_hand;
+      float handedness_score;
       std::array<HandPoseKeypoint, kHandPoseKeypointCount> smoothed_keypoints;
     };
     struct OneEuroFilter {
@@ -82,7 +85,7 @@ namespace signlang::handpose_det {
     auto extract_landmarks(const signlang::video_frontend::VideoFrameMetadata& metadata, const std::uint8_t* payload,
                            std::uint64_t payload_size, const CropTransform& transform,
                            std::array<HandPoseKeypoint, kHandPoseKeypointCount>& out, float& out_presence,
-                           bool& out_is_left) const -> bool;
+                           bool& out_is_left, float& out_handedness_score) const -> bool;
 
     void try_tracking_from_previous_frame(const signlang::video_frontend::VideoFrameMetadata& metadata,
                                           const std::uint8_t* payload, std::uint64_t payload_size);
@@ -134,6 +137,7 @@ namespace signlang::handpose_det {
     float euro_beta_;
     float euro_d_cutoff_;
     float handedness_threshold_;
+    bool swap_handedness_;
     std::uint32_t max_tracking_gap_;
     std::uint32_t max_stale_frames_;
     const std::uint32_t hand_slots_;

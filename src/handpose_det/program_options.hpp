@@ -34,6 +34,7 @@ namespace signlang::handpose_det {
   constexpr auto kDefaultMaxStaleFrames = std::uint32_t{5};
   constexpr auto kDefaultSubscriberBufferSize = std::uint64_t{2};
   constexpr auto kDefaultSingleHand = false;
+  constexpr auto kDefaultSwapHandedness = false;
 
   struct ProgramOptions {
     std::string input_service_name;
@@ -61,6 +62,7 @@ namespace signlang::handpose_det {
     std::uint32_t max_stale_frames;
     std::uint64_t subscriber_buffer_size;
     bool single_hand;
+    bool swap_handedness;
     rknn_core_mask palm_detector_npu_core_mask;
     rknn_core_mask landmark_npu_core_mask;
     bool verbose;

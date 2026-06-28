@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 namespace signlang::signlang_manager {
   namespace {
@@ -31,88 +30,21 @@ namespace signlang::signlang_manager {
       }
     }
 
-    std::sort(hands.begin(), hands.end(),
-              [this](const auto* a, const auto* b) { return compute_hand_center(*a) < compute_hand_center(*b); });
-
     if (hands.size() > kMaxHandCount) {
       hands.resize(kMaxHandCount);
     }
     return hands;
   }
 
-  auto GestureFeatureExtractor::compute_hand_center(const handpose_det::HandPoseDetection& hand) const -> float {
-    auto sum_x = 0.0F;
-    for (const auto& kp : hand.keypoints) {
-      sum_x += kp.x;
-    }
-    return sum_x / static_cast<float>(hand.keypoints.size());
-  }
-
-  auto GestureFeatureExtractor::compute_center_distance(const handpose_det::HandPoseDetection& current,
-                                                        const HandSlot& previous) const -> float {
-    auto current_x = 0.0F;
-    auto current_y = 0.0F;
-    auto prev_x = 0.0F;
-    auto prev_y = 0.0F;
-
-    for (std::size_t i = 0; i < current.keypoints.size(); ++i) {
-      current_x += current.keypoints[i].x;
-      current_y += current.keypoints[i].y;
-      prev_x += previous.keypoints[i].x;
-      prev_y += previous.keypoints[i].y;
-    }
-
-    const auto n = static_cast<float>(current.keypoints.size());
-    current_x /= n;
-    current_y /= n;
-    prev_x /= n;
-    prev_y /= n;
-
-    const auto dx = current_x - prev_x;
-    const auto dy = current_y - prev_y;
-    return std::sqrt(dx * dx + dy * dy);
-  }
-
   auto GestureFeatureExtractor::assign_hands_to_slots(const std::vector<const handpose_det::HandPoseDetection*>& hands)
       -> std::array<const handpose_det::HandPoseDetection*, kMaxHandCount> {
     auto assigned = std::array<const handpose_det::HandPoseDetection*, kMaxHandCount>{nullptr, nullptr};
 
-    if (hands.size() == kMaxHandCount) {
-      assigned[0] = hands[0];
-      assigned[1] = hands[1];
-      return assigned;
-    }
-
-    auto available_slots = std::vector<std::uint32_t>{};
-    for (std::uint32_t i = 0; i < kMaxHandCount; ++i) {
-      available_slots.push_back(i);
-    }
-
     for (const auto* hand : hands) {
-      auto previous_slots = std::vector<std::uint32_t>{};
-      for (const auto slot : available_slots) {
-        if (prev_hands_[slot].occupied) {
-          previous_slots.push_back(slot);
-        }
+      const auto slot = hand->is_left_hand ? 0U : 1U;
+      if (assigned[slot] == nullptr || hand->confidence > assigned[slot]->confidence) {
+        assigned[slot] = hand;
       }
-
-      auto best_slot = std::uint32_t{0};
-      if (!previous_slots.empty()) {
-        auto min_distance = std::numeric_limits<float>::max();
-        for (const auto slot : previous_slots) {
-          const auto distance = compute_center_distance(*hand, prev_hands_[slot]);
-          if (distance < min_distance) {
-            min_distance = distance;
-            best_slot = slot;
-          }
-        }
-      } else {
-        best_slot = available_slots.front();
-      }
-
-      assigned[best_slot] = hand;
-      available_slots.erase(std::remove(available_slots.begin(), available_slots.end(), best_slot),
-                            available_slots.end());
     }
 
     return assigned;

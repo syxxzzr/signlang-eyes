@@ -54,6 +54,7 @@ npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 
 [handpose_det]
 npu_core = "2"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
+swap_handedness = true             # Swap left/right handedness for mirrored cameras
 # model = "models/mediapipe/hand_detector.rknn"
 # landmark_model = "models/mediapipe/hand_landmarks_detector.rknn"
 # confidence = 0.5                 # Palm detection confidence threshold
