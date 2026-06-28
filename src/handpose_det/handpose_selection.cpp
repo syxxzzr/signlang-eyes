@@ -64,4 +64,3 @@ namespace signlang::handpose_det {
   }
 
 } // namespace signlang::handpose_det
-

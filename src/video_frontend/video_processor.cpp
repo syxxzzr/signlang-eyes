@@ -122,16 +122,14 @@ namespace signlang::video_frontend {
                                            static_cast<int>(capture_format_.height), RK_FORMAT_YUYV_422);
     const auto dst_img = wrapbuffer_handle(dst_handle, static_cast<int>(output_format_.width),
                                            static_cast<int>(output_format_.height), RK_FORMAT_RGB_888);
-    const auto src_rect =
-        im_rect{.x = 0,
-                .y = 0,
-                .width = static_cast<int>(capture_format_.width),
-                .height = static_cast<int>(capture_format_.height)};
-    const auto dst_rect =
-        im_rect{.x = 0,
-                .y = 0,
-                .width = static_cast<int>(output_format_.width),
-                .height = static_cast<int>(output_format_.height)};
+    const auto src_rect = im_rect{.x = 0,
+                                  .y = 0,
+                                  .width = static_cast<int>(capture_format_.width),
+                                  .height = static_cast<int>(capture_format_.height)};
+    const auto dst_rect = im_rect{.x = 0,
+                                  .y = 0,
+                                  .width = static_cast<int>(output_format_.width),
+                                  .height = static_cast<int>(output_format_.height)};
     const auto empty_rect = im_rect{.x = 0, .y = 0, .width = 0, .height = 0};
     const auto usage = IM_SYNC | (mirror_output_ ? IM_HAL_TRANSFORM_FLIP_H : 0);
 
@@ -196,16 +194,14 @@ namespace signlang::video_frontend {
                                            static_cast<int>(capture_format_.height), RK_FORMAT_RGB_888);
     const auto dst_img = wrapbuffer_handle(dst_handle, static_cast<int>(output_format_.width),
                                            static_cast<int>(output_format_.height), RK_FORMAT_RGB_888);
-    const auto src_rect =
-        im_rect{.x = 0,
-                .y = 0,
-                .width = static_cast<int>(capture_format_.width),
-                .height = static_cast<int>(capture_format_.height)};
-    const auto dst_rect =
-        im_rect{.x = 0,
-                .y = 0,
-                .width = static_cast<int>(output_format_.width),
-                .height = static_cast<int>(output_format_.height)};
+    const auto src_rect = im_rect{.x = 0,
+                                  .y = 0,
+                                  .width = static_cast<int>(capture_format_.width),
+                                  .height = static_cast<int>(capture_format_.height)};
+    const auto dst_rect = im_rect{.x = 0,
+                                  .y = 0,
+                                  .width = static_cast<int>(output_format_.width),
+                                  .height = static_cast<int>(output_format_.height)};
     const auto empty_rect = im_rect{.x = 0, .y = 0, .width = 0, .height = 0};
     const auto usage = IM_SYNC | (mirror_output_ ? IM_HAL_TRANSFORM_FLIP_H : 0);
 

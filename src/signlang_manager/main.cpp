@@ -18,13 +18,13 @@ namespace {
 } // namespace
 
 auto main(int argc, char** argv) -> int {
+  using signlang::signlang_det::SignlangResult;
   using signlang::signlang_manager::BluetoothGattOptions;
   using signlang::signlang_manager::BluetoothGattServer;
   using signlang::signlang_manager::IpcHandposeSubscriber;
   using signlang::signlang_manager::IpcSignlangResultSubscriber;
   using signlang::signlang_manager::ManagerService;
   using signlang::signlang_manager::parse_program_options;
-  using signlang::signlang_det::SignlangResult;
 
   return signlang::runtime::run_module(argc, argv, parse_program_options, [&](const auto& options) {
     spdlog::info("Starting sign language manager");
@@ -76,8 +76,7 @@ auto main(int argc, char** argv) -> int {
           return;
         }
 
-        const auto* signlang_result =
-            pending_signlang_result.has_value() ? &pending_signlang_result.value() : nullptr;
+        const auto* signlang_result = pending_signlang_result.has_value() ? &pending_signlang_result.value() : nullptr;
         const auto packet = manager.build_stream_packet(metadata, detections, count, signlang_result);
         bluetooth.notify_packet(packet);
         pending_signlang_result.reset();

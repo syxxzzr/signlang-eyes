@@ -371,9 +371,9 @@ namespace signlang::handpose_det {
       handedness_threshold_{options.handedness_threshold}, swap_handedness_{options.swap_handedness},
       max_tracking_gap_{options.max_tracking_gap}, max_stale_frames_{options.max_stale_frames},
       single_hand_full_frame_interval_{options.single_hand_full_frame_interval},
-      stable_hands_full_frame_interval_{options.stable_hands_full_frame_interval},
-      hand_slots_{hand_slots}, model_width_{kPalmInputSize}, model_height_{kPalmInputSize}, source_dma_fd_{-1},
-      source_dma_data_{nullptr}, source_dma_capacity_{0} {
+      stable_hands_full_frame_interval_{options.stable_hands_full_frame_interval}, hand_slots_{hand_slots},
+      model_width_{kPalmInputSize}, model_height_{kPalmInputSize}, source_dma_fd_{-1}, source_dma_data_{nullptr},
+      source_dma_capacity_{0} {
     initialize_models(options);
     validate_models();
     build_palm_anchors();
@@ -636,8 +636,7 @@ namespace signlang::handpose_det {
       return true;
     }
 
-    return stable_hands_full_frame_interval_ > 0 &&
-           current_frame_number_ % stable_hands_full_frame_interval_ == 0;
+    return stable_hands_full_frame_interval_ > 0 && current_frame_number_ % stable_hands_full_frame_interval_ == 0;
   }
 
   void HandPoseModel::run_palm_detector(const signlang::video_frontend::VideoFrameMetadata& metadata,

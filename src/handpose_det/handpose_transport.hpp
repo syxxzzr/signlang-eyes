@@ -51,9 +51,8 @@ namespace signlang::handpose_det {
     void ensure_upstream_attached();
 
   private:
-    using VideoSubscriber =
-        iox2::Subscriber<iox2::ServiceType::Ipc, iox2::bb::Slice<std::uint8_t>,
-                         signlang::video_frontend::VideoFrameMetadata>;
+    using VideoSubscriber = iox2::Subscriber<iox2::ServiceType::Ipc, iox2::bb::Slice<std::uint8_t>,
+                                             signlang::video_frontend::VideoFrameMetadata>;
     using HandposeService =
         iox2::PortFactoryPublishSubscribe<iox2::ServiceType::Ipc, iox2::bb::Slice<HandPoseDetection>,
                                           HandPoseFrameMetadata>;
@@ -63,8 +62,7 @@ namespace signlang::handpose_det {
                                         std::uint64_t buffer_size)
         -> iox2::Subscriber<iox2::ServiceType::Ipc, iox2::bb::Slice<std::uint8_t>,
                             signlang::video_frontend::VideoFrameMetadata>;
-    static auto create_handpose_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
-                                        const std::string& service_name)
+    static auto create_handpose_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
         -> HandposeService;
     static auto create_handpose_publisher(const HandposeService& service, std::uint32_t hand_slots)
         -> iox2::Publisher<iox2::ServiceType::Ipc, iox2::bb::Slice<HandPoseDetection>, HandPoseFrameMetadata>;

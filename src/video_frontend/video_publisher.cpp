@@ -23,8 +23,7 @@ namespace signlang::video_frontend {
 
   VideoPublisher::VideoPublisher(const std::string& service_name, std::uint32_t max_payload_size_bytes) :
       node_{create_node()}, service_{create_service(node_, service_name)},
-      publisher_{create_publisher(service_, max_payload_size_bytes)},
-      max_payload_size_bytes_{max_payload_size_bytes} {}
+      publisher_{create_publisher(service_, max_payload_size_bytes)}, max_payload_size_bytes_{max_payload_size_bytes} {}
 
   auto VideoPublisher::has_subscribers() const -> bool { return signlang::common::ipc::has_subscribers(service_); }
 

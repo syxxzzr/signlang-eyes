@@ -92,7 +92,8 @@ namespace signlang::state_machine {
   auto IpcStatePublisher::create_event_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
                                                const std::string& service_name)
       -> iox2::PortFactoryEvent<iox2::ServiceType::Ipc> {
-    auto service = node.service_builder(signlang::common::ipc::service_name_from_string(service_name)).event().open_or_create();
+    auto service =
+        node.service_builder(signlang::common::ipc::service_name_from_string(service_name)).event().open_or_create();
     if (!service.has_value()) {
       throw std::runtime_error("Failed to open or create iceoryx2 app state event service: " + service_name);
     }

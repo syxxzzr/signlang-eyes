@@ -48,7 +48,8 @@ namespace signlang::signlang_manager {
 
   IpcSignlangResultSubscriber::IpcSignlangResultSubscriber(const std::string& service_name,
                                                            std::uint64_t subscriber_buffer_size) :
-      node_{create_node()}, subscriber_{create_subscriber(node_, service_name, subscriber_buffer_size)} {}
+      node_{create_node()},
+      subscriber_{create_subscriber(node_, service_name, subscriber_buffer_size)} {}
 
   auto IpcSignlangResultSubscriber::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
@@ -112,7 +113,8 @@ namespace signlang::signlang_manager {
         if (response.status != signlang_det::PrototypeControlStatus::Ok) {
           const auto message_end = std::find(response.message.begin(), response.message.end(), '\0');
           const auto message = std::string{response.message.begin(), message_end};
-          throw std::runtime_error("Signlang prototype reload failed" + (message.empty() ? std::string{} : ": " + message));
+          throw std::runtime_error("Signlang prototype reload failed" +
+                                   (message.empty() ? std::string{} : ": " + message));
         }
         return response;
       }

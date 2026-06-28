@@ -195,7 +195,8 @@ namespace {
         auto should_publish = true;
         if (recognized && options.duplicate_suppression_ms > 0) {
           const auto now = std::chrono::steady_clock::now();
-          if (last_published_gesture_id.has_value() && last_published_gesture_id.value() == inference_result.gesture_id &&
+          if (last_published_gesture_id.has_value() &&
+              last_published_gesture_id.value() == inference_result.gesture_id &&
               now - last_published_gesture_time < duplicate_suppression_window) {
             should_publish = false;
             spdlog::debug("Suppressing duplicate sign language result: {}", result.gesture_name.data());

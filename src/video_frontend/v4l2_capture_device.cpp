@@ -72,7 +72,8 @@ namespace signlang::video_frontend {
 
   V4l2CaptureDevice::V4l2CaptureDevice(const std::string& device_name, VideoFormatRequest format_request,
                                        std::uint32_t fps) :
-      device_name_{device_name}, format_request_{format_request}, requested_fps_{fps}, device_fd_{-1},
+      device_name_{device_name},
+      format_request_{format_request}, requested_fps_{fps}, device_fd_{-1},
       format_{.width = 0, .height = 0, .pixel_format = kPixelFormatYuyv}, fps_{fps}, max_frame_size_bytes_{0},
       active_buffer_index_{-1}, streaming_{false} {
     open_device();

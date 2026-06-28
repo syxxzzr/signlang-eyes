@@ -16,7 +16,8 @@ namespace signlang::handpose_det {
 
   HandPoseTransport::HandPoseTransport(const std::string& input_service_name, const std::string& output_service_name,
                                        std::uint64_t subscriber_buffer_size, std::uint32_t hand_slots) :
-      node_{create_node()}, input_service_name_{input_service_name}, subscriber_buffer_size_{subscriber_buffer_size},
+      node_{create_node()},
+      input_service_name_{input_service_name}, subscriber_buffer_size_{subscriber_buffer_size},
       service_{create_handpose_service(node_, output_service_name)},
       publisher_{create_handpose_publisher(service_, hand_slots)}, hand_slots_{hand_slots} {}
 

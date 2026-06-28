@@ -553,12 +553,8 @@ static auto build_handpose_det_args(const toml::table& cfg) -> std::vector<std::
 static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
-      kExeSignlangDet,
-      "--input-service",
-      kHandposeOutput,
-      "--output-service",
-      kSignlangOutput,
-      "--prototype-control-service",
+      kExeSignlangDet,           "--input-service", kHandposeOutput,
+      "--output-service",        kSignlangOutput,   "--prototype-control-service",
       kSignlangPrototypeControl,
   };
 
@@ -582,12 +578,8 @@ static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::
 static auto build_signlang_manager_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
-      kExeSignlangManager,
-      "--input-service",
-      kHandposeOutput,
-      "--signlang-result-service",
-      kSignlangOutput,
-      "--signlang-control-service",
+      kExeSignlangManager,         "--input-service", kHandposeOutput,
+      "--signlang-result-service", kSignlangOutput,   "--signlang-control-service",
       kSignlangPrototypeControl,
   };
 
@@ -612,14 +604,10 @@ static auto build_signlang_manager_args(const toml::table& cfg) -> std::vector<s
 
 static auto build_modules(const toml::table& config) -> std::vector<ModuleEntry> {
   return {
-      {"state_machine", build_state_machine_args(config)},
-      {"audio_frontend", build_audio_frontend_args(config)},
-      {"video_frontend", build_video_frontend_args(config)},
-      {"speech_asr", build_speech_asr_args(config)},
-      {"env_sound_det", build_env_sound_det_args(config)},
-      {"handpose_det", build_handpose_det_args(config)},
-      {"signlang_manager", build_signlang_manager_args(config)},
-      {"signlang_det", build_signlang_det_args(config)},
+      {"state_machine", build_state_machine_args(config)},       {"audio_frontend", build_audio_frontend_args(config)},
+      {"video_frontend", build_video_frontend_args(config)},     {"speech_asr", build_speech_asr_args(config)},
+      {"env_sound_det", build_env_sound_det_args(config)},       {"handpose_det", build_handpose_det_args(config)},
+      {"signlang_manager", build_signlang_manager_args(config)}, {"signlang_det", build_signlang_det_args(config)},
   };
 }
 
@@ -674,7 +662,9 @@ static auto run_modules_once(const std::vector<ModuleEntry>& modules) -> bool {
     }
 
     if (pid == 0) {
-      struct timespec ts{.tv_sec = 0, .tv_nsec = 500000000};
+      struct timespec ts {
+        .tv_sec = 0, .tv_nsec = 500000000
+      };
       nanosleep(&ts, nullptr);
       continue;
     }
@@ -735,9 +725,9 @@ auto main(int argc, char** argv) -> int {
 
     spdlog::info("loaded config: {}", config_path.string());
 
-	    // Warn about any IPC service keys in the TOML
-	    warn_ipc_keys_in_config(config);
-	    warn_audio_downstream_config(config);
+    // Warn about any IPC service keys in the TOML
+    warn_ipc_keys_in_config(config);
+    warn_audio_downstream_config(config);
 
     signlang::runtime::install_shutdown_signal_handlers();
     std::signal(SIGCHLD, SIG_DFL);
@@ -755,15 +745,14 @@ auto main(int argc, char** argv) -> int {
       }
 
       if (!can_restart(launcher_config.restart_attempts, completed_restarts)) {
-        spdlog::error("module startup/runtime failed; restart limit {} reached",
-                      launcher_config.restart_attempts);
+        spdlog::error("module startup/runtime failed; restart limit {} reached", launcher_config.restart_attempts);
         return 1;
       }
 
       ++completed_restarts;
-      spdlog::warn("module startup/runtime failed; restarting system (attempt {}, limit {})",
-                   completed_restarts, launcher_config.restart_attempts < 0 ? std::string{"unlimited"}
-                                                                            : std::to_string(launcher_config.restart_attempts));
+      spdlog::warn("module startup/runtime failed; restarting system (attempt {}, limit {})", completed_restarts,
+                   launcher_config.restart_attempts < 0 ? std::string{"unlimited"}
+                                                        : std::to_string(launcher_config.restart_attempts));
       sleep_before_restart();
     }
     return 0;

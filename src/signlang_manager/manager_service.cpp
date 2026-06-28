@@ -141,10 +141,9 @@ namespace signlang::signlang_manager {
               {curr_cost[j - 1U], curr_steps[j - 1U]},
               {prev_cost[j - 1U], prev_steps[j - 1U]},
           }};
-          const auto best = *std::min_element(candidates.begin(), candidates.end(),
-                                              [](const auto& left, const auto& right) {
-                                                return left.first < right.first;
-                                              });
+          const auto best =
+              *std::min_element(candidates.begin(), candidates.end(),
+                                [](const auto& left, const auto& right) { return left.first < right.first; });
 
           curr_cost[j] = best.first + frame_distance(lhs[i - 1U], rhs[j - 1U]);
           curr_steps[j] = best.second + 1U;
@@ -564,9 +563,10 @@ namespace signlang::signlang_manager {
 
     const auto representative_samples = select_representative_samples(candidate_samples, kMaxRepresentativeSamples);
     const auto gesture_id = database_.replace_gesture_samples(session.gesture_name, representative_samples);
-    spdlog::info("Stored uploaded gesture '{}' as id {}; uploaded_windows={}, existing_samples={}, stored_representatives={}",
-                 session.gesture_name, gesture_id, uploaded_samples.size(), existing_sample_count,
-                 representative_samples.size());
+    spdlog::info(
+        "Stored uploaded gesture '{}' as id {}; uploaded_windows={}, existing_samples={}, stored_representatives={}",
+        session.gesture_name, gesture_id, uploaded_samples.size(), existing_sample_count,
+        representative_samples.size());
     return gesture_id;
   }
 

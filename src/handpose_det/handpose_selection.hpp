@@ -26,4 +26,3 @@ namespace signlang::handpose_det {
 } // namespace signlang::handpose_det
 
 #endif // SIGNLANG_EYES_HANDPOSE_DET_HANDPOSE_SELECTION_HPP
-

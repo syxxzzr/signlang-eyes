@@ -79,7 +79,9 @@ namespace signlang::signlang_det {
   IpcSignlangPublisher::IpcSignlangPublisher(const std::string& service_name) :
       node_(create_node()), service_(create_service(node_, service_name)), publisher_(create_publisher(service_)) {}
 
-  auto IpcSignlangPublisher::has_subscribers() const -> bool { return signlang::common::ipc::has_subscribers(service_); }
+  auto IpcSignlangPublisher::has_subscribers() const -> bool {
+    return signlang::common::ipc::has_subscribers(service_);
+  }
 
   void IpcSignlangPublisher::publish(const SignlangResult& result) {
     auto loan_result = publisher_.loan_uninit();

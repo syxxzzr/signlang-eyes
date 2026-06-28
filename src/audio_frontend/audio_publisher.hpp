@@ -32,7 +32,8 @@ namespace signlang::audio_frontend {
     static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
     static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
         -> AudioService;
-    static auto create_publisher(const AudioService& service) -> iox2::Publisher<iox2::ServiceType::Ipc, AudioFrame, void>;
+    static auto create_publisher(const AudioService& service)
+        -> iox2::Publisher<iox2::ServiceType::Ipc, AudioFrame, void>;
 
     iox2::Node<iox2::ServiceType::Ipc> node_;
     AudioService service_;

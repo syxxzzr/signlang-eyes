@@ -69,7 +69,8 @@ namespace signlang::env_sound_det {
 
   YamnetModel::YamnetModel(const std::string& model_path, const std::string& class_map_path,
                            rknn_core_mask npu_core_mask, std::uint32_t rknn_priority_flag, float score_threshold) :
-      context_{0}, io_num_{}, scores_output_index_{0}, score_frame_count_{0}, score_threshold_{score_threshold} {
+      context_{0},
+      io_num_{}, scores_output_index_{0}, score_frame_count_{0}, score_threshold_{score_threshold} {
     load_labels(class_map_path);
 
     auto* model_path_buffer = const_cast<char*>(model_path.c_str());

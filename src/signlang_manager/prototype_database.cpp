@@ -98,8 +98,7 @@ namespace signlang::signlang_manager {
     auto backup_path_for(const std::filesystem::path& database_path) -> std::filesystem::path {
       namespace fs = std::filesystem;
 
-      const auto base_path =
-          fs::path{database_path.string() + ".invalid-" + utc_backup_timestamp() + ".bak"};
+      const auto base_path = fs::path{database_path.string() + ".invalid-" + utc_backup_timestamp() + ".bak"};
       auto candidate = base_path;
       auto error = std::error_code{};
       for (auto suffix = 1U; fs::exists(candidate, error) && !error; ++suffix) {
