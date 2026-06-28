@@ -70,6 +70,8 @@ All module executables also accept `--log-file <path>` and `--log-rotate-size <b
 | `--swap-handedness`      | `false` | –        | Swap left/right handedness interpretation for mirrored cameras |
 | `--max-tracking-gap`     | `2`     | `>= 1`   | Max frame gap before tracking is considered lost     |
 | `--max-stale-frames`     | `5`     | `>= 1`   | Max frames before stale track slot is reclaimed      |
+| `--single-hand-full-frame-interval` | `5` | `>= 0` | Full-frame palm detection interval while one hand is tracked; 0 disables |
+| `--stable-hands-full-frame-interval` | `15` | `>= 0` | Full-frame palm detection interval while all hand slots are tracked; 0 disables |
 | `--npu-core`             | `auto`                                          | auto,0,1,2,0_1,0_1_2,all | RK3588 NPU core mask                                 |
 | `--palm-npu-core`        | `--npu-core`                                    | auto,0,1,2,0_1,0_1_2,all | Palm detector NPU core override                      |
 | `--landmark-npu-core`    | `--npu-core`                                    | auto,0,1,2,0_1,0_1_2,all | Hand landmark model NPU core override                |

@@ -32,6 +32,8 @@ namespace signlang::handpose_det {
   constexpr auto kDefaultHandednessThreshold = 0.5F;
   constexpr auto kDefaultMaxTrackingGap = std::uint32_t{2};
   constexpr auto kDefaultMaxStaleFrames = std::uint32_t{5};
+  constexpr auto kDefaultSingleHandFullFrameInterval = std::uint32_t{5};
+  constexpr auto kDefaultStableHandsFullFrameInterval = std::uint32_t{15};
   constexpr auto kDefaultSubscriberBufferSize = std::uint64_t{2};
   constexpr auto kDefaultSingleHand = false;
   constexpr auto kDefaultSwapHandedness = false;
@@ -60,6 +62,8 @@ namespace signlang::handpose_det {
     float handedness_threshold;
     std::uint32_t max_tracking_gap;
     std::uint32_t max_stale_frames;
+    std::uint32_t single_hand_full_frame_interval;
+    std::uint32_t stable_hands_full_frame_interval;
     std::uint64_t subscriber_buffer_size;
     bool single_hand;
     bool swap_handedness;

@@ -539,6 +539,8 @@ static auto build_handpose_det_args(const toml::table& cfg) -> std::vector<std::
     add_opt_bool_assignment(args, "--swap-handedness", opt_bool(*tbl, "swap_handedness"));
     add_opt_int(args, "--max-tracking-gap", opt_int(*tbl, "max_tracking_gap"));
     add_opt_int(args, "--max-stale-frames", opt_int(*tbl, "max_stale_frames"));
+    add_opt_int(args, "--single-hand-full-frame-interval", opt_int(*tbl, "single_hand_full_frame_interval"));
+    add_opt_int(args, "--stable-hands-full-frame-interval", opt_int(*tbl, "stable_hands_full_frame_interval"));
     add_opt_bool_assignment(args, "--single-hand", opt_bool(*tbl, "single_hand"));
     add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
     add_opt_str(args, "--palm-npu-core", opt_string(*tbl, "palm_npu_core"));

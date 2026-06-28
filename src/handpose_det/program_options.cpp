@@ -66,6 +66,8 @@ namespace signlang::handpose_det {
       ("handedness-threshold",         "Threshold for left/right hand classification",              cxxopts::value<float>()->default_value(std::to_string(kDefaultHandednessThreshold)))
       ("max-tracking-gap",             "Max frames gap before tracking is considered lost",         cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultMaxTrackingGap)))
       ("max-stale-frames",             "Max frames before a stale tracked hand slot is reclaimed",  cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultMaxStaleFrames)))
+      ("single-hand-full-frame-interval", "Full-frame palm detection interval while one hand is tracked; 0 disables", cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultSingleHandFullFrameInterval)))
+      ("stable-hands-full-frame-interval", "Full-frame palm detection interval while all hand slots are tracked; 0 disables", cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultStableHandsFullFrameInterval)))
       ("subscriber-buffer",            "iceoryx2 subscriber queue size",                            cxxopts::value<std::uint64_t>()->default_value(std::to_string(kDefaultSubscriberBufferSize)))
       ("single-hand",                  "Recognize and publish one hand slot instead of two",        cxxopts::value<bool>()->default_value(kDefaultSingleHand ? "true" : "false")->implicit_value("true"))
       ("swap-handedness",              "Swap left/right handedness classification for mirrored cameras", cxxopts::value<bool>()->default_value(kDefaultSwapHandedness ? "true" : "false")->implicit_value("true"))
@@ -125,6 +127,8 @@ namespace signlang::handpose_det {
         .handedness_threshold = parsed_options["handedness-threshold"].as<float>(),
         .max_tracking_gap = parsed_options["max-tracking-gap"].as<std::uint32_t>(),
         .max_stale_frames = parsed_options["max-stale-frames"].as<std::uint32_t>(),
+        .single_hand_full_frame_interval = parsed_options["single-hand-full-frame-interval"].as<std::uint32_t>(),
+        .stable_hands_full_frame_interval = parsed_options["stable-hands-full-frame-interval"].as<std::uint32_t>(),
         .subscriber_buffer_size = subscriber_buffer_size,
         .single_hand = single_hand,
         .swap_handedness = parsed_options["swap-handedness"].as<bool>(),

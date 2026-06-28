@@ -92,6 +92,7 @@ namespace signlang::handpose_det {
 
     void update_tracked_hands(const std::vector<PalmCandidate>& detected_hands);
     void apply_nms();
+    auto should_run_full_frame_detection(std::uint32_t tracked_count) const -> bool;
 
     auto compute_iou(const HandPoseBox& box1, const HandPoseBox& box2) const -> float;
 
@@ -140,6 +141,8 @@ namespace signlang::handpose_det {
     bool swap_handedness_;
     std::uint32_t max_tracking_gap_;
     std::uint32_t max_stale_frames_;
+    std::uint32_t single_hand_full_frame_interval_;
+    std::uint32_t stable_hands_full_frame_interval_;
     const std::uint32_t hand_slots_;
     std::uint32_t model_width_;
     std::uint32_t model_height_;
