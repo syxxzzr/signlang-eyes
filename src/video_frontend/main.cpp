@@ -11,6 +11,40 @@
 
 namespace {
 
+  class CapturedFrameGuard {
+  public:
+    explicit CapturedFrameGuard(signlang::video_frontend::V4l2CaptureDevice& capture_device) :
+        capture_device_{capture_device}, active_{true} {}
+
+    CapturedFrameGuard(const CapturedFrameGuard&) = delete;
+    auto operator=(const CapturedFrameGuard&) -> CapturedFrameGuard& = delete;
+
+    ~CapturedFrameGuard() {
+      if (!active_) {
+        return;
+      }
+
+      try {
+        capture_device_.release_frame();
+      } catch (const std::exception& error) {
+        spdlog::warn("Failed to release V4L2 frame during cleanup: {}", error.what());
+      }
+    }
+
+    void release() {
+      if (!active_) {
+        return;
+      }
+
+      capture_device_.release_frame();
+      active_ = false;
+    }
+
+  private:
+    signlang::video_frontend::V4l2CaptureDevice& capture_device_;
+    bool active_;
+  };
+
   auto resolve_output_format(const signlang::video_frontend::VideoFormat& capture_format,
                              const signlang::video_frontend::VideoFormatRequest& output_request)
       -> signlang::video_frontend::VideoFormat {
@@ -63,8 +97,9 @@ auto main(int argc, char** argv) -> int {
       }
 
       const auto frame = capture_device.capture_frame();
+      auto frame_guard = CapturedFrameGuard{capture_device};
       publisher.publish(frame, video_processor, capture_device.fps(), sequence_number++);
-      capture_device.release_frame();
+      frame_guard.release();
     }
 
     return 0;
