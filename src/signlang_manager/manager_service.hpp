@@ -1,12 +1,10 @@
 #ifndef SIGNLANG_EYES_SIGNLANG_MANAGER_MANAGER_SERVICE_HPP
 #define SIGNLANG_EYES_SIGNLANG_MANAGER_MANAGER_SERVICE_HPP
 
-#include "gesture_encoder.hpp"
-#include "gesture_feature_extractor.hpp"
 #include "iceoryx_gateway.hpp"
 #include "program_options.hpp"
 #include "protocol.hpp"
-#include "prototype_database.hpp"
+#include "signlang_det/gesture_management.hpp"
 
 #include <atomic>
 #include <optional>
@@ -50,15 +48,14 @@ namespace signlang::signlang_manager {
     [[nodiscard]] auto handle_add_abort(const ProtocolPacket& request) -> ProtocolPacket;
     [[nodiscard]] auto handle_get_status(const ProtocolPacket& request) -> ProtocolPacket;
 
-    [[nodiscard]] auto encode_uploaded_gesture(const UploadSession& session) -> std::uint32_t;
+    [[nodiscard]] auto send_management_request(signlang_det::GestureManagementRequest request)
+        -> signlang_det::GestureManagementResponse;
+    [[nodiscard]] auto make_management_request(signlang_det::GestureManagementCommand command)
+        -> signlang_det::GestureManagementRequest;
     [[nodiscard]] auto make_response(const ProtocolPacket& request, std::uint16_t status,
                                      const std::vector<std::uint8_t>& payload = {}) const -> ProtocolPacket;
 
-    GestureEncoder encoder_;
-    PrototypeDatabase database_;
-    IpcPrototypeControlClient prototype_control_;
-    float min_keypoint_confidence_;
-    float upload_window_overlap_;
+    IpcGestureManagementClient gesture_management_;
     std::uint32_t stream_fps_;
     std::uint32_t max_upload_bytes_;
     std::atomic_bool streaming_enabled_;

@@ -79,42 +79,32 @@ namespace signlang::signlang_manager {
     return std::move(subscriber.value());
   }
 
-  IpcPrototypeControlClient::IpcPrototypeControlClient(const std::string& service_name) :
+  IpcGestureManagementClient::IpcGestureManagementClient(const std::string& service_name) :
       node_{create_node()}, service_{create_service(node_, service_name)}, client_{create_client(service_)} {}
 
-  auto IpcPrototypeControlClient::request_reload() const -> signlang_det::PrototypeControlResponse {
-    static auto request_id = std::uint32_t{0};
-    const auto request = signlang_det::PrototypeControlRequest{
-        .command = signlang_det::PrototypeControlCommand::ReloadPrototypes,
-        .request_id = request_id++,
-    };
+  auto IpcGestureManagementClient::request(const signlang_det::GestureManagementRequest& request) const
+      -> signlang_det::GestureManagementResponse {
     auto send_result = client_.send_copy(request);
     if (!send_result.has_value()) {
-      throw std::runtime_error("Failed to send signlang prototype reload request");
+      throw std::runtime_error("Failed to send signlang gesture management request");
     }
 
     auto pending_response = std::move(send_result.value());
     if (pending_response.number_of_server_connections() == 0) {
-      throw std::runtime_error("No signlang prototype control server received reload request");
+      throw std::runtime_error("No signlang gesture management server received request");
     }
 
     constexpr auto kMaxWaitAttempts = 100;
     for (auto attempt = 0; attempt < kMaxWaitAttempts; ++attempt) {
       auto receive_result = pending_response.receive();
       if (!receive_result.has_value()) {
-        throw std::runtime_error("Failed to receive signlang prototype reload response");
+        throw std::runtime_error("Failed to receive signlang gesture management response");
       }
 
       if (receive_result.value().has_value()) {
         const auto& response = receive_result.value().value().payload();
         if (response.request_id != request.request_id) {
-          throw std::runtime_error("Received mismatched signlang prototype reload response");
-        }
-        if (response.status != signlang_det::PrototypeControlStatus::Ok) {
-          const auto message_end = std::find(response.message.begin(), response.message.end(), '\0');
-          const auto message = std::string{response.message.begin(), message_end};
-          throw std::runtime_error("Signlang prototype reload failed" +
-                                   (message.empty() ? std::string{} : ": " + message));
+          throw std::runtime_error("Received mismatched signlang gesture management response");
         }
         return response;
       }
@@ -122,10 +112,10 @@ namespace signlang::signlang_manager {
       (void)node_.wait(iox2::bb::Duration::from_millis(10));
     }
 
-    throw std::runtime_error("Timed out waiting for signlang prototype reload response");
+    throw std::runtime_error("Timed out waiting for signlang gesture management response");
   }
 
-  auto IpcPrototypeControlClient::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
+  auto IpcGestureManagementClient::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
     iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
 
     auto node =
@@ -136,26 +126,26 @@ namespace signlang::signlang_manager {
     return std::move(node.value());
   }
 
-  auto IpcPrototypeControlClient::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
-                                                 const std::string& service_name) -> PrototypeControlService {
+  auto IpcGestureManagementClient::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                                  const std::string& service_name) -> GestureManagementService {
     auto service =
         node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
-            .request_response<signlang_det::PrototypeControlRequest, signlang_det::PrototypeControlResponse>()
+            .request_response<signlang_det::GestureManagementRequest, signlang_det::GestureManagementResponse>()
             .max_servers(1)
             .max_clients(4)
             .max_active_requests_per_client(1)
             .max_response_buffer_size(1)
             .open_or_create();
     if (!service.has_value()) {
-      throw std::runtime_error("Failed to open signlang prototype control service in manager: " + service_name);
+      throw std::runtime_error("Failed to open signlang gesture management service in manager: " + service_name);
     }
     return std::move(service.value());
   }
 
-  auto IpcPrototypeControlClient::create_client(const PrototypeControlService& service) -> PrototypeControlClient {
+  auto IpcGestureManagementClient::create_client(const GestureManagementService& service) -> GestureManagementClient {
     auto client = service.client_builder().create();
     if (!client.has_value()) {
-      throw std::runtime_error("Failed to create signlang prototype control client in manager");
+      throw std::runtime_error("Failed to create signlang gesture management client in manager");
     }
     return std::move(client.value());
   }

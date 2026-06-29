@@ -1,8 +1,3 @@
-if(NOT TARGET signlang::rknn_runtime)
-    message(STATUS "Skipping signlang_eyes_signlang_manager: RKNN runtime target not available")
-    return()
-endif()
-
 if(NOT TARGET signlang::gio)
     message(STATUS "Skipping signlang_eyes_signlang_manager: GLib/GIO target not available")
     return()
@@ -10,13 +5,10 @@ endif()
 
 add_executable(signlang_eyes_signlang_manager
         bluetooth_gatt_server.cpp
-        gesture_encoder.cpp
-        gesture_feature_extractor.cpp
         iceoryx_gateway.cpp
         manager_service.cpp
         program_options.cpp
         protocol.cpp
-        prototype_database.cpp
         wire_handpose.cpp
         main.cpp)
 
@@ -28,10 +20,8 @@ target_include_directories(signlang_eyes_signlang_manager PRIVATE
 
 target_link_libraries(signlang_eyes_signlang_manager PRIVATE
         cxxopts::cxxopts
-        SQLiteCpp::SQLiteCpp
         spdlog::spdlog
         iceoryx2-cxx::shared-lib-cxx
-        signlang::rknn_runtime
         signlang::gio
         Threads::Threads)
 

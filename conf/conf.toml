@@ -95,17 +95,12 @@ npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 # confidence_threshold = 0.6       # Minimum recognition confidence
 # confidence_margin = 0.1          # Min top-1 vs top-2 confidence margin
 # duplicate_suppression_ms = 1000  # Suppress repeated same recognized word within this window; 0 disables
+# upload_window_overlap = 0.5      # Overlap ratio when long gesture uploads split into prototype samples
 # subscriber_buffer = 2            # iceoryx2 subscriber queue size
 
 [signlang_manager]
-npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
 # bluetooth_name = "SignLang Eyes"
 # adapter_path = "/org/bluez/hci0"
-# model = "models/bilstm/biltsm.rknn"
-# prototypes = "conf/prototypes.sqlite"
-# min_confidence = 0.3             # Minimum keypoint confidence for uploaded samples
-# motion_weight = 0.0              # Motion feature weight for uploaded samples
-# upload_window_overlap = 0.5      # Overlap ratio when long uploads split into samples
 # subscriber_buffer = 2            # iceoryx2 subscriber queue size
 # stream_fps = 30                  # Maximum BLE handpose streaming frame rate
 # max_notify_payload = 180         # Maximum BLE notification payload chunk size

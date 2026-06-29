@@ -33,6 +33,7 @@ namespace signlang::launcher::ipc {
   constexpr auto kHandposeOutput = "handpose_result";
   constexpr auto kSignlangOutput = "signlang_result";
   constexpr auto kSignlangPrototypeControl = "signlang_prototype_control";
+  constexpr auto kSignlangGestureManagement = "signlang_gesture_management";
   constexpr auto kStateEvent = "app_state_event";
   constexpr auto kStateBlackboard = "app_state_blackboard";
   constexpr auto kStateControl = "app_state_control";
@@ -546,7 +547,7 @@ static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::
   std::vector<std::string> args = {
       kExeSignlangDet,           "--input-service", kHandposeOutput,
       "--output-service",        kSignlangOutput,   "--prototype-control-service",
-      kSignlangPrototypeControl,
+      kSignlangPrototypeControl, "--gesture-management-service", kSignlangGestureManagement,
   };
 
   if (const auto* tbl = cfg["signlang_det"].as_table()) {
@@ -560,6 +561,7 @@ static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::
     add_opt_double(args, "--confidence-threshold", opt_double(*tbl, "confidence_threshold"));
     add_opt_double(args, "--confidence-margin", opt_double(*tbl, "confidence_margin"));
     add_opt_int(args, "--duplicate-suppression-ms", opt_int(*tbl, "duplicate_suppression_ms"));
+    add_opt_double(args, "--upload-window-overlap", opt_double(*tbl, "upload_window_overlap"));
     add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
     add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
   }
@@ -570,23 +572,17 @@ static auto build_signlang_manager_args(const toml::table& cfg) -> std::vector<s
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
       kExeSignlangManager,         "--input-service", kHandposeOutput,
-      "--signlang-result-service", kSignlangOutput,   "--signlang-control-service",
-      kSignlangPrototypeControl,
+      "--signlang-result-service", kSignlangOutput,   "--gesture-management-service",
+      kSignlangGestureManagement,
   };
 
   if (const auto* tbl = cfg["signlang_manager"].as_table()) {
     add_opt_str(args, "--bluetooth-name", opt_string(*tbl, "bluetooth_name"));
     add_opt_str(args, "--adapter-path", opt_string(*tbl, "adapter_path"));
-    add_opt_str(args, "--model", opt_string(*tbl, "model"));
-    add_opt_str(args, "--prototypes", opt_string(*tbl, "prototypes"));
-    add_opt_double(args, "--min-confidence", opt_double(*tbl, "min_confidence"));
-    add_opt_double(args, "--motion-weight", opt_double(*tbl, "motion_weight"));
-    add_opt_double(args, "--upload-window-overlap", opt_double(*tbl, "upload_window_overlap"));
     add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
     add_opt_int(args, "--stream-fps", opt_int(*tbl, "stream_fps"));
     add_opt_int(args, "--max-notify-payload", opt_int(*tbl, "max_notify_payload"));
     add_opt_int(args, "--max-upload-bytes", opt_int(*tbl, "max_upload_bytes"));
-    add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
     if (const auto enable_streaming = opt_bool(*tbl, "enable_streaming_by_default");
         enable_streaming && *enable_streaming) {
       args.emplace_back("--enable-streaming-by-default");

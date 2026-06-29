@@ -1,13 +1,20 @@
-#ifndef SIGNLANG_EYES_SIGNLANG_MANAGER_PROTOTYPE_DATABASE_HPP
-#define SIGNLANG_EYES_SIGNLANG_MANAGER_PROTOTYPE_DATABASE_HPP
+#ifndef SIGNLANG_EYES_SIGNLANG_DET_PROTOTYPE_DATABASE_HPP
+#define SIGNLANG_EYES_SIGNLANG_DET_PROTOTYPE_DATABASE_HPP
 
-#include "gesture_types.hpp"
+#include "signlang_model.hpp"
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
-namespace signlang::signlang_manager {
+namespace signlang::signlang_det {
+
+  struct GestureInfo {
+    std::uint32_t id;
+    std::string name;
+    bool enabled;
+    std::uint32_t sample_count;
+  };
 
   class PrototypeDatabase {
   public:
@@ -22,8 +29,6 @@ namespace signlang::signlang_manager {
 
     [[nodiscard]] auto list_gestures() const -> std::vector<GestureInfo>;
     [[nodiscard]] auto load_gesture_samples(const std::string& gesture_name) const -> std::vector<EncodedSequence>;
-    [[nodiscard]] auto add_gesture_sample(const std::string& gesture_name, const EncodedSequence& encoded_sample,
-                                          bool replace_existing) -> std::uint32_t;
     [[nodiscard]] auto replace_gesture_samples(const std::string& gesture_name,
                                                const std::vector<EncodedSequence>& samples) -> std::uint32_t;
     [[nodiscard]] auto delete_gesture(std::uint32_t gesture_id) -> bool;
@@ -40,6 +45,6 @@ namespace signlang::signlang_manager {
     std::uint32_t embedding_dim_;
   };
 
-} // namespace signlang::signlang_manager
+} // namespace signlang::signlang_det
 
-#endif // SIGNLANG_EYES_SIGNLANG_MANAGER_PROTOTYPE_DATABASE_HPP
+#endif // SIGNLANG_EYES_SIGNLANG_DET_PROTOTYPE_DATABASE_HPP

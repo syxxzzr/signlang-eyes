@@ -2,6 +2,7 @@
 #define SIGNLANG_EYES_SIGNLANG_DET_ICEORYX_GATEWAY_HPP
 
 #include "handpose_det/handpose_frame.hpp"
+#include "gesture_management.hpp"
 #include "prototype_control.hpp"
 #include "signlang_result.hpp"
 
@@ -93,6 +94,34 @@ namespace signlang::signlang_det {
     iox2::Server<iox2::ServiceType::Ipc, PrototypeControlRequest, void, PrototypeControlResponse, void> server_;
   };
 
+  class IpcGestureManagementServer {
+  public:
+    explicit IpcGestureManagementServer(const std::string& service_name);
+
+    IpcGestureManagementServer(const IpcGestureManagementServer&) = delete;
+    auto operator=(const IpcGestureManagementServer&) -> IpcGestureManagementServer& = delete;
+    IpcGestureManagementServer(IpcGestureManagementServer&&) = delete;
+    auto operator=(IpcGestureManagementServer&&) -> IpcGestureManagementServer& = delete;
+
+    template <typename Handler>
+    void process_pending_requests(Handler&& handler);
+
+  private:
+    static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
+    static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+        -> iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, GestureManagementRequest, void,
+                                            GestureManagementResponse, void>;
+    static auto create_server(const iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, GestureManagementRequest,
+                                                                     void, GestureManagementResponse, void>& service)
+        -> iox2::Server<iox2::ServiceType::Ipc, GestureManagementRequest, void, GestureManagementResponse, void>;
+
+    iox2::Node<iox2::ServiceType::Ipc> node_;
+    iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, GestureManagementRequest, void,
+                                     GestureManagementResponse, void>
+        service_;
+    iox2::Server<iox2::ServiceType::Ipc, GestureManagementRequest, void, GestureManagementResponse, void> server_;
+  };
+
   template <typename Handler>
   auto IpcHandposeSubscriber::receive_latest(Handler&& handler) -> bool {
     auto latest_sample = subscriber_.receive();
@@ -141,6 +170,29 @@ namespace signlang::signlang_det {
       receive_result = server_.receive();
       if (!receive_result.has_value()) {
         throw std::runtime_error("Failed to receive signlang prototype control request");
+      }
+      active_request = std::move(receive_result.value());
+    }
+  }
+
+  template <typename Handler>
+  void IpcGestureManagementServer::process_pending_requests(Handler&& handler) {
+    auto receive_result = server_.receive();
+    if (!receive_result.has_value()) {
+      throw std::runtime_error("Failed to receive signlang gesture management request");
+    }
+
+    auto active_request = std::move(receive_result.value());
+    while (active_request.has_value()) {
+      auto response = handler(active_request.value().payload());
+      const auto send_result = active_request.value().send_copy(response);
+      if (!send_result.has_value()) {
+        throw std::runtime_error("Failed to send signlang gesture management response");
+      }
+
+      receive_result = server_.receive();
+      if (!receive_result.has_value()) {
+        throw std::runtime_error("Failed to receive signlang gesture management request");
       }
       active_request = std::move(receive_result.value());
     }

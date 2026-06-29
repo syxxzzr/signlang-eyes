@@ -245,7 +245,6 @@ sequence_length = 30       # 30-frame window
 confidence_threshold = 0.6 # Recognition confidence
 
 [signlang_manager]
-npu_core = "0"             # NPU core 0
 bluetooth_name = "SignLang Eyes"
 stream_fps = 30
 ```

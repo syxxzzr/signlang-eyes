@@ -54,9 +54,9 @@ namespace signlang::signlang_det {
     explicit DtwMatcher(float window_ratio);
 
     [[nodiscard]] auto match(const EncodedSequence& query, const PrototypeStore& store) const -> std::vector<Candidate>;
+    [[nodiscard]] auto compute_distance(const EncodedSequence& query, const EncodedSequence& sample) const -> float;
 
   private:
-    [[nodiscard]] auto compute_distance(const EncodedSequence& query, const EncodedSequence& sample) const -> float;
     [[nodiscard]] static auto compute_frame_distance(const std::vector<float>& query_frame,
                                                      const std::vector<float>& sample_frame) -> float;
     [[nodiscard]] auto compute_window(std::uint32_t query_length, std::uint32_t sample_length) const -> std::uint32_t;
@@ -117,6 +117,9 @@ namespace signlang::signlang_det {
     ~SignlangModel();
 
     [[nodiscard]] auto infer(const std::vector<FeatureVector>& sequence) -> InferenceResult;
+    [[nodiscard]] auto encode_features(const std::vector<FeatureVector>& sequence) -> EncodedSequence;
+    [[nodiscard]] auto embedding_dim() const -> std::uint32_t;
+    [[nodiscard]] auto dtw_distance(const EncodedSequence& lhs, const EncodedSequence& rhs) const -> float;
     [[nodiscard]] auto get_gesture_name(std::uint32_t gesture_id) const -> const char*;
     [[nodiscard]] auto expected_sequence_length() const -> std::uint32_t;
     void reload_prototypes(const std::string& prototypes_path);

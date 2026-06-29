@@ -1,11 +1,9 @@
 #include "signlang_model.hpp"
 
-#include "SQLiteCpp.h"
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
 #include <array>
-#include <charconv>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -16,28 +14,6 @@
 
 namespace signlang::signlang_det {
   namespace {
-
-    constexpr auto kPrototypeSchemaVersion = int{1};
-    constexpr const char* kFloat32Dtype = "f32";
-
-    auto read_meta_int(SQLite::Database& database, const char* key) -> int {
-      auto query = SQLite::Statement{database, "SELECT value FROM meta WHERE key = ?"};
-      query.bind(1, key);
-      if (!query.executeStep()) {
-        return 0;
-      }
-
-      const auto value = query.getColumn(0).getString();
-      auto parsed = int{0};
-      const auto* begin = value.data();
-      const auto* end = begin + value.size();
-      const auto [parse_end, parse_error] = std::from_chars(begin, end, parsed);
-      if (parse_error != std::errc{} || parse_end != end) {
-        throw std::runtime_error("Prototype meta value for key '" + std::string{key} + "' must be an integer");
-      }
-
-      return parsed;
-    }
 
     class RknnOutputReleaseGuard {
     public:
@@ -58,92 +34,6 @@ namespace signlang::signlang_det {
     };
 
   } // namespace
-
-  auto PrototypeStore::load(const std::string& path) -> PrototypeStore {
-    auto database = SQLite::Database{path, SQLite::OPEN_READONLY};
-    auto store = PrototypeStore{};
-
-    if (!database.tableExists("meta") || !database.tableExists("gestures") || !database.tableExists("samples")) {
-      throw std::runtime_error("Prototype SQLite database is missing required tables: " + path);
-    }
-
-    const auto schema_version = read_meta_int(database, "schema_version");
-    if (schema_version != kPrototypeSchemaVersion) {
-      throw std::runtime_error("Unsupported prototype SQLite schema version: " + std::to_string(schema_version));
-    }
-
-    const auto meta_embedding_dim = read_meta_int(database, "embedding_dim");
-    if (meta_embedding_dim <= 0) {
-      throw std::runtime_error("Prototype SQLite database has invalid embedding_dim metadata");
-    }
-    store.embedding_dim_ = static_cast<std::uint32_t>(meta_embedding_dim);
-
-    auto gesture_query = SQLite::Statement{database,
-                                           "SELECT id, name "
-                                           "FROM gestures "
-                                           "WHERE enabled != 0 "
-                                           "ORDER BY id"};
-
-    while (gesture_query.executeStep()) {
-      auto gesture = GesturePrototypeSet{
-          .gesture_id = static_cast<std::uint32_t>(gesture_query.getColumn(0).getUInt()),
-          .name = gesture_query.getColumn(1).getString(),
-          .samples = {},
-      };
-      if (gesture.name.empty()) {
-        throw std::runtime_error("Enabled gesture has an empty name: " + std::to_string(gesture.gesture_id));
-      }
-
-      auto sample_query = SQLite::Statement{database,
-                                            "SELECT id, frame_count, embedding_dim, dtype, data "
-                                            "FROM samples "
-                                            "WHERE gesture_id = ? "
-                                            "ORDER BY id"};
-      sample_query.bind(1, gesture.gesture_id);
-
-      while (sample_query.executeStep()) {
-        const auto sample_id = static_cast<std::uint32_t>(sample_query.getColumn(0).getUInt());
-        const auto frame_count = static_cast<std::uint32_t>(sample_query.getColumn(1).getUInt());
-        const auto embedding_dim = static_cast<std::uint32_t>(sample_query.getColumn(2).getUInt());
-        const auto dtype = sample_query.getColumn(3).getString();
-        const auto* blob = static_cast<const float*>(sample_query.getColumn(4).getBlob());
-        const auto blob_bytes = sample_query.getColumn(4).getBytes();
-
-        if (frame_count == 0 || embedding_dim == 0) {
-          throw std::runtime_error("Prototype sample has invalid dimensions");
-        }
-        if (embedding_dim != store.embedding_dim_) {
-          throw std::runtime_error("Prototype sample embedding dimension mismatch: expected " +
-                                   std::to_string(store.embedding_dim_) + ", got " + std::to_string(embedding_dim));
-        }
-        if (dtype != kFloat32Dtype) {
-          throw std::runtime_error("Unsupported prototype sample dtype: " + dtype);
-        }
-
-        const auto expected_bytes = static_cast<std::size_t>(frame_count) * embedding_dim * sizeof(float);
-        if (blob == nullptr || blob_bytes < 0 || static_cast<std::size_t>(blob_bytes) != expected_bytes) {
-          throw std::runtime_error("Prototype sample blob size mismatch for sample " + std::to_string(sample_id));
-        }
-
-        auto sample = GesturePrototype{.sample_id = sample_id, .frames = EncodedSequence(frame_count)};
-        for (std::uint32_t frame_index = 0; frame_index < frame_count; ++frame_index) {
-          const auto* frame_begin = blob + (static_cast<std::size_t>(frame_index) * embedding_dim);
-          sample.frames[frame_index].assign(frame_begin, frame_begin + embedding_dim);
-        }
-
-        gesture.samples.push_back(std::move(sample));
-        ++store.sample_count_;
-      }
-
-      if (gesture.samples.empty()) {
-        throw std::runtime_error("Enabled gesture has no prototype samples: " + std::to_string(gesture.gesture_id));
-      }
-      store.names_by_id_.emplace(gesture.gesture_id, gesture.name);
-      store.gestures_.push_back(std::move(gesture));
-    }
-
-    return store;
-  }
 
   auto PrototypeStore::gestures() const -> const std::vector<GesturePrototypeSet>& { return gestures_; }
 
@@ -440,6 +330,16 @@ namespace signlang::signlang_det {
 
   auto SignlangModel::expected_sequence_length() const -> std::uint32_t { return encoder_->sequence_length(); }
 
+  auto SignlangModel::embedding_dim() const -> std::uint32_t { return encoder_->embedding_dim(); }
+
+  auto SignlangModel::encode_features(const std::vector<FeatureVector>& sequence) -> EncodedSequence {
+    return encoder_->encode(sequence);
+  }
+
+  auto SignlangModel::dtw_distance(const EncodedSequence& lhs, const EncodedSequence& rhs) const -> float {
+    return matcher_.compute_distance(lhs, rhs);
+  }
+
   void SignlangModel::reload_prototypes(const std::string& prototypes_path) {
     auto next_store = PrototypeStore::load(prototypes_path);
     if (next_store.embedding_dim() != encoder_->embedding_dim()) {
@@ -464,7 +364,7 @@ namespace signlang::signlang_det {
   auto SignlangModel::infer(const std::vector<FeatureVector>& sequence) -> InferenceResult {
     const auto start_time = std::chrono::steady_clock::now();
 
-    const auto encoded_frames = encoder_->encode(sequence);
+    const auto encoded_frames = encode_features(sequence);
     auto candidates = matcher_.match(encoded_frames, prototypes_);
 
     auto result = InferenceResult{

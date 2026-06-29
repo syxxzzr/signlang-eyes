@@ -1,4 +1,4 @@
-# signlang_manager — BLE Handpose Stream and Gesture Database Manager
+# signlang_manager — BLE Handpose Stream and Gesture Library Gateway
 
 ## Overview
 
@@ -6,14 +6,12 @@
 
 - streams latest `handpose_det` results through BLE notifications
 - includes newly recognized `signlang_det` results in the next handpose stream notification
-- lists existing gesture prototypes
-- adds gestures from uploaded handpose recordings
-- deletes gestures from the SQLite prototype database
-- asks `signlang_det` to reload prototypes after database mutations
+- forwards gesture list/add/delete requests to `signlang_det`
+- validates and gates BLE uploads before sending raw handpose recordings to `signlang_det`
 
-The module initializes `prototypes.sqlite` automatically. If the file is empty, missing required tables, has a wrong
-schema version, or has an embedding dimension mismatch, it recreates a valid empty database with no gestures.
-At startup it also verifies the configured BlueZ adapter, powers it on if needed, and exits with an error if GATT
+`signlang_det` owns SQLite prototype storage, upload feature extraction, BiLSTM encoding, DTW representative selection,
+and prototype reloads. At startup `signlang_manager` verifies the configured BlueZ adapter, powers it on if needed,
+and exits with an error if GATT
 application or LE advertisement registration fails.
 
 ## BLE Service
@@ -70,11 +68,10 @@ Each frame payload is the raw-f32 wire format produced by `wire_handpose.{hpp,cp
 
 During commit, the manager:
 
-1. decodes handpose frames
-2. copies the feature extraction logic used by `signlang_det`
-3. runs its own RKNN BiLSTM encoder instance
-4. writes encoded prototype samples to SQLite via `SQLiteCpp`
-5. sends a prototype reload request to `signlang_det`
+1. verifies all BLE upload chunks arrived
+2. decodes each wire handpose frame into `HandPoseFrameMetadata` plus `HandPoseDetection` values
+3. forwards the decoded frames to `signlang_det` over the gesture-management request-response service
+4. returns the stored gesture id from `signlang_det`
 
 ## Command-Line Parameters
 
@@ -86,18 +83,12 @@ All module executables also accept `--log-file <path>` and `--log-rotate-size <b
 |-----------|---------|-------------|
 | `--input-service` | required | handpose iceoryx2 service |
 | `--signlang-result-service` | required | signlang result iceoryx2 service |
-| `--signlang-control-service` | required | prototype reload request-response service |
+| `--gesture-management-service` | required | signlang_det gesture management request-response service |
 | `--bluetooth-name` | `SignLang Eyes` | BLE advertising local name |
 | `--adapter-path` | `/org/bluez/hci0` | BlueZ adapter object path |
-| `--model` | `models/bilstm/biltsm.rknn` | RKNN encoder model |
-| `--prototypes` | `conf/prototypes.sqlite` | SQLite prototype DB |
-| `--min-confidence` | `0.3` | minimum hand confidence for uploaded samples |
-| `--motion-weight` | `0.0` | velocity feature weight |
-| `--upload-window-overlap` | `0.5` | overlap when long uploads are split into samples |
 | `--subscriber-buffer` | `2` | iceoryx2 handpose queue size |
 | `--stream-fps` | `30` | max BLE stream frame rate |
 | `--max-notify-payload` | `180` | notification chunk size |
-| `--npu-core` | `auto` | RKNN NPU core selection |
 | `--enable-streaming-by-default` | false | stream as soon as a client subscribes |
 
 ## Running Board BLE Check

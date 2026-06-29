@@ -22,6 +22,8 @@ add_executable(signlang_eyes_signlang_det
         keypoint_ring_buffer.cpp
         feature_extractor.cpp
         signlang_model.cpp
+        prototype_database.cpp
+        gesture_management_service.cpp
         iceoryx_gateway.cpp
         program_options.cpp
         main.cpp)

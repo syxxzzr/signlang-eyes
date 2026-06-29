@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-namespace signlang::signlang_manager {
+namespace signlang::signlang_det {
   namespace {
 
     constexpr auto kSchemaVersion = int{1};
@@ -110,6 +110,92 @@ namespace signlang::signlang_manager {
 
   } // namespace
 
+  auto PrototypeStore::load(const std::string& path) -> PrototypeStore {
+    auto database = SQLite::Database{path, SQLite::OPEN_READONLY};
+    auto store = PrototypeStore{};
+
+    if (!database.tableExists("meta") || !database.tableExists("gestures") || !database.tableExists("samples")) {
+      throw std::runtime_error("Prototype SQLite database is missing required tables: " + path);
+    }
+
+    const auto schema_version = read_meta_int(database, "schema_version");
+    if (schema_version != kSchemaVersion) {
+      throw std::runtime_error("Unsupported prototype SQLite schema version: " + std::to_string(schema_version));
+    }
+
+    const auto meta_embedding_dim = read_meta_int(database, "embedding_dim");
+    if (meta_embedding_dim <= 0) {
+      throw std::runtime_error("Prototype SQLite database has invalid embedding_dim metadata");
+    }
+    store.embedding_dim_ = static_cast<std::uint32_t>(meta_embedding_dim);
+
+    auto gesture_query = SQLite::Statement{database,
+                                           "SELECT id, name "
+                                           "FROM gestures "
+                                           "WHERE enabled != 0 "
+                                           "ORDER BY id"};
+
+    while (gesture_query.executeStep()) {
+      auto gesture = GesturePrototypeSet{
+          .gesture_id = static_cast<std::uint32_t>(gesture_query.getColumn(0).getUInt()),
+          .name = gesture_query.getColumn(1).getString(),
+          .samples = {},
+      };
+      if (gesture.name.empty()) {
+        throw std::runtime_error("Enabled gesture has an empty name: " + std::to_string(gesture.gesture_id));
+      }
+
+      auto sample_query = SQLite::Statement{database,
+                                            "SELECT id, frame_count, embedding_dim, dtype, data "
+                                            "FROM samples "
+                                            "WHERE gesture_id = ? "
+                                            "ORDER BY id"};
+      sample_query.bind(1, gesture.gesture_id);
+
+      while (sample_query.executeStep()) {
+        const auto sample_id = static_cast<std::uint32_t>(sample_query.getColumn(0).getUInt());
+        const auto frame_count = static_cast<std::uint32_t>(sample_query.getColumn(1).getUInt());
+        const auto embedding_dim = static_cast<std::uint32_t>(sample_query.getColumn(2).getUInt());
+        const auto dtype = sample_query.getColumn(3).getString();
+        const auto* blob = static_cast<const float*>(sample_query.getColumn(4).getBlob());
+        const auto blob_bytes = sample_query.getColumn(4).getBytes();
+
+        if (frame_count == 0 || embedding_dim == 0) {
+          throw std::runtime_error("Prototype sample has invalid dimensions");
+        }
+        if (embedding_dim != store.embedding_dim_) {
+          throw std::runtime_error("Prototype sample embedding dimension mismatch: expected " +
+                                   std::to_string(store.embedding_dim_) + ", got " + std::to_string(embedding_dim));
+        }
+        if (dtype != kFloat32Dtype) {
+          throw std::runtime_error("Unsupported prototype sample dtype: " + dtype);
+        }
+
+        const auto expected_bytes = static_cast<std::size_t>(frame_count) * embedding_dim * sizeof(float);
+        if (blob == nullptr || blob_bytes < 0 || static_cast<std::size_t>(blob_bytes) != expected_bytes) {
+          throw std::runtime_error("Prototype sample blob size mismatch for sample " + std::to_string(sample_id));
+        }
+
+        auto sample = GesturePrototype{.sample_id = sample_id, .frames = EncodedSequence(frame_count)};
+        for (std::uint32_t frame_index = 0; frame_index < frame_count; ++frame_index) {
+          const auto* frame_begin = blob + (static_cast<std::size_t>(frame_index) * embedding_dim);
+          sample.frames[frame_index].assign(frame_begin, frame_begin + embedding_dim);
+        }
+
+        gesture.samples.push_back(std::move(sample));
+        ++store.sample_count_;
+      }
+
+      if (gesture.samples.empty()) {
+        throw std::runtime_error("Enabled gesture has no prototype samples: " + std::to_string(gesture.gesture_id));
+      }
+      store.names_by_id_.emplace(gesture.gesture_id, gesture.name);
+      store.gestures_.push_back(std::move(gesture));
+    }
+
+    return store;
+  }
+
   PrototypeDatabase::PrototypeDatabase(std::string path, std::uint32_t embedding_dim) :
       path_{std::move(path)}, embedding_dim_{embedding_dim} {
     if (path_.empty()) {
@@ -157,7 +243,7 @@ namespace signlang::signlang_manager {
       fs::create_directories(parent);
     }
 
-    std::error_code error;
+    auto error = std::error_code{};
     if (fs::exists(db_path, error) && !error) {
       const auto backup_path = backup_path_for(db_path);
       fs::copy_file(db_path, backup_path, fs::copy_options::none, error);
@@ -275,51 +361,6 @@ namespace signlang::signlang_manager {
     return samples;
   }
 
-  auto PrototypeDatabase::add_gesture_sample(const std::string& gesture_name, const EncodedSequence& encoded_sample,
-                                             bool replace_existing) -> std::uint32_t {
-    if (gesture_name.empty()) {
-      throw std::runtime_error("Gesture name must not be empty");
-    }
-
-    auto blob = encoded_sample_to_blob(encoded_sample, embedding_dim_);
-    if (blob.size() > static_cast<std::size_t>(std::numeric_limits<int>::max() / sizeof(float))) {
-      throw std::runtime_error("Encoded gesture sample is too large to store in SQLite");
-    }
-
-    auto database = SQLite::Database{path_, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE};
-    auto transaction = SQLite::Transaction{database, SQLite::TransactionBehavior::IMMEDIATE};
-
-    auto gesture_id = find_gesture_id(database, gesture_name);
-    if (!gesture_id.has_value()) {
-      auto insert_gesture = SQLite::Statement{database, "INSERT INTO gestures(name, enabled) VALUES (?, 1)"};
-      insert_gesture.bind(1, gesture_name);
-      insert_gesture.exec();
-      gesture_id = static_cast<std::uint32_t>(database.getLastInsertRowid());
-    } else if (replace_existing) {
-      auto delete_samples = SQLite::Statement{database, "DELETE FROM samples WHERE gesture_id = ?"};
-      delete_samples.bind(1, gesture_id.value());
-      delete_samples.exec();
-
-      auto enable_gesture = SQLite::Statement{database, "UPDATE gestures SET enabled = 1 WHERE id = ?"};
-      enable_gesture.bind(1, gesture_id.value());
-      enable_gesture.exec();
-    }
-
-    auto insert_sample =
-        SQLite::Statement{database,
-                          "INSERT INTO samples(gesture_id, frame_count, embedding_dim, dtype, data, weight) "
-                          "VALUES (?, ?, ?, ?, ?, 1.0)"};
-    insert_sample.bind(1, gesture_id.value());
-    insert_sample.bind(2, static_cast<std::uint32_t>(encoded_sample.size()));
-    insert_sample.bind(3, embedding_dim_);
-    insert_sample.bind(4, kFloat32Dtype);
-    insert_sample.bind(5, blob.data(), static_cast<int>(blob.size() * sizeof(float)));
-    insert_sample.exec();
-
-    transaction.commit();
-    return gesture_id.value();
-  }
-
   auto PrototypeDatabase::replace_gesture_samples(const std::string& gesture_name,
                                                   const std::vector<EncodedSequence>& samples) -> std::uint32_t {
     if (gesture_name.empty()) {
@@ -408,4 +449,4 @@ namespace signlang::signlang_manager {
     return delete_gesture(gesture_id.value());
   }
 
-} // namespace signlang::signlang_manager
+} // namespace signlang::signlang_det

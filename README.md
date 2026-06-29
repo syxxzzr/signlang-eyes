@@ -194,12 +194,10 @@ model = "models/bilstm/biltsm.rknn"
 prototypes = "conf/prototypes.sqlite"
 sequence_length = 30       # Sliding window frame count
 confidence_threshold = 0.6 # Recognition confidence threshold (0.0-1.0)
+upload_window_overlap = 0.5
 
 [signlang_manager]
-npu_core = "0"
 bluetooth_name = "SignLang Eyes"
-model = "models/bilstm/biltsm.rknn"
-prototypes = "conf/prototypes.sqlite"
 stream_fps = 30
 ```
 
@@ -270,12 +268,15 @@ install/bin/handpose_det \
 # BLE sign language manager
 install/bin/signlang_manager \
     --input-service handpose_result \
-    --signlang-control-service signlang_prototype_control
+    --signlang-result-service signlang_result \
+    --gesture-management-service signlang_gesture_management
 
 # Sign language recognition
 install/bin/signlang_det \
     --input-service handpose_result \
     --output-service signlang_result \
+    --prototype-control-service signlang_prototype_control \
+    --gesture-management-service signlang_gesture_management \
     --npu-core 0 \
     --sequence-length 30
 ```

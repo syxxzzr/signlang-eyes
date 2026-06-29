@@ -28,7 +28,6 @@ auto main(int argc, char** argv) -> int {
 
   return signlang::runtime::run_module(argc, argv, parse_program_options, [&](const auto& options) {
     spdlog::info("Starting sign language manager");
-    spdlog::info("Prototype database: {}", options.prototypes_path);
 
     auto manager = ManagerService{options};
     auto bluetooth = BluetoothGattServer{BluetoothGattOptions{
