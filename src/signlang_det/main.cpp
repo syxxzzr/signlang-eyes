@@ -145,6 +145,8 @@ namespace {
     auto next_window_end_seq = std::uint64_t{hop_frames};
     auto last_published_gesture_id = std::optional<std::uint32_t>{};
     auto last_published_gesture_time = std::chrono::steady_clock::time_point{};
+    auto last_hit_gesture_id = std::optional<std::uint32_t>{};
+    auto consecutive_hit_count = std::uint32_t{0};
     const auto duplicate_suppression_window = std::chrono::milliseconds{options.duplicate_suppression_ms};
 
     while (!should_stop) {
@@ -158,6 +160,8 @@ namespace {
         downstream_active.store(false);
         next_window_end_seq = hop_frames;
         last_published_gesture_id.reset();
+        last_hit_gesture_id.reset();
+        consecutive_hit_count = 0;
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         continue;
       }
@@ -193,7 +197,25 @@ namespace {
         }
 
         auto should_publish = true;
-        if (result.recognized && options.duplicate_suppression_ms > 0) {
+        if (result.recognized) {
+          if (last_hit_gesture_id.has_value() && last_hit_gesture_id.value() == result.gesture_id) {
+            ++consecutive_hit_count;
+          } else {
+            last_hit_gesture_id = result.gesture_id;
+            consecutive_hit_count = 1;
+          }
+
+          if (consecutive_hit_count < options.consecutive_hit_windows) {
+            should_publish = false;
+            spdlog::debug("Waiting for consecutive sign language hits: {} ({}/{})", result.gesture_name.data(),
+                          consecutive_hit_count, options.consecutive_hit_windows);
+          }
+        } else {
+          last_hit_gesture_id.reset();
+          consecutive_hit_count = 0;
+        }
+
+        if (should_publish && result.recognized && options.duplicate_suppression_ms > 0) {
           const auto now = std::chrono::steady_clock::now();
           if (last_published_gesture_id.has_value() &&
               last_published_gesture_id.value() == result.gesture_id &&

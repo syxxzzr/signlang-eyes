@@ -13,7 +13,7 @@
 namespace signlang::signlang_det {
   namespace {
 
-    constexpr auto kMaxRepresentativeSamples = std::size_t{3};
+    using DistanceMatrix = std::vector<std::vector<float>>;
 
     auto fixed_cstr(const std::array<char, kMaxGestureNameLength>& value) -> std::string {
       const auto end = std::find(value.begin(), value.end(), '\0');
@@ -26,12 +26,22 @@ namespace signlang::signlang_det {
       std::copy_n(message.data(), count, dest.data());
     }
 
-    auto select_representative_samples(SignlangModel& model, const std::vector<EncodedSequence>& samples)
-        -> std::vector<EncodedSequence> {
-      if (samples.size() <= kMaxRepresentativeSamples) {
-        return samples;
+    auto median(std::vector<float> values) -> float {
+      if (values.empty()) {
+        return 0.0F;
       }
+      const auto mid = values.begin() + static_cast<std::ptrdiff_t>(values.size() / 2U);
+      std::nth_element(values.begin(), mid, values.end());
+      auto result = *mid;
+      if (values.size() % 2U == 0U) {
+        const auto lower = *std::max_element(values.begin(), mid);
+        result = (result + lower) * 0.5F;
+      }
+      return result;
+    }
 
+    auto compute_pairwise_distances(SignlangModel& model, const std::vector<EncodedSequence>& samples)
+        -> DistanceMatrix {
       const auto count = samples.size();
       auto distances = std::vector<std::vector<float>>(count, std::vector<float>(count, 0.0F));
       for (std::size_t i = 0; i < count; ++i) {
@@ -41,6 +51,71 @@ namespace signlang::signlang_det {
           distances[j][i] = distance;
         }
       }
+      return distances;
+    }
+
+    auto filter_outlier_samples(const std::vector<EncodedSequence>& samples, const DistanceMatrix& distances)
+        -> std::vector<EncodedSequence> {
+      if (samples.size() < 4U) {
+        return samples;
+      }
+
+      auto mean_distances = std::vector<float>{};
+      mean_distances.reserve(samples.size());
+      for (std::size_t i = 0; i < samples.size(); ++i) {
+        auto sum = 0.0F;
+        auto finite_count = std::uint32_t{0};
+        for (std::size_t j = 0; j < samples.size(); ++j) {
+          if (i == j || !std::isfinite(distances[i][j])) {
+            continue;
+          }
+          sum += distances[i][j];
+          ++finite_count;
+        }
+        mean_distances.push_back(finite_count == 0 ? std::numeric_limits<float>::infinity()
+                                                   : sum / static_cast<float>(finite_count));
+      }
+
+      const auto center = median(mean_distances);
+      auto deviations = std::vector<float>{};
+      deviations.reserve(mean_distances.size());
+      for (const auto value : mean_distances) {
+        if (std::isfinite(value)) {
+          deviations.push_back(std::abs(value - center));
+        }
+      }
+
+      const auto mad = median(deviations);
+      if (mad <= 1e-6F || !std::isfinite(center)) {
+        return samples;
+      }
+
+      const auto threshold = center + 3.0F * 1.4826F * mad;
+      auto filtered = std::vector<EncodedSequence>{};
+      filtered.reserve(samples.size());
+      for (std::size_t i = 0; i < samples.size(); ++i) {
+        if (mean_distances[i] <= threshold) {
+          filtered.push_back(samples[i]);
+        }
+      }
+
+      if (filtered.empty()) {
+        return samples;
+      }
+      if (filtered.size() != samples.size()) {
+        spdlog::info("Filtered {} outlier gesture prototype samples", samples.size() - filtered.size());
+      }
+      return filtered;
+    }
+
+    auto select_representative_samples(const std::vector<EncodedSequence>& samples,
+                                       const DistanceMatrix& distances, std::size_t representative_count)
+        -> std::vector<EncodedSequence> {
+      if (samples.size() <= representative_count) {
+        return samples;
+      }
+
+      const auto count = samples.size();
 
       auto cluster_cost = [&](const std::vector<std::size_t>& medoids) {
         auto cost = 0.0F;
@@ -55,7 +130,7 @@ namespace signlang::signlang_det {
       };
 
       auto medoids = std::vector<std::size_t>{};
-      while (medoids.size() < kMaxRepresentativeSamples) {
+      while (medoids.size() < representative_count) {
         auto best_index = std::size_t{0};
         auto best_cost = std::numeric_limits<float>::infinity();
         for (std::size_t candidate = 0; candidate < count; ++candidate) {
@@ -319,6 +394,8 @@ namespace signlang::signlang_det {
                                        features.begin() + static_cast<std::ptrdiff_t>(start + sequence_length)};
         uploaded_samples.push_back(model_.encode_features(window));
       }
+      const auto distances = compute_pairwise_distances(model_, uploaded_samples);
+      uploaded_samples = filter_outlier_samples(uploaded_samples, distances);
     }
 
     auto candidate_samples = session.replace_existing ? std::vector<EncodedSequence>{}
@@ -329,7 +406,10 @@ namespace signlang::signlang_det {
     std::vector<EncodedSequence> representative_samples;
     {
       const std::lock_guard lock{model_mutex_};
-      representative_samples = select_representative_samples(model_, candidate_samples);
+      const auto distances = compute_pairwise_distances(model_, candidate_samples);
+      const auto representative_count = std::min<std::size_t>(candidate_samples.size(),
+                                                              options_.max_representative_samples);
+      representative_samples = select_representative_samples(candidate_samples, distances, representative_count);
     }
     const auto gesture_id = database_.replace_gesture_samples(session.gesture_name, representative_samples);
     spdlog::info(

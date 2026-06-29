@@ -243,6 +243,8 @@ confidence = 0.5           # Detection confidence
 npu_core = "0"             # NPU core 0
 sequence_length = 30       # 30-frame window
 confidence_threshold = 0.6 # Recognition confidence
+max_representative_samples = 3
+consecutive_hit_windows = 2
 
 [signlang_manager]
 bluetooth_name = "SignLang Eyes"

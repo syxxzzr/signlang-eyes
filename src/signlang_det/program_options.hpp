@@ -22,6 +22,8 @@ namespace signlang::signlang_det {
   constexpr auto kDefaultConfidenceMargin = float{0.1F};
   constexpr auto kDefaultDuplicateSuppressionMs = std::uint32_t{1000};
   constexpr auto kDefaultUploadWindowOverlap = float{0.5F};
+  constexpr auto kDefaultMaxRepresentativeSamples = std::uint32_t{3};
+  constexpr auto kDefaultConsecutiveHitWindows = std::uint32_t{2};
 
   struct ProgramOptions {
     std::string input_service_name;
@@ -41,6 +43,8 @@ namespace signlang::signlang_det {
     float confidence_margin;
     std::uint32_t duplicate_suppression_ms;
     float upload_window_overlap;
+    std::uint32_t max_representative_samples;
+    std::uint32_t consecutive_hit_windows;
     signlang::logging::Options logging;
   };
 

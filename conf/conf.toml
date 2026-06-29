@@ -96,6 +96,8 @@ npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 # confidence_margin = 0.1          # Min top-1 vs top-2 confidence margin
 # duplicate_suppression_ms = 1000  # Suppress repeated same recognized word within this window; 0 disables
 # upload_window_overlap = 0.5      # Overlap ratio when long gesture uploads split into prototype samples
+# max_representative_samples = 3   # Maximum retained representative samples per gesture
+# consecutive_hit_windows = 2      # Same gesture windows required before publishing a result
 # subscriber_buffer = 2            # iceoryx2 subscriber queue size
 
 [signlang_manager]

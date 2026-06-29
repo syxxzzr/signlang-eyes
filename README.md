@@ -195,6 +195,8 @@ prototypes = "conf/prototypes.sqlite"
 sequence_length = 30       # Sliding window frame count
 confidence_threshold = 0.6 # Recognition confidence threshold (0.0-1.0)
 upload_window_overlap = 0.5
+max_representative_samples = 3
+consecutive_hit_windows = 2
 
 [signlang_manager]
 bluetooth_name = "SignLang Eyes"

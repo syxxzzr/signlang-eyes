@@ -562,6 +562,8 @@ static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::
     add_opt_double(args, "--confidence-margin", opt_double(*tbl, "confidence_margin"));
     add_opt_int(args, "--duplicate-suppression-ms", opt_int(*tbl, "duplicate_suppression_ms"));
     add_opt_double(args, "--upload-window-overlap", opt_double(*tbl, "upload_window_overlap"));
+    add_opt_int(args, "--max-representative-samples", opt_int(*tbl, "max_representative_samples"));
+    add_opt_int(args, "--consecutive-hit-windows", opt_int(*tbl, "consecutive_hit_windows"));
     add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
     add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
   }

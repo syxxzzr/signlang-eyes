@@ -68,6 +68,10 @@ namespace signlang::signlang_det {
         cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultDuplicateSuppressionMs)))(
         "upload-window-overlap", "Overlap ratio when long gesture uploads are split into prototype samples",
         cxxopts::value<float>()->default_value(std::to_string(kDefaultUploadWindowOverlap)))(
+        "max-representative-samples", "Maximum retained representative prototype samples per gesture",
+        cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultMaxRepresentativeSamples)))(
+        "consecutive-hit-windows", "Recognized gesture windows required before publishing a result",
+        cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultConsecutiveHitWindows)))(
         "npu-core", "NPU core selection: auto,0,1,2,0_1,0_1_2,all",
         cxxopts::value<std::string>()->default_value("auto"))("h,help", "Print usage");
     signlang::logging::add_cli_options(options);
@@ -128,6 +132,16 @@ namespace signlang::signlang_det {
       throw std::runtime_error("--upload-window-overlap must be in [0.0, 1.0)");
     }
 
+    const auto max_representative_samples = parsed_options["max-representative-samples"].as<std::uint32_t>();
+    if (max_representative_samples == 0) {
+      throw std::runtime_error("--max-representative-samples must be greater than 0");
+    }
+
+    const auto consecutive_hit_windows = parsed_options["consecutive-hit-windows"].as<std::uint32_t>();
+    if (consecutive_hit_windows == 0) {
+      throw std::runtime_error("--consecutive-hit-windows must be greater than 0");
+    }
+
     const auto npu_core_str = parsed_options["npu-core"].as<std::string>();
     const auto npu_core_mask = parse_npu_core_mask(npu_core_str);
 
@@ -153,6 +167,8 @@ namespace signlang::signlang_det {
         .confidence_margin = confidence_margin,
         .duplicate_suppression_ms = duplicate_suppression_ms,
         .upload_window_overlap = upload_window_overlap,
+        .max_representative_samples = max_representative_samples,
+        .consecutive_hit_windows = consecutive_hit_windows,
         .logging = signlang::logging::parse_cli_options(parsed_options),
     };
   }
