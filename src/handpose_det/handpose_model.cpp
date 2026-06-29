@@ -371,8 +371,7 @@ namespace signlang::handpose_det {
       euro_beta_{options.euro_beta}, euro_d_cutoff_{options.euro_d_cutoff},
       handedness_threshold_{options.handedness_threshold}, swap_handedness_{options.swap_handedness},
       max_tracking_gap_{options.max_tracking_gap}, max_stale_frames_{options.max_stale_frames},
-      single_hand_full_frame_interval_{options.single_hand_full_frame_interval},
-      stable_hands_full_frame_interval_{options.stable_hands_full_frame_interval}, hand_slots_{hand_slots},
+      full_frame_interval_{options.full_frame_interval}, previous_tracked_count_{0}, hand_slots_{hand_slots},
       model_width_{kPalmInputSize}, model_height_{kPalmInputSize}, source_dma_fd_{-1}, source_dma_data_{nullptr},
       source_dma_capacity_{0} {
     initialize_models(options);
@@ -553,6 +552,8 @@ namespace signlang::handpose_det {
       }
     }
 
+    previous_tracked_count_ = output_idx;
+
     return InferenceResult{
         .detection_count = output_idx,
         .image_width = metadata.output_width,
@@ -630,14 +631,11 @@ namespace signlang::handpose_det {
   }
 
   auto HandPoseModel::should_run_full_frame_detection(std::uint32_t tracked_count) const -> bool {
-    if (tracked_count < hand_slots_) {
-      if (tracked_count == 1 && single_hand_full_frame_interval_ > 0) {
-        return current_frame_number_ % single_hand_full_frame_interval_ == 0;
-      }
+    if (previous_tracked_count_ > 0 && tracked_count == 0) {
       return true;
     }
 
-    return stable_hands_full_frame_interval_ > 0 && current_frame_number_ % stable_hands_full_frame_interval_ == 0;
+    return full_frame_interval_ > 0 && (current_frame_number_ - 1) % full_frame_interval_ == 0;
   }
 
   void HandPoseModel::run_palm_detector(const signlang::video_frontend::VideoFrameMetadata& metadata,

@@ -25,12 +25,13 @@ The module publishes up to two valid hands by default. `--single-hand` limits ou
 
 **Detection pipeline:**
 1. Try tracking from previous frame ROIs using landmark model only
-2. If tracked hands are fewer than the configured one-hand/two-hand mode, run full-frame palm detection
-3. Apply weighted NMS to merge overlapping palm proposals by confidence
-4. For new detections: compute adaptive ROI from palm keypoints, run landmark model
-5. Filter by presence confidence; extract handedness classification
-6. Apply One Euro Filter temporal smoothing to all tracked keypoints
-7. Select the highest-confidence reliable left hand and right hand, then publish only those valid hands
+2. Run full-frame palm detection on the first frame and then every `--full-frame-interval` frames
+3. If ROI tracking drops from a non-zero hand count to zero, run an extra full-frame palm detection to confirm the loss
+4. Apply weighted NMS to merge overlapping palm proposals by confidence
+5. For new detections: compute adaptive ROI from palm keypoints, run landmark model
+6. Filter by presence confidence; extract handedness classification
+7. Apply One Euro Filter temporal smoothing to all tracked keypoints
+8. Select the highest-confidence reliable left hand and right hand, then publish only those valid hands
 
 **Key properties:**
 - `HandPoseFrameMetadata::detection_count` reports the actual valid hand count: 0, 1, or 2
@@ -43,40 +44,39 @@ Relative paths are resolved from the installation root. For installed module exe
 
 All module executables also accept `--log-file <path>` and `--log-rotate-size <bytes>`; the launcher supplies these automatically when it starts modules.
 
-| Parameter                | Default                                         | Range                    | Description                                          |
-|--------------------------|-------------------------------------------------|--------------------------|------------------------------------------------------|
-| `--input-service`, `-i`  | required                                        | –                        | Upstream video iceoryx2 service                      |
-| `--output-service`, `-o` | required                                        | –                        | Hand pose output iceoryx2 service                    |
-| `--model`, `-m`          | `models/mediapipe/hand_detector.rknn`           | –                        | Palm detector RKNN model                             |
-| `--landmark-model`       | `models/mediapipe/hand_landmarks_detector.rknn` | –                        | Hand landmark RKNN model                             |
-| `--single-hand`          | `false`                                         | `true`/`false`           | Detect and publish one hand instead of two           |
-| `--confidence`           | `0.5`                                           | (0, 1)                   | Palm detection confidence threshold                  |
-| `--presence-threshold`   | `0.5`                                           | (0, 1)                   | Hand presence confidence threshold                   |
-| `--tracking-threshold`   | `0.5`                                           | (0, 1)                   | Confidence threshold for reusing previous ROI        |
-| `--nms-iou-threshold`    | `0.3`                                           | (0, 1)                   | IoU threshold for weighted NMS merge                 |
-| `--tracking-iou-match`   | `0.3`                                           | (0, 1)                   | IoU threshold for matching detection to tracked hand |
-| `--crop-expansion`       | `2.0`   | `> 0`    | Expansion factor for tracking crop from bounding box |
-| `--base-roi-expansion`   | `2.6`   | `> 0`    | Base ROI expansion factor from palm keypoints        |
-| `--small-hand-expansion` | `3.0`   | `> 0`    | ROI expansion factor for small hands                 |
-| `--large-hand-expansion` | `2.3`   | `> 0`    | ROI expansion factor for large hands                 |
-| `--small-hand-threshold` | `60.0`  | `> 0`    | Pixel size below which a hand is considered small    |
-| `--large-hand-threshold` | `120.0` | `> 0`    | Pixel size above which a hand is considered large    |
-| `--boundary-margin`      | `50.0`  | `>= 0`   | Distance to image edge triggering boundary shrink    |
-| `--boundary-min-factor`  | `0.7`   | `(0, 1]` | Minimum expansion multiplier at image boundary       |
-| `--euro-min-cutoff`      | `1.0`   | `> 0`    | One Euro Filter min cutoff frequency (Hz)            |
-| `--euro-beta`            | `0.007` | `>= 0`   | One Euro Filter speed coefficient                    |
-| `--euro-d-cutoff`        | `1.0`   | `> 0`    | One Euro Filter derivative cutoff frequency (Hz)     |
-| `--handedness-threshold` | `0.5`   | `(0, 1)` | Threshold for left/right hand classification         |
-| `--swap-handedness`      | `false` | –        | Swap left/right handedness interpretation for mirrored cameras |
-| `--max-tracking-gap`     | `2`     | `>= 1`   | Max frame gap before tracking is considered lost     |
-| `--max-stale-frames`     | `5`     | `>= 1`   | Max frames before stale track slot is reclaimed      |
-| `--single-hand-full-frame-interval` | `5` | `>= 0` | Full-frame palm detection interval while one hand is tracked; 0 disables |
-| `--stable-hands-full-frame-interval` | `15` | `>= 0` | Full-frame palm detection interval while all hand slots are tracked; 0 disables |
-| `--npu-core`             | `auto`                                          | auto,0,1,2,0_1,0_1_2,all | RK3588 NPU core mask                                 |
-| `--palm-npu-core`        | `--npu-core`                                    | auto,0,1,2,0_1,0_1_2,all | Palm detector NPU core override                      |
-| `--landmark-npu-core`    | `--npu-core`                                    | auto,0,1,2,0_1,0_1_2,all | Hand landmark model NPU core override                |
-| `--subscriber-buffer`    | `2`    | `>= 1`   | iceoryx2 subscriber queue size                       |
-| `--verbose`              | off                                             | –                        | Print RKNN tensor details                            |
+| Parameter                | Default                                         | Range                    | Description                                                                                        |
+|--------------------------|-------------------------------------------------|--------------------------|----------------------------------------------------------------------------------------------------|
+| `--input-service`, `-i`  | required                                        | –                        | Upstream video iceoryx2 service                                                                    |
+| `--output-service`, `-o` | required                                        | –                        | Hand pose output iceoryx2 service                                                                  |
+| `--model`, `-m`          | `models/mediapipe/hand_detector.rknn`           | –                        | Palm detector RKNN model                                                                           |
+| `--landmark-model`       | `models/mediapipe/hand_landmarks_detector.rknn` | –                        | Hand landmark RKNN model                                                                           |
+| `--single-hand`          | `false`                                         | `true`/`false`           | Detect and publish one hand instead of two                                                         |
+| `--confidence`           | `0.5`                                           | (0, 1)                   | Palm detection confidence threshold                                                                |
+| `--presence-threshold`   | `0.5`                                           | (0, 1)                   | Hand presence confidence threshold                                                                 |
+| `--tracking-threshold`   | `0.5`                                           | (0, 1)                   | Confidence threshold for reusing previous ROI                                                      |
+| `--nms-iou-threshold`    | `0.3`                                           | (0, 1)                   | IoU threshold for weighted NMS merge                                                               |
+| `--tracking-iou-match`   | `0.3`                                           | (0, 1)                   | IoU threshold for matching detection to tracked hand                                               |
+| `--crop-expansion`       | `2.0`                                           | `> 0`                    | Expansion factor for tracking crop from bounding box                                               |
+| `--base-roi-expansion`   | `2.6`                                           | `> 0`                    | Base ROI expansion factor from palm keypoints                                                      |
+| `--small-hand-expansion` | `3.0`                                           | `> 0`                    | ROI expansion factor for small hands                                                               |
+| `--large-hand-expansion` | `2.3`                                           | `> 0`                    | ROI expansion factor for large hands                                                               |
+| `--small-hand-threshold` | `60.0`                                          | `> 0`                    | Pixel size below which a hand is considered small                                                  |
+| `--large-hand-threshold` | `120.0`                                         | `> 0`                    | Pixel size above which a hand is considered large                                                  |
+| `--boundary-margin`      | `50.0`                                          | `>= 0`                   | Distance to image edge triggering boundary shrink                                                  |
+| `--boundary-min-factor`  | `0.7`                                           | `(0, 1]`                 | Minimum expansion multiplier at image boundary                                                     |
+| `--euro-min-cutoff`      | `1.0`                                           | `> 0`                    | One Euro Filter min cutoff frequency (Hz)                                                          |
+| `--euro-beta`            | `0.007`                                         | `>= 0`                   | One Euro Filter speed coefficient                                                                  |
+| `--euro-d-cutoff`        | `1.0`                                           | `> 0`                    | One Euro Filter derivative cutoff frequency (Hz)                                                   |
+| `--handedness-threshold` | `0.5`                                           | `(0, 1)`                 | Threshold for left/right hand classification                                                       |
+| `--swap-handedness`      | `false`                                         | –                        | Swap left/right handedness interpretation for mirrored cameras                                     |
+| `--max-tracking-gap`     | `2`                                             | `>= 1`                   | Max frame gap before tracking is considered lost                                                   |
+| `--max-stale-frames`     | `5`                                             | `>= 1`                   | Max frames before stale track slot is reclaimed                                                    |
+| `--full-frame-interval`  | `10`                                            | `>= 0`                   | Full-frame palm detection interval in frames; first frame always runs; 0 disables periodic refresh |
+| `--npu-core`             | `auto`                                          | auto,0,1,2,0_1,0_1_2,all | RK3588 NPU core mask                                                                               |
+| `--palm-npu-core`        | `--npu-core`                                    | auto,0,1,2,0_1,0_1_2,all | Palm detector NPU core override                                                                    |
+| `--landmark-npu-core`    | `--npu-core`                                    | auto,0,1,2,0_1,0_1_2,all | Hand landmark model NPU core override                                                              |
+| `--subscriber-buffer`    | `2`                                             | `>= 1`                   | iceoryx2 subscriber queue size                                                                     |
+| `--verbose`              | off                                             | –                        | Print RKNN tensor details                                                                          |
 
 ## IPC Payload
 

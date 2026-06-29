@@ -141,8 +141,8 @@ namespace signlang::handpose_det {
     bool swap_handedness_;
     std::uint32_t max_tracking_gap_;
     std::uint32_t max_stale_frames_;
-    std::uint32_t single_hand_full_frame_interval_;
-    std::uint32_t stable_hands_full_frame_interval_;
+    std::uint32_t full_frame_interval_;
+    std::uint32_t previous_tracked_count_;
     const std::uint32_t hand_slots_;
     std::uint32_t model_width_;
     std::uint32_t model_height_;
