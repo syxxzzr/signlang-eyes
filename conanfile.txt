@@ -3,7 +3,6 @@ boost/1.91.0
 cxxopts/3.3.1
 fftw/3.3.10
 iceoryx2/0.9.999
-libjpeg-turbo/3.1.4.1
 librga/1.0.0
 minmea/0.3.0.cci.20230620
 rknn-runtime/1.0.0
@@ -18,7 +17,6 @@ fftw/*:precision_double=False
 fftw/*:precision_longdouble=False
 fftw/*:precision_quad=False
 fmt/*:header_only=True
-libjpeg-turbo/*:shared=False
 spdlog/*:header_only=False
 spdlog/*:shared=True
 sqlite3/*:threadsafe=1

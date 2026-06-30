@@ -48,6 +48,10 @@ find_package(iceoryx2-cxx REQUIRED CONFIG)
 find_package(rknn-runtime REQUIRED CONFIG)
 find_package(librga REQUIRED CONFIG)
 
+if(NOT TARGET libjpeg-turbo::turbojpeg)
+    message(FATAL_ERROR "libjpeg-turbo was found, but target libjpeg-turbo::turbojpeg is unavailable")
+endif()
+
 # Threads
 find_package(Threads REQUIRED)
 
