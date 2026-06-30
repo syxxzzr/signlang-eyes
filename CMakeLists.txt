@@ -45,6 +45,66 @@ add_library(tomlplusplus INTERFACE)
 target_include_directories(tomlplusplus INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tomlplusplus/include)
 add_library(tomlplusplus::tomlplusplus ALIAS tomlplusplus)
 
+# Boost
+set(SIGNLANG_BOOST_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/third_party/boost)
+if(EXISTS ${SIGNLANG_BOOST_ROOT}/libs/asio/include/boost/asio.hpp
+        AND EXISTS ${SIGNLANG_BOOST_ROOT}/libs/json/include/boost/json.hpp
+        AND EXISTS ${SIGNLANG_BOOST_ROOT}/libs/mqtt5/include/boost/mqtt5.hpp)
+    file(GLOB SIGNLANG_BOOST_LIB_INCLUDE_DIRS
+        LIST_DIRECTORIES true
+        ${SIGNLANG_BOOST_ROOT}/libs/*/include)
+
+    add_library(signlang_boost_asio INTERFACE)
+    target_include_directories(signlang_boost_asio INTERFACE ${SIGNLANG_BOOST_LIB_INCLUDE_DIRS})
+    add_library(Boost::asio ALIAS signlang_boost_asio)
+
+    add_library(signlang_boost_json INTERFACE)
+    target_include_directories(signlang_boost_json INTERFACE ${SIGNLANG_BOOST_LIB_INCLUDE_DIRS})
+    target_compile_definitions(signlang_boost_json INTERFACE BOOST_JSON_HEADER_ONLY)
+    add_library(Boost::json ALIAS signlang_boost_json)
+
+    add_library(signlang_boost_mqtt5 INTERFACE)
+    target_include_directories(signlang_boost_mqtt5 INTERFACE ${SIGNLANG_BOOST_LIB_INCLUDE_DIRS})
+    add_library(Boost::mqtt5 ALIAS signlang_boost_mqtt5)
+else()
+    find_package(Boost CONFIG QUIET)
+    include(CheckIncludeFileCXX)
+    set(CMAKE_REQUIRED_QUIET TRUE)
+    check_include_file_cxx(boost/asio.hpp SIGNLANG_HAVE_BOOST_ASIO)
+    check_include_file_cxx(boost/json.hpp SIGNLANG_HAVE_BOOST_JSON)
+    check_include_file_cxx(boost/mqtt5.hpp SIGNLANG_HAVE_BOOST_MQTT5)
+    unset(CMAKE_REQUIRED_QUIET)
+    if(Boost_FOUND AND SIGNLANG_HAVE_BOOST_ASIO AND SIGNLANG_HAVE_BOOST_JSON AND SIGNLANG_HAVE_BOOST_MQTT5)
+        if(NOT TARGET Boost::asio AND TARGET Boost::headers)
+            add_library(signlang_boost_asio INTERFACE)
+            target_link_libraries(signlang_boost_asio INTERFACE Boost::headers)
+            add_library(Boost::asio ALIAS signlang_boost_asio)
+        endif()
+        if(NOT TARGET Boost::json AND TARGET Boost::headers)
+            add_library(signlang_boost_json INTERFACE)
+            target_link_libraries(signlang_boost_json INTERFACE Boost::headers)
+            target_compile_definitions(signlang_boost_json INTERFACE BOOST_JSON_HEADER_ONLY)
+            add_library(Boost::json ALIAS signlang_boost_json)
+        endif()
+        if(NOT TARGET Boost::mqtt5 AND TARGET Boost::headers)
+            add_library(signlang_boost_mqtt5 INTERFACE)
+            target_link_libraries(signlang_boost_mqtt5 INTERFACE Boost::headers)
+            add_library(Boost::mqtt5 ALIAS signlang_boost_mqtt5)
+        endif()
+    endif()
+endif()
+
+# minmea
+set(SIGNLANG_MINMEA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/minmea/include)
+set(SIGNLANG_MINMEA_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/minmea/lib/aarch64)
+if(EXISTS ${SIGNLANG_MINMEA_INCLUDE_DIR}/minmea.h AND EXISTS ${SIGNLANG_MINMEA_LIB_DIR}/libminmea.a)
+    add_library(minmea STATIC IMPORTED GLOBAL)
+    set_target_properties(minmea PROPERTIES
+        IMPORTED_LOCATION ${SIGNLANG_MINMEA_LIB_DIR}/libminmea.a
+        INTERFACE_INCLUDE_DIRECTORIES ${SIGNLANG_MINMEA_INCLUDE_DIR})
+    add_library(minmea::minmea ALIAS minmea)
+endif()
+
 # Threads
 find_package(Threads REQUIRED)
 
