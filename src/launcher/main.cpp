@@ -38,6 +38,7 @@ namespace signlang::launcher::ipc {
   constexpr auto kStateBlackboard = "app_state_blackboard";
   constexpr auto kStateControl = "app_state_control";
   constexpr auto kAudioLocalizationBlackboard = "audio_source_localization";
+  constexpr auto kLlmClient = "llm_client";
 
 } // namespace signlang::launcher::ipc
 
@@ -52,11 +53,13 @@ namespace {
   constexpr auto kExeSignlangManager = "bin/signlang_manager";
   constexpr auto kExeSignlangDet = "bin/signlang_det";
   constexpr auto kExePositionService = "bin/position_service";
+  constexpr auto kExeLlmClient = "bin/llm_client";
 
   constexpr std::array kIpcKeys = {
       "input_service",         "input-service",         "output_service",           "output-service",
       "state_event_service",   "state-event-service",   "state_blackboard_service", "state-blackboard-service",
       "state_control_service", "state-control-service", "localization_blackboard",  "localization-blackboard",
+      "service",
   };
 
   void warn_ipc_keys_in_table(const toml::table& tbl, const std::string& section_name) {
@@ -73,9 +76,8 @@ namespace {
 
   void warn_ipc_keys_in_config(const toml::table& config) {
     constexpr std::array kSections = {
-        "state_machine", "audio_frontend", "video_frontend",   "speech_asr",
-        "env_sound_det", "handpose_det",   "signlang_manager", "signlang_det",
-        "position_service",
+        "state_machine", "audio_frontend", "video_frontend",   "speech_asr",   "env_sound_det",
+        "handpose_det",   "signlang_manager", "signlang_det", "position_service", "llm_client",
     };
 
     for (const auto* section_name : kSections) {
@@ -618,13 +620,28 @@ static auto build_position_service_args(const toml::table& cfg) -> std::vector<s
   return args;
 }
 
+static auto build_llm_client_args(const toml::table& cfg) -> std::vector<std::string> {
+  using namespace signlang::launcher::ipc;
+  std::vector<std::string> args = {kExeLlmClient, "--service", kLlmClient};
+
+  if (const auto* tbl = cfg["llm_client"].as_table()) {
+    add_opt_str(args, "--base-url", opt_string(*tbl, "base_url"));
+    add_opt_str(args, "--api-key", opt_string(*tbl, "api_key"));
+    add_opt_str(args, "--model", opt_string(*tbl, "model"));
+    add_opt_str(args, "--system-prompt-file", opt_string(*tbl, "system_prompt_file"));
+    add_opt_int(args, "--request-timeout-ms", opt_int(*tbl, "request_timeout_ms"));
+  }
+
+  return args;
+}
+
 static auto build_modules(const toml::table& config) -> std::vector<ModuleEntry> {
   return {
       {"state_machine", build_state_machine_args(config)},       {"audio_frontend", build_audio_frontend_args(config)},
       {"video_frontend", build_video_frontend_args(config)},     {"speech_asr", build_speech_asr_args(config)},
       {"env_sound_det", build_env_sound_det_args(config)},       {"handpose_det", build_handpose_det_args(config)},
       {"signlang_manager", build_signlang_manager_args(config)}, {"signlang_det", build_signlang_det_args(config)},
-      {"position_service", build_position_service_args(config)},
+      {"position_service", build_position_service_args(config)}, {"llm_client", build_llm_client_args(config)},
   };
 }
 

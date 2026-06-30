@@ -123,3 +123,10 @@ baud_rate = 115200                 # GNSS serial baud rate
 # mqtt_keep_alive = 30             # MQTT keep-alive in seconds
 # mqtt_qos = 0                     # MQTT publish QoS: 0, 1, 2
 # mqtt_retain = false              # Publish retained MQTT messages
+
+[llm_client]
+# base_url = "https://api.openai.com/v1" # OpenAI-compatible API base URL
+# api_key = ""                           # API secret key; empty omits Authorization
+# model = "gpt-5.5"             # OpenAI-compatible model name
+# system_prompt_file = "conf/llm_system_prompt.txt"
+# request_timeout_ms = 60000             # HTTP request timeout in milliseconds
