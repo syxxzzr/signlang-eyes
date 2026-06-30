@@ -35,7 +35,7 @@ target_include_directories(signlang_eyes_signlang_det PRIVATE
 
 target_link_libraries(signlang_eyes_signlang_det PRIVATE
         cxxopts::cxxopts
-        SQLiteCpp::SQLiteCpp
+        SQLiteCpp
         spdlog::spdlog
         iceoryx2-cxx::shared-lib-cxx
         signlang::common
