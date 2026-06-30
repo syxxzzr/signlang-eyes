@@ -36,6 +36,7 @@ See `conf/conf.toml` for the default configuration with all available keys docum
 - `[handpose_det]` — MediaPipe hand pose detection parameters (npu_core, confidence, single_hand, etc.)
 - `[signlang_det]` — Sign language recognition parameters (npu_core, sequence_length, confidence_threshold, etc.)
 - `[signlang_manager]` — BLE GATT streaming and prototype database management parameters
+- `[llm_client]` — OpenAI-compatible LLM request service parameters
 
 ## Technical Details
 
@@ -54,6 +55,7 @@ app_state_blackboard   ↔ state_machine
 app_state_control      ↔ state_machine ← env_sound_det
 signlang_prototype_control ↔ signlang_manager → signlang_det
 audio_source_localization ↔ audio_frontend (sound source localization blackboard)
+llm_client           ↔ OpenAI-compatible LLM request-response service
 ```
 
 ### Startup Order
@@ -68,6 +70,7 @@ Modules are started sequentially in this order:
 6. `handpose_det` — hand keypoint detection
 7. `signlang_manager` — BLE streaming and prototype database management
 8. `signlang_det` — sign language recognition
+9. `llm_client` — OpenAI-compatible LLM request-response service
 
 ### Process Lifecycle
 
