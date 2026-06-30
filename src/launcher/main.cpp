@@ -51,6 +51,7 @@ namespace {
   constexpr auto kExeHandposeDet = "bin/handpose_det";
   constexpr auto kExeSignlangManager = "bin/signlang_manager";
   constexpr auto kExeSignlangDet = "bin/signlang_det";
+  constexpr auto kExePositionService = "bin/position_service";
 
   constexpr std::array kIpcKeys = {
       "input_service",         "input-service",         "output_service",           "output-service",
@@ -74,6 +75,7 @@ namespace {
     constexpr std::array kSections = {
         "state_machine", "audio_frontend", "video_frontend",   "speech_asr",
         "env_sound_det", "handpose_det",   "signlang_manager", "signlang_det",
+        "position_service",
     };
 
     for (const auto* section_name : kSections) {
@@ -594,12 +596,35 @@ static auto build_signlang_manager_args(const toml::table& cfg) -> std::vector<s
   return args;
 }
 
+static auto build_position_service_args(const toml::table& cfg) -> std::vector<std::string> {
+  std::vector<std::string> args = {kExePositionService};
+
+  if (const auto* tbl = cfg["position_service"].as_table()) {
+    add_opt_str(args, "--device", opt_string(*tbl, "device"));
+    add_opt_int(args, "--baud-rate", opt_int(*tbl, "baud_rate"));
+    add_opt_str(args, "--mqtt-host", opt_string(*tbl, "mqtt_host"));
+    add_opt_int(args, "--mqtt-port", opt_int(*tbl, "mqtt_port"));
+    add_opt_str(args, "--mqtt-client-id", opt_string(*tbl, "mqtt_client_id"));
+    add_opt_str(args, "--mqtt-topic", opt_string(*tbl, "mqtt_topic"));
+    add_opt_str(args, "--alert-event-service", opt_string(*tbl, "alert_event_service"));
+    add_opt_str(args, "--alert-mqtt-topic", opt_string(*tbl, "alert_mqtt_topic"));
+    add_opt_str(args, "--mqtt-username", opt_string(*tbl, "mqtt_username"));
+    add_opt_str(args, "--mqtt-password", opt_string(*tbl, "mqtt_password"));
+    add_opt_int(args, "--mqtt-keep-alive", opt_int(*tbl, "mqtt_keep_alive"));
+    add_opt_int(args, "--mqtt-qos", opt_int(*tbl, "mqtt_qos"));
+    add_opt_bool_assignment(args, "--mqtt-retain", opt_bool(*tbl, "mqtt_retain"));
+  }
+
+  return args;
+}
+
 static auto build_modules(const toml::table& config) -> std::vector<ModuleEntry> {
   return {
       {"state_machine", build_state_machine_args(config)},       {"audio_frontend", build_audio_frontend_args(config)},
       {"video_frontend", build_video_frontend_args(config)},     {"speech_asr", build_speech_asr_args(config)},
       {"env_sound_det", build_env_sound_det_args(config)},       {"handpose_det", build_handpose_det_args(config)},
       {"signlang_manager", build_signlang_manager_args(config)}, {"signlang_det", build_signlang_det_args(config)},
+      {"position_service", build_position_service_args(config)},
   };
 }
 

@@ -108,3 +108,18 @@ npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 # max_notify_payload = 180         # Maximum BLE notification payload chunk size
 # max_upload_bytes = 8388608       # Maximum BLE gesture upload size in bytes
 # enable_streaming_by_default = false
+
+[position_service]
+device = "/dev/ttyS9"              # GNSS serial device path
+baud_rate = 115200                 # GNSS serial baud rate
+# mqtt_host = "127.0.0.1"          # MQTT broker host
+# mqtt_port = 1883                 # MQTT broker TCP port
+# mqtt_client_id = "signlang_eyes_position_service"
+# mqtt_topic = "signlang/position" # MQTT topic for position JSON payloads
+# alert_event_service = "app_state_event"
+# alert_mqtt_topic = "signlang/alert"
+# mqtt_username = ""
+# mqtt_password = ""
+# mqtt_keep_alive = 30             # MQTT keep-alive in seconds
+# mqtt_qos = 0                     # MQTT publish QoS: 0, 1, 2
+# mqtt_retain = false              # Publish retained MQTT messages
