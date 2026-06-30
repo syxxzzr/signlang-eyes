@@ -10,15 +10,13 @@ set_target_properties(signlang_eyes_position_service PROPERTIES
 target_include_directories(signlang_eyes_position_service PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_compile_definitions(signlang_eyes_position_service PRIVATE
-        BOOST_JSON_HEADER_ONLY)
-
 target_link_libraries(signlang_eyes_position_service PRIVATE
         cxxopts::cxxopts
         spdlog::spdlog
         iceoryx2-cxx::shared-lib-cxx
         signlang::common
         Boost::headers
+        Boost::json
         minmea::minmea
         Threads::Threads)
 

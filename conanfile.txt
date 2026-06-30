@@ -11,7 +11,7 @@ sqlitecpp/3.3.3
 tomlplusplus/3.4.0
 
 [options]
-boost/*:header_only=True
+boost/*:shared=True
 fftw/*:precision_single=True
 fftw/*:precision_double=False
 fftw/*:precision_longdouble=False

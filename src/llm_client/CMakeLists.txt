@@ -12,15 +12,13 @@ set_target_properties(signlang_eyes_llm_client PROPERTIES
 target_include_directories(signlang_eyes_llm_client PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_compile_definitions(signlang_eyes_llm_client PRIVATE
-        BOOST_JSON_HEADER_ONLY)
-
 target_link_libraries(signlang_eyes_llm_client PRIVATE
         cxxopts::cxxopts
         spdlog::spdlog
         iceoryx2-cxx::shared-lib-cxx
         signlang::common
         Boost::headers
+        Boost::json
         OpenSSL::SSL
         OpenSSL::Crypto
         Threads::Threads)

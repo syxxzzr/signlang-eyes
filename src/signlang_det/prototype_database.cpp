@@ -1,6 +1,6 @@
 #include "prototype_database.hpp"
 
-#include "SQLiteCpp.h"
+#include "SQLiteCpp/SQLiteCpp.h"
 #include "spdlog/spdlog.h"
 
 #include <array>

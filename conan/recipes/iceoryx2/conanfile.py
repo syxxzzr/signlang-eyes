@@ -25,6 +25,8 @@ class Iceoryx2Conan(ConanFile):
         copy(self, "*", src=source_root / "share", dst=Path(self.package_folder) / "share")
 
     def package_info(self):
+        lib_dir = Path(self.package_folder) / "lib"
+
         self.cpp_info.set_property("cmake_find_mode", "config")
         self.cpp_info.set_property("cmake_file_name", "iceoryx2-cxx")
         self.cpp_info.set_property("cmake_target_name", "iceoryx2-cxx::shared-lib-cxx")
@@ -33,6 +35,8 @@ class Iceoryx2Conan(ConanFile):
         self.cpp_info.libdirs = ["lib"]
         self.cpp_info.libs = ["iceoryx2_cxx", "iceoryx2_ffi_c"]
         self.cpp_info.system_libs = ["dl", "rt", "m", "pthread"]
+        self.cpp_info.exelinkflags = [f"-Wl,-rpath-link,{lib_dir}"]
+        self.cpp_info.sharedlinkflags = [f"-Wl,-rpath-link,{lib_dir}"]
         self.cpp_info.builddirs = [
             "lib/cmake/iceoryx2-bb-cxx",
             "lib/cmake/iceoryx2-c",
