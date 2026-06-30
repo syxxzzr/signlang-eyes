@@ -1,8 +1,3 @@
-if(NOT TARGET Boost::asio OR NOT TARGET Boost::json OR NOT TARGET Boost::mqtt5 OR NOT TARGET minmea::minmea)
-    message(STATUS "Skipping signlang_eyes_position_service: Boost.Asio, Boost.JSON, Boost.MQTT5, or minmea target not available")
-    return()
-endif()
-
 add_executable(signlang_eyes_position_service
         event_listener.cpp
         program_options.cpp
@@ -15,14 +10,15 @@ set_target_properties(signlang_eyes_position_service PROPERTIES
 target_include_directories(signlang_eyes_position_service PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR})
 
+target_compile_definitions(signlang_eyes_position_service PRIVATE
+        BOOST_JSON_HEADER_ONLY)
+
 target_link_libraries(signlang_eyes_position_service PRIVATE
         cxxopts::cxxopts
         spdlog::spdlog
         iceoryx2-cxx::shared-lib-cxx
         signlang::common
-        Boost::asio
-        Boost::json
-        Boost::mqtt5
+        Boost::headers
         minmea::minmea
         Threads::Threads)
 

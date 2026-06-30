@@ -24,7 +24,7 @@ foreach(required_file
     endif()
 endforeach()
 
-if(NOT TARGET fftw3f)
+if(NOT TARGET FFTW3::fftw3f)
     message(FATAL_ERROR "Missing FFTW target; configure FFTW from the root CMakeLists.txt")
 endif()
 
@@ -47,7 +47,7 @@ target_link_libraries(signlang_eyes_speech_asr PRIVATE
         iceoryx2-cxx::shared-lib-cxx
         signlang::rknn_runtime
         signlang::common
-        fftw3f
+        FFTW3::fftw3f
         Threads::Threads
         m)
 
