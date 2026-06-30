@@ -16,6 +16,7 @@ namespace signlang::position_service {
     constexpr std::uint16_t kDefaultMqttPort = 1883;
     constexpr auto kDefaultMqttClientId = "signlang_eyes_position_service";
     constexpr auto kDefaultMqttTopic = "signlang/position";
+    constexpr auto kDefaultAlertMqttTopic = "signlang/alert";
     constexpr std::uint16_t kDefaultKeepAliveSeconds = 30;
 
     auto parse_port(const cxxopts::ParseResult& parsed_options, const char* option_name) -> std::uint16_t {
@@ -50,6 +51,10 @@ namespace signlang::position_service {
         "mqtt-client-id", "MQTT client id", cxxopts::value<std::string>()->default_value(kDefaultMqttClientId))(
         "mqtt-topic", "MQTT topic for position JSON payloads",
         cxxopts::value<std::string>()->default_value(kDefaultMqttTopic))(
+        "alert-event-service", "iceoryx2 event service name that triggers MQTT alert payloads",
+        cxxopts::value<std::string>()->default_value(""))(
+        "alert-mqtt-topic", "MQTT topic for alert JSON payloads",
+        cxxopts::value<std::string>()->default_value(kDefaultAlertMqttTopic))(
         "mqtt-username", "MQTT username", cxxopts::value<std::string>()->default_value(""))(
         "mqtt-password", "MQTT password", cxxopts::value<std::string>()->default_value(""))(
         "mqtt-keep-alive", "MQTT keep-alive in seconds",
@@ -78,6 +83,10 @@ namespace signlang::position_service {
     if (mqtt_topic.empty()) {
       throw std::runtime_error("--mqtt-topic must not be empty");
     }
+    auto alert_mqtt_topic = parsed_options["alert-mqtt-topic"].as<std::string>();
+    if (alert_mqtt_topic.empty()) {
+      throw std::runtime_error("--alert-mqtt-topic must not be empty");
+    }
 
     return ProgramOptionsParseResult{ProgramOptions{
         .serial_device = parsed_options["device"].as<std::string>(),
@@ -86,6 +95,8 @@ namespace signlang::position_service {
         .mqtt_port = parse_port(parsed_options, "mqtt-port"),
         .mqtt_client_id = parsed_options["mqtt-client-id"].as<std::string>(),
         .mqtt_topic = std::move(mqtt_topic),
+        .alert_event_service = parsed_options["alert-event-service"].as<std::string>(),
+        .alert_mqtt_topic = std::move(alert_mqtt_topic),
         .mqtt_username = parsed_options["mqtt-username"].as<std::string>(),
         .mqtt_password = parsed_options["mqtt-password"].as<std::string>(),
         .keep_alive_seconds = static_cast<std::uint16_t>(keep_alive),

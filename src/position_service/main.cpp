@@ -1,4 +1,5 @@
 #include "common/runtime.hpp"
+#include "event_listener.hpp"
 #include "payload_queue.hpp"
 #include "position.hpp"
 #include "position_parser.hpp"
@@ -54,6 +55,14 @@ namespace signlang::position_service {
       return json::serialize(payload);
     }
 
+    auto payload_from_alert_event(const AlertEvent& event) -> std::string {
+      json::object payload;
+      payload["type"] = "alert";
+      payload["event_id"] = event.id;
+      payload["count"] = event.count;
+      return json::serialize(payload);
+    }
+
   } // namespace
 
   class PositionService : public std::enable_shared_from_this<PositionService> {
@@ -64,7 +73,9 @@ namespace signlang::position_service {
           serial_{serial_io_context},
           mqtt_client_{mqtt_io_context},
           mqtt_drain_timer_{mqtt_io_context},
-          options_{std::move(options)} {}
+          options_{std::move(options)},
+          alert_listener_{options_.alert_event_service, "position_service_alert_listener",
+                          [this](const AlertEvent& event) { publish_alert(event); }} {}
 
     void start() {
       serial_.open(options_.serial_device);
@@ -79,9 +90,13 @@ namespace signlang::position_service {
           .keep_alive(options_.keep_alive_seconds)
           .async_run(asio::detached);
       schedule_mqtt_drain();
+      alert_listener_.start();
 
       spdlog::info("serial device: {} @ {}", options_.serial_device, options_.baud_rate);
       spdlog::info("mqtt broker: {}:{}, topic: {}", options_.mqtt_host, options_.mqtt_port, options_.mqtt_topic);
+      if (!options_.alert_event_service.empty()) {
+        spdlog::info("alert event service: {}, topic: {}", options_.alert_event_service, options_.alert_mqtt_topic);
+      }
       read_next_line();
     }
 
@@ -90,6 +105,7 @@ namespace signlang::position_service {
       boost::system::error_code ignored;
       serial_.cancel(ignored);
       serial_.close(ignored);
+      alert_listener_.stop();
     }
 
     [[nodiscard]] auto mqtt_done() const -> bool { return mqtt_done_.load(std::memory_order_acquire); }
@@ -129,8 +145,20 @@ namespace signlang::position_service {
     }
 
     void publish(const PositionFix& fix) {
-      if (!payload_queue_.push(payload_from_fix(fix))) {
+      if (!payload_queue_.push(MqttPayload{
+              .topic = options_.mqtt_topic,
+              .payload = payload_from_fix(fix),
+          })) {
         spdlog::warn("position payload queue is full; dropping newest fix");
+      }
+    }
+
+    void publish_alert(const AlertEvent& event) {
+      if (!payload_queue_.push(MqttPayload{
+              .topic = options_.alert_mqtt_topic,
+              .payload = payload_from_alert_event(event),
+          })) {
+        spdlog::warn("position payload queue is full; dropping alert event");
       }
     }
 
@@ -147,7 +175,7 @@ namespace signlang::position_service {
     void drain_mqtt_queue() {
       if (stop_requested_.load(std::memory_order_acquire)) {
         while (auto payload = payload_queue_.pop()) {
-          publish_payload(std::make_shared<std::string>(std::move(*payload)));
+          publish_payload(std::make_shared<MqttPayload>(std::move(*payload)));
         }
         mqtt_client_.cancel();
         mqtt_done_.store(true, std::memory_order_release);
@@ -160,34 +188,34 @@ namespace signlang::position_service {
         if (!payload.has_value()) {
           break;
         }
-        publish_payload(std::make_shared<std::string>(std::move(*payload)));
+        publish_payload(std::make_shared<MqttPayload>(std::move(*payload)));
       }
 
       schedule_mqtt_drain();
     }
 
-    void publish_payload(const std::shared_ptr<std::string>& payload) {
+    void publish_payload(const std::shared_ptr<MqttPayload>& payload) {
       const auto retain = options_.retain ? mqtt::retain_e::yes : mqtt::retain_e::no;
       const auto on_publish = [payload](boost::system::error_code error, auto&&...) {
         if (error) {
           spdlog::warn("mqtt publish failed: {}", error.message());
           return;
         }
-        spdlog::info("published position payload ({} bytes)", payload->size());
+        spdlog::info("published mqtt payload to {} ({} bytes)", payload->topic, payload->payload.size());
       };
 
       switch (options_.qos) {
         case 0:
           mqtt_client_.async_publish<mqtt::qos_e::at_most_once>(
-              options_.mqtt_topic, *payload, retain, mqtt::publish_props{}, on_publish);
+              payload->topic, payload->payload, retain, mqtt::publish_props{}, on_publish);
           break;
         case 1:
           mqtt_client_.async_publish<mqtt::qos_e::at_least_once>(
-              options_.mqtt_topic, *payload, retain, mqtt::publish_props{}, on_publish);
+              payload->topic, payload->payload, retain, mqtt::publish_props{}, on_publish);
           break;
         case 2:
           mqtt_client_.async_publish<mqtt::qos_e::exactly_once>(
-              options_.mqtt_topic, *payload, retain, mqtt::publish_props{}, on_publish);
+              payload->topic, payload->payload, retain, mqtt::publish_props{}, on_publish);
           break;
         default:
           break;
@@ -202,9 +230,10 @@ namespace signlang::position_service {
     asio::steady_timer mqtt_drain_timer_;
     NmeaPositionParser parser_;
     PositionPayloadQueue payload_queue_;
+    ProgramOptions options_;
+    EventListener alert_listener_;
     std::atomic_bool stop_requested_{false};
     std::atomic_bool mqtt_done_{false};
-    ProgramOptions options_;
   };
 
 } // namespace signlang::position_service

@@ -10,6 +10,11 @@
 
 namespace signlang::position_service {
 
+  struct MqttPayload {
+    std::string topic;
+    std::string payload;
+  };
+
   template <std::size_t Capacity>
   class PayloadQueue {
   public:
@@ -19,7 +24,7 @@ namespace signlang::position_service {
     PayloadQueue(const PayloadQueue&) = delete;
     auto operator=(const PayloadQueue&) -> PayloadQueue& = delete;
 
-    [[nodiscard]] auto push(std::string payload) -> bool {
+    [[nodiscard]] auto push(MqttPayload payload) -> bool {
       const auto head = head_.load(std::memory_order_relaxed);
       const auto next_head = increment(head);
       if (next_head == tail_.load(std::memory_order_acquire)) {
@@ -31,14 +36,14 @@ namespace signlang::position_service {
       return true;
     }
 
-    [[nodiscard]] auto pop() -> std::optional<std::string> {
+    [[nodiscard]] auto pop() -> std::optional<MqttPayload> {
       const auto tail = tail_.load(std::memory_order_relaxed);
       if (tail == head_.load(std::memory_order_acquire)) {
         return std::nullopt;
       }
 
       auto payload = std::move(slots_[tail]);
-      slots_[tail].clear();
+      slots_[tail] = {};
       tail_.store(increment(tail), std::memory_order_release);
       return payload;
     }
@@ -48,7 +53,7 @@ namespace signlang::position_service {
       return (index + 1) % Capacity;
     }
 
-    std::array<std::string, Capacity> slots_{};
+    std::array<MqttPayload, Capacity> slots_{};
     alignas(64) std::atomic_size_t head_{0};
     alignas(64) std::atomic_size_t tail_{0};
   };

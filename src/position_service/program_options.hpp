@@ -16,6 +16,8 @@ namespace signlang::position_service {
     std::uint16_t mqtt_port;
     std::string mqtt_client_id;
     std::string mqtt_topic;
+    std::string alert_event_service;
+    std::string alert_mqtt_topic;
     std::string mqtt_username;
     std::string mqtt_password;
     std::uint16_t keep_alive_seconds;

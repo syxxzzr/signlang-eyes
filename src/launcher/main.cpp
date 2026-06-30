@@ -606,6 +606,8 @@ static auto build_position_service_args(const toml::table& cfg) -> std::vector<s
     add_opt_int(args, "--mqtt-port", opt_int(*tbl, "mqtt_port"));
     add_opt_str(args, "--mqtt-client-id", opt_string(*tbl, "mqtt_client_id"));
     add_opt_str(args, "--mqtt-topic", opt_string(*tbl, "mqtt_topic"));
+    add_opt_str(args, "--alert-event-service", opt_string(*tbl, "alert_event_service"));
+    add_opt_str(args, "--alert-mqtt-topic", opt_string(*tbl, "alert_mqtt_topic"));
     add_opt_str(args, "--mqtt-username", opt_string(*tbl, "mqtt_username"));
     add_opt_str(args, "--mqtt-password", opt_string(*tbl, "mqtt_password"));
     add_opt_int(args, "--mqtt-keep-alive", opt_int(*tbl, "mqtt_keep_alive"));

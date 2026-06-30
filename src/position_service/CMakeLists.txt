@@ -4,6 +4,7 @@ if(NOT TARGET Boost::asio OR NOT TARGET Boost::json OR NOT TARGET Boost::mqtt5 O
 endif()
 
 add_executable(signlang_eyes_position_service
+        event_listener.cpp
         program_options.cpp
         position_parser.cpp
         main.cpp)
@@ -17,6 +18,7 @@ target_include_directories(signlang_eyes_position_service PRIVATE
 target_link_libraries(signlang_eyes_position_service PRIVATE
         cxxopts::cxxopts
         spdlog::spdlog
+        iceoryx2-cxx::shared-lib-cxx
         signlang::common
         Boost::asio
         Boost::json
