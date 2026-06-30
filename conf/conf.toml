@@ -128,5 +128,5 @@ baud_rate = 115200                 # GNSS serial baud rate
 # base_url = "https://api.openai.com/v1" # OpenAI-compatible API base URL
 # api_key = ""                           # API secret key; empty omits Authorization
 # model = "gpt-5.5"             # OpenAI-compatible model name
-# system_prompt_file = "conf/llm_system_prompt.txt"
+# system_prompt_file = "conf/system_prompt.txt"
 # request_timeout_ms = 60000             # HTTP request timeout in milliseconds

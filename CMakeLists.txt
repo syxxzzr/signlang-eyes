@@ -97,7 +97,7 @@ endforeach()
 # Install default launcher configuration
 install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/conf/conf.toml
-    ${CMAKE_CURRENT_SOURCE_DIR}/conf/llm_system_prompt.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/conf/system_prompt.txt
     DESTINATION conf)
 
 # Install shared sign language assets used by signlang_det and signlang_manager

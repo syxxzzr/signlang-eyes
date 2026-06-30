@@ -11,7 +11,7 @@ namespace signlang::llm_client {
 
     constexpr auto kDefaultBaseUrl = "https://api.openai.com/v1";
     constexpr auto kDefaultModel = "gpt-5.5";
-    constexpr auto kDefaultSystemPromptFile = "conf/llm_system_prompt.txt";
+    constexpr auto kDefaultSystemPromptFile = "conf/system_prompt.txt";
     constexpr std::uint32_t kDefaultRequestTimeoutMs = 60000;
 
   } // namespace

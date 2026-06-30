@@ -29,7 +29,7 @@ add_custom_command(TARGET signlang_eyes_llm_client POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
         "$<TARGET_FILE_DIR:signlang_eyes_llm_client>/conf"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../conf/llm_system_prompt.txt
-        "$<TARGET_FILE_DIR:signlang_eyes_llm_client>/conf/llm_system_prompt.txt")
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../conf/system_prompt.txt
+        "$<TARGET_FILE_DIR:signlang_eyes_llm_client>/conf/system_prompt.txt")
 
 install(TARGETS signlang_eyes_llm_client DESTINATION bin)
