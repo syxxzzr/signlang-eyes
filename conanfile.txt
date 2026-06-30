@@ -2,8 +2,11 @@
 boost/1.91.0
 cxxopts/3.3.1
 fftw/3.3.10
+iceoryx2/0.9.999
 libjpeg-turbo/3.1.4.1
+librga/1.0.0
 minmea/0.3.0.cci.20230620
+rknn-runtime/1.0.0
 spdlog/1.17.0
 sqlitecpp/3.3.3
 tomlplusplus/3.4.0

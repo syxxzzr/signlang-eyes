@@ -44,13 +44,12 @@ find_package(SQLiteCpp REQUIRED CONFIG)
 find_package(spdlog REQUIRED CONFIG)
 find_package(FFTW3 REQUIRED CONFIG)
 find_package(libjpeg-turbo REQUIRED CONFIG)
+find_package(iceoryx2-cxx REQUIRED CONFIG)
+find_package(rknn-runtime REQUIRED CONFIG)
+find_package(librga REQUIRED CONFIG)
 
 # Threads
 find_package(Threads REQUIRED)
-
-# iceoryx2
-list(APPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/third_party/iceoryx2)
-find_package(iceoryx2-cxx REQUIRED)
 
 # System dependencies
 find_package(ALSA REQUIRED)
@@ -85,26 +84,6 @@ else()
     message(WARNING "GLib/GIO development files were not found; signlang_manager will be skipped")
 endif()
 
-# RKNN Runtime headers
-add_library(signlang_rknn_headers INTERFACE)
-target_include_directories(signlang_rknn_headers INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/rknn_runtime/include)
-add_library(signlang::rknn_headers ALIAS signlang_rknn_headers)
-
-# RKNN Runtime library
-add_library(signlang_rknn_runtime SHARED IMPORTED GLOBAL)
-set_target_properties(signlang_rknn_runtime PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/third_party/rknn_runtime/lib/aarch64/librknnrt.so
-    INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/rknn_runtime/include)
-target_link_libraries(signlang_rknn_runtime INTERFACE signlang::rknn_headers)
-add_library(signlang::rknn_runtime ALIAS signlang_rknn_runtime)
-
-# librga (Rockchip RGA hardware accelerator)
-add_library(librga SHARED IMPORTED GLOBAL)
-set_target_properties(librga PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/third_party/librga/lib/aarch64/librga.so
-    INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/third_party/librga/include)
-add_library(librga::rga ALIAS librga)
-
 # Modules
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/common)
 file(GLOB MODULE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src/*)
@@ -114,17 +93,6 @@ foreach(MODULE_DIR ${MODULE_DIRS})
         add_subdirectory(${MODULE_DIR})
     endif()
 endforeach()
-
-# Install shared libraries to lib
-install(FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/iceoryx2/lib/libiceoryx2_cxx.so
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/iceoryx2/lib/libiceoryx2_ffi_c.so
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/rknn_runtime/lib/aarch64/librknnrt.so
-    DESTINATION lib)
-
-install(FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/librga/lib/aarch64/librga.so
-    DESTINATION lib)
 
 # Install default launcher configuration
 install(FILES
