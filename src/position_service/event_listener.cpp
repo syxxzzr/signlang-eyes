@@ -3,6 +3,7 @@
 #include "common/ipc_utils.hpp"
 #include "iox2/bb/duration.hpp"
 #include "iox2/bb/static_function.hpp"
+#include "iox2/event_id.hpp"
 #include "iox2/iceoryx2.hpp"
 #include "spdlog/spdlog.h"
 
@@ -67,16 +68,16 @@ namespace signlang::position_service {
       spdlog::info("Alert event listener started on service '{}'", service_name_);
 
       while (!stop_requested_.load(std::memory_order_acquire)) {
-        iox2::bb::StaticFunction<void(iox2::EventActivation)> callback{[this](iox2::EventActivation activation) {
+        iox2::bb::StaticFunction<void(iox2::EventId)> callback{[this](iox2::EventId event_id) {
           if (callback_) {
             callback_(AlertEvent{
-                .id = static_cast<std::uint64_t>(activation.id().as_value()),
-                .count = activation.count(),
+                .id = static_cast<std::uint64_t>(event_id.as_value()),
+                .count = 1,
             });
           }
         }};
 
-        const auto result = listener.value().timed_wait(callback, iox2::bb::Duration::from_millis(200));
+        const auto result = listener.value().timed_wait_all(callback, iox2::bb::Duration::from_millis(200));
         if (!result.has_value()) {
           spdlog::warn("Alert event listener wait failed");
         }
