@@ -37,6 +37,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # Conan-managed dependencies
 find_package(cxxopts REQUIRED CONFIG)
+find_package(cpp-pinyin REQUIRED CONFIG)
 find_package(tomlplusplus REQUIRED CONFIG)
 find_package(Boost REQUIRED CONFIG)
 find_package(minmea REQUIRED CONFIG)
