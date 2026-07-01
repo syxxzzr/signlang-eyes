@@ -70,10 +70,7 @@ namespace signlang::position_service {
       while (!stop_requested_.load(std::memory_order_acquire)) {
         iox2::bb::StaticFunction<void(iox2::EventId)> callback{[this](iox2::EventId event_id) {
           if (callback_) {
-            callback_(AlertEvent{
-                .id = static_cast<std::uint64_t>(event_id.as_value()),
-                .count = 1,
-            });
+              callback_(AlertEvent{static_cast<std::uint64_t>(event_id.as_value()), 1});
           }
         }};
 

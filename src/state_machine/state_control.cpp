@@ -78,12 +78,7 @@ namespace signlang::state_machine {
   }
 
   auto StateController::make_response(bool accepted, StateControlErrorCode error_code) const -> StateControlResponse {
-    return StateControlResponse{
-        .accepted = accepted,
-        .current_base_state = base_state_,
-        .current_special_state = current_special_state_value(),
-        .error_code = error_code,
-    };
+    return StateControlResponse{accepted, base_state_, current_special_state_value(), error_code};
   }
 
   auto StateController::next_base_state() const -> AppState {

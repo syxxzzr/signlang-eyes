@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.20)
 
 project(signlang_eyes LANGUAGES CXX C)
 
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12.3)
+    message(FATAL_ERROR
+        "This project requires GCC 12.3 or newer.\n"
+        "Current C++ compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+endif()
+
 # This project ONLY supports aarch64 target platform
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
     message(FATAL_ERROR
@@ -10,9 +16,10 @@ if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
         "Please configure with: -DCMAKE_SYSTEM_PROCESSOR=aarch64")
 endif()
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-pedantic-errors>)
 
 # RPATH settings for runtime library search
 set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")

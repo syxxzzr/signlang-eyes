@@ -69,14 +69,14 @@ namespace signlang::position_service {
                   std::min(frame.satellites_tracked, static_cast<int>(std::numeric_limits<std::uint8_t>::max())))};
         latest_hdop_ = fraction_to_double(frame.hdop);
 
-        return PositionFix{
-            .latitude_deg = *latitude,
-            .longitude_deg = *longitude,
-            .altitude_m = latest_altitude_m_,
-            .satellites = latest_satellites_,
-            .hdop = latest_hdop_,
-            .source_sentence = sentence,
-        };
+        auto fix = PositionFix{};
+        fix.latitude_deg = *latitude;
+        fix.longitude_deg = *longitude;
+        fix.altitude_m = latest_altitude_m_;
+        fix.satellites = latest_satellites_;
+        fix.hdop = latest_hdop_;
+        fix.source_sentence = sentence;
+        return fix;
       }
       case MINMEA_SENTENCE_RMC: {
         minmea_sentence_rmc frame{};
@@ -95,16 +95,16 @@ namespace signlang::position_service {
           *speed_kph *= 1.852;
         }
 
-        return PositionFix{
-            .latitude_deg = *latitude,
-            .longitude_deg = *longitude,
-            .altitude_m = latest_altitude_m_,
-            .speed_kph = speed_kph,
-            .track_deg = fraction_to_double(frame.course),
-            .satellites = latest_satellites_,
-            .hdop = latest_hdop_,
-            .source_sentence = sentence,
-        };
+        auto fix = PositionFix{};
+        fix.latitude_deg = *latitude;
+        fix.longitude_deg = *longitude;
+        fix.altitude_m = latest_altitude_m_;
+        fix.speed_kph = speed_kph;
+        fix.track_deg = fraction_to_double(frame.course);
+        fix.satellites = latest_satellites_;
+        fix.hdop = latest_hdop_;
+        fix.source_sentence = sentence;
+        return fix;
       }
       default:
         return std::nullopt;

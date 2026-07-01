@@ -33,6 +33,11 @@ namespace signlang::llm_client {
       return value;
     }
 
+    auto ends_with(std::string_view value, std::string_view suffix) -> bool {
+      return value.size() >= suffix.size() &&
+             value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+    }
+
     auto string_value(const json::value& value) -> std::string {
       if (value.is_string()) {
         return std::string{value.as_string().c_str()};
@@ -64,10 +69,9 @@ namespace signlang::llm_client {
       options_{std::move(options)}, builtin_prompt_{std::move(builtin_prompt)}, url_{parse_base_url(options_.base_url)} {
   }
 
-  auto OpenAiClient::complete(const std::string& prompt) -> boost::asio::awaitable<LlmCompletionResult> {
-    const auto executor = co_await asio::this_coro::executor;
-    Tcp::resolver resolver{executor};
-    const auto results = co_await resolver.async_resolve(url_.host, url_.port, asio::use_awaitable);
+  auto OpenAiClient::complete(const std::string& prompt) -> LlmCompletionResult {
+    Tcp::resolver resolver{io_context_};
+    const auto results = resolver.resolve(url_.host, url_.port);
 
     http::request<http::string_body> request{http::verb::post, url_.target, 11};
     request.set(http::field::host, url_.host);
@@ -89,26 +93,26 @@ namespace signlang::llm_client {
       ssl_context.set_default_verify_paths();
       ssl_context.set_verify_mode(asio::ssl::verify_peer);
 
-      beast::ssl_stream<beast::tcp_stream> stream{executor, ssl_context};
+      beast::ssl_stream<beast::tcp_stream> stream{io_context_, ssl_context};
       if (SSL_set_tlsext_host_name(stream.native_handle(), url_.host.c_str()) != 1) {
         throw std::runtime_error("Failed to set TLS SNI host name");
       }
 
       beast::get_lowest_layer(stream).expires_after(timeout);
-      co_await beast::get_lowest_layer(stream).async_connect(results, asio::use_awaitable);
-      co_await stream.async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
-      co_await http::async_write(stream, request, asio::use_awaitable);
-      co_await http::async_read(stream, buffer, response, asio::use_awaitable);
+      beast::get_lowest_layer(stream).connect(results);
+      stream.handshake(asio::ssl::stream_base::client);
+      http::write(stream, request);
+      http::read(stream, buffer, response);
 
       beast::error_code ignored;
       beast::get_lowest_layer(stream).expires_after(timeout);
-      co_await stream.async_shutdown(asio::redirect_error(asio::use_awaitable, ignored));
+      stream.shutdown(ignored);
     } else if (url_.scheme == "http") {
-      beast::tcp_stream stream{executor};
+      beast::tcp_stream stream{io_context_};
       stream.expires_after(timeout);
-      co_await stream.async_connect(results, asio::use_awaitable);
-      co_await http::async_write(stream, request, asio::use_awaitable);
-      co_await http::async_read(stream, buffer, response, asio::use_awaitable);
+      stream.connect(results);
+      http::write(stream, request);
+      http::read(stream, buffer, response);
 
       beast::error_code ignored;
       stream.socket().shutdown(Tcp::socket::shutdown_both, ignored);
@@ -116,7 +120,7 @@ namespace signlang::llm_client {
       throw std::runtime_error("Unsupported URL scheme: " + url_.scheme);
     }
 
-    co_return parse_response(static_cast<std::uint32_t>(response.result_int()), response.body());
+    return parse_response(static_cast<std::uint32_t>(response.result_int()), response.body());
   }
 
   auto OpenAiClient::parse_base_url(const std::string& base_url) -> ParsedUrl {
@@ -145,12 +149,7 @@ namespace signlang::llm_client {
       }
     }
 
-    return ParsedUrl{
-        .scheme = std::move(scheme),
-        .host = std::move(host),
-        .port = std::move(port),
-        .target = completion_target(std::move(path)),
-    };
+    return ParsedUrl{std::move(scheme), std::move(host), std::move(port), completion_target(std::move(path))};
   }
 
   auto OpenAiClient::completion_target(std::string path) -> std::string {
@@ -162,7 +161,7 @@ namespace signlang::llm_client {
     }
 
     path = remove_trailing_slashes(std::move(path));
-    if (path == "/chat/completions" || path.ends_with("/chat/completions")) {
+    if (path == "/chat/completions" || ends_with(path, "/chat/completions")) {
       return path;
     }
     if (path == "/") {
@@ -196,11 +195,7 @@ namespace signlang::llm_client {
     boost::system::error_code parse_error;
     const auto parsed = json::parse(body, parse_error);
     if (parse_error) {
-      return LlmCompletionResult{
-          .http_status = http_status,
-          .text = {},
-          .error_message = "Failed to parse LLM API JSON response: " + parse_error.message(),
-      };
+      return LlmCompletionResult{http_status, {}, "Failed to parse LLM API JSON response: " + parse_error.message()};
     }
 
     if (http_status < 200U || http_status >= 300U) {
@@ -208,22 +203,22 @@ namespace signlang::llm_client {
       if (message.empty()) {
         message = "LLM API returned HTTP " + std::to_string(http_status);
       }
-      return LlmCompletionResult{.http_status = http_status, .text = {}, .error_message = std::move(message)};
+      return LlmCompletionResult{http_status, {}, std::move(message)};
     }
 
     if (!parsed.is_object()) {
-      return LlmCompletionResult{.http_status = http_status, .text = {}, .error_message = "LLM API response is not an object"};
+      return LlmCompletionResult{http_status, {}, "LLM API response is not an object"};
     }
 
     const auto& root = parsed.as_object();
     const auto* choices = root.if_contains("choices");
     if (choices == nullptr || !choices->is_array() || choices->as_array().empty()) {
-      return LlmCompletionResult{.http_status = http_status, .text = {}, .error_message = "LLM API response has no choices"};
+      return LlmCompletionResult{http_status, {}, "LLM API response has no choices"};
     }
 
     const auto& first_choice = choices->as_array().front();
     if (!first_choice.is_object()) {
-      return LlmCompletionResult{.http_status = http_status, .text = {}, .error_message = "LLM API choice is not an object"};
+      return LlmCompletionResult{http_status, {}, "LLM API choice is not an object"};
     }
 
     const auto& choice_object = first_choice.as_object();
@@ -231,7 +226,7 @@ namespace signlang::llm_client {
       if (const auto* content = message->as_object().if_contains("content")) {
         const auto text = string_value(*content);
         if (!text.empty()) {
-          return LlmCompletionResult{.http_status = http_status, .text = text, .error_message = {}};
+          return LlmCompletionResult{http_status, text, {}};
         }
       }
     }
@@ -239,11 +234,11 @@ namespace signlang::llm_client {
     if (const auto* text = choice_object.if_contains("text")) {
       const auto text_value = string_value(*text);
       if (!text_value.empty()) {
-        return LlmCompletionResult{.http_status = http_status, .text = text_value, .error_message = {}};
+        return LlmCompletionResult{http_status, text_value, {}};
       }
     }
 
-    return LlmCompletionResult{.http_status = http_status, .text = {}, .error_message = "LLM API choice has no text content"};
+    return LlmCompletionResult{http_status, {}, "LLM API choice has no text content"};
   }
 
 } // namespace signlang::llm_client

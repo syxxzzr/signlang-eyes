@@ -145,19 +145,13 @@ namespace signlang::position_service {
     }
 
     void publish(const PositionFix& fix) {
-      if (!payload_queue_.push(MqttPayload{
-              .topic = options_.mqtt_topic,
-              .payload = payload_from_fix(fix),
-          })) {
+      if (!payload_queue_.push(MqttPayload{options_.mqtt_topic, payload_from_fix(fix)})) {
         spdlog::warn("position payload queue is full; dropping newest fix");
       }
     }
 
     void publish_alert(const AlertEvent& event) {
-      if (!payload_queue_.push(MqttPayload{
-              .topic = options_.alert_mqtt_topic,
-              .payload = payload_from_alert_event(event),
-          })) {
+      if (!payload_queue_.push(MqttPayload{options_.alert_mqtt_topic, payload_from_alert_event(event)})) {
         spdlog::warn("position payload queue is full; dropping alert event");
       }
     }

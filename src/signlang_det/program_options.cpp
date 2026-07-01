@@ -78,7 +78,7 @@ namespace signlang::signlang_det {
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
-      return ProgramUsage{.text = options.help()};
+      return ProgramUsage{options.help()};
     }
 
     if (parsed_options.count("input-service") == 0 || parsed_options.count("output-service") == 0) {
@@ -146,31 +146,30 @@ namespace signlang::signlang_det {
     const auto npu_core_mask = parse_npu_core_mask(npu_core_str);
 
     return ProgramOptions{
-        .input_service_name = parsed_options["input-service"].as<std::string>(),
-        .output_service_name = parsed_options["output-service"].as<std::string>(),
-        .prototype_control_service_name = parsed_options.count("prototype-control-service") != 0
+        parsed_options["input-service"].as<std::string>(),
+        parsed_options["output-service"].as<std::string>(),
+        parsed_options.count("prototype-control-service") != 0
             ? std::optional<std::string>{parsed_options["prototype-control-service"].as<std::string>()}
             : std::nullopt,
-        .gesture_management_service_name = parsed_options.count("gesture-management-service") != 0
+        parsed_options.count("gesture-management-service") != 0
             ? std::optional<std::string>{parsed_options["gesture-management-service"].as<std::string>()}
             : std::nullopt,
-        .model_path = parsed_options["model"].as<std::string>(),
-        .prototypes_path = parsed_options["prototypes"].as<std::string>(),
-        .sequence_length = sequence_length,
-        .overlap_ratio = overlap_ratio,
-        .min_keypoint_confidence = min_confidence,
-        .subscriber_buffer_size = subscriber_buffer_size,
-        .npu_core_mask = npu_core_mask,
-        .motion_weight = motion_weight,
-        .dtw_window_ratio = dtw_window_ratio,
-        .confidence_threshold = confidence_threshold,
-        .confidence_margin = confidence_margin,
-        .duplicate_suppression_ms = duplicate_suppression_ms,
-        .upload_window_overlap = upload_window_overlap,
-        .max_representative_samples = max_representative_samples,
-        .consecutive_hit_windows = consecutive_hit_windows,
-        .logging = signlang::logging::parse_cli_options(parsed_options),
-    };
+        parsed_options["model"].as<std::string>(),
+        parsed_options["prototypes"].as<std::string>(),
+        sequence_length,
+        overlap_ratio,
+        min_confidence,
+        subscriber_buffer_size,
+        npu_core_mask,
+        motion_weight,
+        dtw_window_ratio,
+        confidence_threshold,
+        confidence_margin,
+        duplicate_suppression_ms,
+        upload_window_overlap,
+        max_representative_samples,
+        consecutive_hit_windows,
+        signlang::logging::parse_cli_options(parsed_options)};
   }
 
 } // namespace signlang::signlang_det

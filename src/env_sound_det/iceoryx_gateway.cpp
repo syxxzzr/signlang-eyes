@@ -76,10 +76,9 @@ namespace signlang::env_sound_det {
 
   void IpcStateControlClient::enter_dangerous_sound_state() const {
     const auto request = signlang::state_machine::StateControlRequest{
-        .command = signlang::state_machine::StateControlCommand::EnterSpecial,
-        .target_state = signlang::state_machine::AppState::DangerousSound,
-        .timeout_ms = signlang::state_machine::kDefaultSpecialStateTimeoutMs,
-    };
+        signlang::state_machine::StateControlCommand::EnterSpecial,
+        signlang::state_machine::AppState::DangerousSound,
+        signlang::state_machine::kDefaultSpecialStateTimeoutMs};
 
     (void)client_.send_copy(request);
   }

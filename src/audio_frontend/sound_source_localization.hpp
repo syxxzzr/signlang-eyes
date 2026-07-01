@@ -38,9 +38,7 @@ namespace signlang::audio_frontend {
   static_assert(std::is_trivially_copyable_v<SoundSourceLocalizationKey>);
   static_assert(std::is_trivially_copyable_v<SoundSourceLocalizationResult>);
 
-  constexpr auto default_sound_source_localization_key() -> SoundSourceLocalizationKey {
-    return SoundSourceLocalizationKey{.id = 0};
-  }
+  constexpr auto default_sound_source_localization_key() -> SoundSourceLocalizationKey { return SoundSourceLocalizationKey{0}; }
 
   class SoundSourceLocalizer {
   public:

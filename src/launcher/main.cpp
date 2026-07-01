@@ -367,7 +367,7 @@ namespace {
         error.clear();
         continue;
       }
-      log_files.push_back(LogFile{.path = entry.path(), .modified_time = modified_time});
+      log_files.push_back(LogFile{entry.path(), modified_time});
     }
 
     if (log_files.size() <= retain_files) {
@@ -406,7 +406,7 @@ namespace {
   }
 
   void sleep_before_restart() {
-    struct timespec ts{.tv_sec = 1, .tv_nsec = 0};
+    struct timespec ts{1, 0};
     nanosleep(&ts, nullptr);
   }
 
@@ -715,7 +715,7 @@ static auto run_modules_once(const std::vector<ModuleEntry>& modules) -> bool {
     }
 
     if (pid == 0) {
-      struct timespec ts{.tv_sec = 0, .tv_nsec = 500000000};
+      struct timespec ts{0, 500000000};
       nanosleep(&ts, nullptr);
       continue;
     }
@@ -766,12 +766,9 @@ auto main(int argc, char** argv) -> int {
     const auto logging_config = logging_config_from_toml(config);
     const auto launcher_config = launcher_config_from_toml(config);
     const auto start_timestamp = utc_start_timestamp();
-    signlang::logging::initialize(
-        signlang::logging::Options{
-            .log_file = log_path_for(start_timestamp, "launcher"),
-            .rotate_size = logging_config.rotate_size,
-        },
-        logging_config.retain_files, "launcher");
+    signlang::logging::initialize(signlang::logging::Options{log_path_for(start_timestamp, "launcher"),
+                                                             logging_config.rotate_size},
+                                  logging_config.retain_files, "launcher");
     cleanup_old_log_files(logging_config.retain_files);
 
     spdlog::info("loaded config: {}", config_path.string());

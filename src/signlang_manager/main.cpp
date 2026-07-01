@@ -21,11 +21,8 @@ auto main(int argc, char** argv) -> int {
     spdlog::info("Starting sign language manager");
 
     auto manager = ManagerService{options};
-    auto bluetooth = BluetoothGattServer{BluetoothGattOptions{
-        .adapter_path = options.adapter_path,
-        .local_name = options.bluetooth_name,
-        .max_notify_payload = options.max_notify_payload,
-    }};
+    auto bluetooth =
+        BluetoothGattServer{BluetoothGattOptions{options.adapter_path, options.bluetooth_name, options.max_notify_payload}};
     bluetooth.start([&manager](const auto& request) { return manager.handle_packet_bytes(request); });
 
     auto subscriber = std::optional<IpcHandposeSubscriber>{};

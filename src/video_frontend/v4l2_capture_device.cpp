@@ -73,7 +73,7 @@ namespace signlang::video_frontend {
 
   V4l2CaptureDevice::V4l2CaptureDevice(std::string device_name, VideoFormatRequest format_request, std::uint32_t fps) :
       device_name_{std::move(device_name)}, format_request_{format_request}, requested_fps_{fps}, device_fd_{-1},
-      format_{.width = 0, .height = 0, .pixel_format = kPixelFormatYuyv}, fps_{fps}, max_frame_size_bytes_{0},
+      format_{0, 0, kPixelFormatYuyv}, fps_{fps}, max_frame_size_bytes_{0},
       active_buffer_index_{-1}, streaming_{false} {
     open_device();
     configure();
@@ -127,8 +127,8 @@ namespace signlang::video_frontend {
     v4l2_fmtdesc format_description{};
     format_description.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
-    auto selected_format = VideoFormat{.width = 0, .height = 0, .pixel_format = kPixelFormatYuyv};
-    auto requested_format = VideoFormat{.width = 0, .height = 0, .pixel_format = kPixelFormatYuyv};
+    auto selected_format = VideoFormat{0, 0, kPixelFormatYuyv};
+    auto requested_format = VideoFormat{0, 0, kPixelFormatYuyv};
     for (format_description.index = 0; retry_ioctl(device_fd_, VIDIOC_ENUM_FMT, &format_description) == 0;
          ++format_description.index) {
       if (format_description.pixelformat != kPixelFormatYuyv && format_description.pixelformat != kPixelFormatMjpeg) {
@@ -143,11 +143,8 @@ namespace signlang::video_frontend {
       if (format_request_.width.has_value() &&
           supports_frame_size(format_description.pixelformat, format_request_.width.value(),
                               format_request_.height.value())) {
-        const auto candidate_requested_format = VideoFormat{
-            .width = format_request_.width.value(),
-            .height = format_request_.height.value(),
-            .pixel_format = format_description.pixelformat,
-        };
+        const auto candidate_requested_format =
+            VideoFormat{format_request_.width.value(), format_request_.height.value(), format_description.pixelformat};
         if (is_preferred_format(candidate_requested_format, requested_format)) {
           requested_format = candidate_requested_format;
         }
@@ -176,7 +173,7 @@ namespace signlang::video_frontend {
     v4l2_frmsizeenum frame_size{};
     frame_size.pixel_format = pixel_format;
 
-    auto selected_format = VideoFormat{.width = 0, .height = 0, .pixel_format = pixel_format};
+    auto selected_format = VideoFormat{0, 0, pixel_format};
     for (frame_size.index = 0; retry_ioctl(device_fd_, VIDIOC_ENUM_FRAMESIZES, &frame_size) == 0; ++frame_size.index) {
       if (frame_size.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
         if (frame_area(frame_size.discrete.width, frame_size.discrete.height) >
@@ -310,7 +307,7 @@ namespace signlang::video_frontend {
         throw std::runtime_error(v4l2_error_message("Failed to mmap V4L2 buffer"));
       }
 
-      mapped_buffers_[buffer_index] = MappedBuffer{.start = mapped_data, .length = buffer.length};
+      mapped_buffers_[buffer_index] = MappedBuffer{mapped_data, buffer.length};
       enqueue_buffer(buffer_index);
     }
   }
@@ -398,10 +395,7 @@ namespace signlang::video_frontend {
 
       active_buffer_index_ = static_cast<std::int32_t>(buffer.index);
       const auto& mapped_buffer = mapped_buffers_[buffer.index];
-      return CapturedVideoFrame{
-          .data = static_cast<const std::uint8_t*>(mapped_buffer.start),
-          .size_bytes = buffer.bytesused,
-      };
+      return CapturedVideoFrame{static_cast<const std::uint8_t*>(mapped_buffer.start), buffer.bytesused};
     }
   }
 

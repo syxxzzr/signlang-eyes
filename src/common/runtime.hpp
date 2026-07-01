@@ -19,15 +19,25 @@ namespace signlang::runtime {
 
   namespace detail {
 
+    template <typename T, typename = void>
+    struct IsUsageResult : std::false_type {};
+
     template <typename T>
-    concept UsageResult = requires(const T& value) {
-      { value.text };
+    struct IsUsageResult<T, std::void_t<decltype(std::declval<const T&>().text)>> : std::true_type {};
+
+    template <typename T, typename = void>
+    struct IsRuntimeOptions : std::false_type {};
+
+    template <typename T>
+    struct IsRuntimeOptions<T, std::void_t<decltype(std::declval<const T&>().logging)>> : std::true_type {};
+
+    template <typename T>
+    struct RemoveCvRef {
+      using type = std::remove_cv_t<std::remove_reference_t<T>>;
     };
 
     template <typename T>
-    concept RuntimeOptions = requires(const T& value) {
-      { value.logging };
-    };
+    using RemoveCvRefT = typename RemoveCvRef<T>::type;
 
   } // namespace detail
 
@@ -84,11 +94,11 @@ namespace signlang::runtime {
 
       std::visit(
           [&](const auto& result) {
-            using Result = std::remove_cvref_t<decltype(result)>;
-            if constexpr (detail::UsageResult<Result>) {
+            using Result = detail::RemoveCvRefT<decltype(result)>;
+            if constexpr (detail::IsUsageResult<Result>::value) {
               std::cout << result.text << '\n';
             } else {
-              static_assert(detail::RuntimeOptions<Result>, "Runtime options must expose a logging field");
+              static_assert(detail::IsRuntimeOptions<Result>::value, "Runtime options must expose a logging field");
               signlang::logging::initialize(result.logging, signlang::logging::kDefaultRetainFiles, module_name);
               install_shutdown_signal_handlers();
               exit_code = std::forward<RunModule>(run_module)(result);

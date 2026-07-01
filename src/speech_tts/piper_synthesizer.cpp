@@ -84,12 +84,7 @@ namespace signlang::speech_tts {
     auto [z, y_mask] = run_encoder(phoneme_ids);
     auto audio = run_decoder(z, y_mask);
 
-    const auto chunk = PiperAudioChunkView{
-        .samples = audio.data(),
-        .sample_count = audio.size(),
-        .sample_rate_hz = phonemizer_.config().sample_rate_hz,
-        .is_last = true,
-    };
+    const auto chunk = PiperAudioChunkView{audio.data(), audio.size(), phonemizer_.config().sample_rate_hz, true};
     (void)on_chunk(chunk);
   }
 

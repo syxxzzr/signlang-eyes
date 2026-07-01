@@ -288,15 +288,14 @@ namespace signlang::signlang_det {
     }
 
     upload_ = UploadSession{
-        .transfer_id = request.transfer_id,
-        .gesture_name = gesture_name,
-        .replace_existing = request.replace_existing,
-        .frame_count = request.frame_count,
-        .metadata = std::vector<handpose_det::HandPoseFrameMetadata>(request.frame_count),
-        .detections = std::vector<std::array<handpose_det::HandPoseDetection, kMaxHandCount>>(request.frame_count),
-        .detection_counts = std::vector<std::uint32_t>(request.frame_count, 0),
-        .received = std::vector<std::uint8_t>(request.frame_count, 0),
-    };
+        request.transfer_id,
+        gesture_name,
+        request.replace_existing,
+        request.frame_count,
+        std::vector<handpose_det::HandPoseFrameMetadata>(request.frame_count),
+        std::vector<std::array<handpose_det::HandPoseDetection, kMaxHandCount>>(request.frame_count),
+        std::vector<std::uint32_t>(request.frame_count, 0),
+        std::vector<std::uint8_t>(request.frame_count, 0)};
     return make_response(request, GestureManagementStatus::Ok);
   }
 

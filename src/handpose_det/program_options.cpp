@@ -80,7 +80,7 @@ namespace signlang::handpose_det {
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
-      return ProgramUsage{.text = options.help()};
+      return ProgramUsage{options.help()};
     }
 
     if (parsed_options.count("input-service") == 0 || parsed_options.count("output-service") == 0) {
@@ -103,37 +103,37 @@ namespace signlang::handpose_det {
         : default_npu_core;
 
     return ProgramOptionsParseResult{ProgramOptions{
-        .input_service_name = parsed_options["input-service"].as<std::string>(),
-        .output_service_name = parsed_options["output-service"].as<std::string>(),
-        .palm_detector_model_path = parsed_options["model"].as<std::string>(),
-        .landmark_model_path = parsed_options["landmark-model"].as<std::string>(),
-        .confidence_threshold = parsed_options["confidence"].as<float>(),
-        .presence_threshold = parsed_options["presence-threshold"].as<float>(),
-        .tracking_threshold = parsed_options["tracking-threshold"].as<float>(),
-        .nms_iou_threshold = parsed_options["nms-iou-threshold"].as<float>(),
-        .tracking_iou_match_threshold = parsed_options["tracking-iou-match"].as<float>(),
-        .crop_expansion = parsed_options["crop-expansion"].as<float>(),
-        .base_roi_expansion = parsed_options["base-roi-expansion"].as<float>(),
-        .small_hand_expansion = parsed_options["small-hand-expansion"].as<float>(),
-        .large_hand_expansion = parsed_options["large-hand-expansion"].as<float>(),
-        .small_hand_threshold = parsed_options["small-hand-threshold"].as<float>(),
-        .large_hand_threshold = parsed_options["large-hand-threshold"].as<float>(),
-        .boundary_margin = parsed_options["boundary-margin"].as<float>(),
-        .boundary_min_factor = parsed_options["boundary-min-factor"].as<float>(),
-        .euro_min_cutoff = parsed_options["euro-min-cutoff"].as<float>(),
-        .euro_beta = parsed_options["euro-beta"].as<float>(),
-        .euro_d_cutoff = parsed_options["euro-d-cutoff"].as<float>(),
-        .handedness_threshold = parsed_options["handedness-threshold"].as<float>(),
-        .max_tracking_gap = parsed_options["max-tracking-gap"].as<std::uint32_t>(),
-        .max_stale_frames = parsed_options["max-stale-frames"].as<std::uint32_t>(),
-        .full_frame_interval = parsed_options["full-frame-interval"].as<std::uint32_t>(),
-        .subscriber_buffer_size = subscriber_buffer_size,
-        .single_hand = single_hand,
-        .swap_handedness = parsed_options["swap-handedness"].as<bool>(),
-        .palm_detector_npu_core_mask = parse_core_mask(palm_npu_core),
-        .landmark_npu_core_mask = parse_core_mask(landmark_npu_core),
-        .verbose = parsed_options.count("verbose") != 0,
-        .logging = signlang::logging::parse_cli_options(parsed_options),
+        parsed_options["input-service"].as<std::string>(),
+        parsed_options["output-service"].as<std::string>(),
+        parsed_options["model"].as<std::string>(),
+        parsed_options["landmark-model"].as<std::string>(),
+        parsed_options["confidence"].as<float>(),
+        parsed_options["presence-threshold"].as<float>(),
+        parsed_options["tracking-threshold"].as<float>(),
+        parsed_options["nms-iou-threshold"].as<float>(),
+        parsed_options["tracking-iou-match"].as<float>(),
+        parsed_options["crop-expansion"].as<float>(),
+        parsed_options["base-roi-expansion"].as<float>(),
+        parsed_options["small-hand-expansion"].as<float>(),
+        parsed_options["large-hand-expansion"].as<float>(),
+        parsed_options["small-hand-threshold"].as<float>(),
+        parsed_options["large-hand-threshold"].as<float>(),
+        parsed_options["boundary-margin"].as<float>(),
+        parsed_options["boundary-min-factor"].as<float>(),
+        parsed_options["euro-min-cutoff"].as<float>(),
+        parsed_options["euro-beta"].as<float>(),
+        parsed_options["euro-d-cutoff"].as<float>(),
+        parsed_options["handedness-threshold"].as<float>(),
+        parsed_options["max-tracking-gap"].as<std::uint32_t>(),
+        parsed_options["max-stale-frames"].as<std::uint32_t>(),
+        parsed_options["full-frame-interval"].as<std::uint32_t>(),
+        subscriber_buffer_size,
+        single_hand,
+        parsed_options["swap-handedness"].as<bool>(),
+        parse_core_mask(palm_npu_core),
+        parse_core_mask(landmark_npu_core),
+        parsed_options.count("verbose") != 0,
+        signlang::logging::parse_cli_options(parsed_options),
     }};
   }
 

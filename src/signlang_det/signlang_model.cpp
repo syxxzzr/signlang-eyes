@@ -57,12 +57,7 @@ namespace signlang::signlang_det {
     candidates.reserve(store.gesture_count());
 
     for (const auto& gesture : store.gestures()) {
-      auto best = Candidate{
-          .gesture_id = gesture.gesture_id,
-          .sample_id = 0,
-          .distance = std::numeric_limits<float>::infinity(),
-          .confidence = 0.0F,
-      };
+      auto best = Candidate{gesture.gesture_id, 0, std::numeric_limits<float>::infinity(), 0.0F};
 
       for (const auto& sample : gesture.samples) {
         const auto distance = compute_distance(query, sample.frames);
@@ -367,15 +362,14 @@ namespace signlang::signlang_det {
     const auto encoded_frames = encode_features(sequence);
     auto candidates = matcher_.match(encoded_frames, prototypes_);
 
-    auto result = InferenceResult{
-        .recognized = !candidates.empty(),
-        .gesture_id = candidates.empty() ? 0U : candidates.front().gesture_id,
-        .inference_time_ms = 0.0F,
-        .confidence = candidates.empty() ? 0.0F : candidates.front().confidence,
-        .second_confidence = candidates.size() > 1 ? candidates[1].confidence : 0.0F,
-        .distance = candidates.empty() ? std::numeric_limits<float>::infinity() : candidates.front().distance,
-        .candidates = std::move(candidates),
-    };
+    auto result =
+        InferenceResult{!candidates.empty(),
+                        candidates.empty() ? 0U : candidates.front().gesture_id,
+                        0.0F,
+                        candidates.empty() ? 0.0F : candidates.front().confidence,
+                        candidates.size() > 1 ? candidates[1].confidence : 0.0F,
+                        candidates.empty() ? std::numeric_limits<float>::infinity() : candidates.front().distance,
+                        std::move(candidates)};
 
     const auto end_time = std::chrono::steady_clock::now();
     result.inference_time_ms = std::chrono::duration<float, std::milli>(end_time - start_time).count();

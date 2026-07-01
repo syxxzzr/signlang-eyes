@@ -4,6 +4,8 @@
 #include "audio_frontend/audio_frame.hpp"
 
 #include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -47,6 +49,8 @@ namespace signlang::common {
 
     std::uint32_t expected_sample_rate_hz_;
     std::vector<std::atomic<float>> samples_;
+    mutable std::mutex wake_mutex_;
+    mutable std::condition_variable wake_condition_;
     std::atomic_uint64_t start_sample_index_;
     std::atomic_uint64_t next_sample_index_;
     mutable std::atomic_uint64_t wake_sequence_;

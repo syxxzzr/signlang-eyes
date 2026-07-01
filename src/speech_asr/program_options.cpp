@@ -97,7 +97,7 @@ namespace signlang::speech_asr {
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
-      return ProgramUsage{.text = options.help()};
+      return ProgramUsage{options.help()};
     }
 
     if (parsed_options.count("input-service") == 0 || parsed_options.count("output-service") == 0) {
@@ -143,22 +143,22 @@ namespace signlang::speech_asr {
         : default_npu_core;
 
     return ProgramOptionsParseResult{ProgramOptions{
-        .audio_service_name = parsed_options["input-service"].as<std::string>(),
-        .result_service_name = parsed_options["output-service"].as<std::string>(),
-        .encoder_model_path = parsed_options["encoder-model"].as<std::string>(),
-        .decoder_model_path = parsed_options["decoder-model"].as<std::string>(),
-        .vocab_en_path = parsed_options["vocab-en"].as<std::string>(),
-        .vocab_zh_path = parsed_options["vocab-zh"].as<std::string>(),
-        .mel_filters_path = parsed_options["mel-filters"].as<std::string>(),
-        .window_ms = window_ms,
-        .overlap_ratio = overlap_ratio,
-        .language = language,
-        .max_decode_steps = max_decode_steps,
-        .subscriber_buffer_size = subscriber_buffer_size,
-        .encoder_npu_core_mask = parse_npu_core_mask(encoder_npu_core),
-        .decoder_npu_core_mask = parse_npu_core_mask(decoder_npu_core),
-        .rknn_priority_flag = parse_rknn_priority_flag(parsed_options["rknn-priority"].as<std::string>()),
-        .logging = signlang::logging::parse_cli_options(parsed_options),
+        parsed_options["input-service"].as<std::string>(),
+        parsed_options["output-service"].as<std::string>(),
+        parsed_options["encoder-model"].as<std::string>(),
+        parsed_options["decoder-model"].as<std::string>(),
+        parsed_options["vocab-en"].as<std::string>(),
+        parsed_options["vocab-zh"].as<std::string>(),
+        parsed_options["mel-filters"].as<std::string>(),
+        window_ms,
+        overlap_ratio,
+        language,
+        max_decode_steps,
+        subscriber_buffer_size,
+        parse_npu_core_mask(encoder_npu_core),
+        parse_npu_core_mask(decoder_npu_core),
+        parse_rknn_priority_flag(parsed_options["rknn-priority"].as<std::string>()),
+        signlang::logging::parse_cli_options(parsed_options),
     }};
   }
 

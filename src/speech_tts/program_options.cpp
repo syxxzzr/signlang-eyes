@@ -77,7 +77,7 @@ namespace signlang::speech_tts {
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
-      return ProgramUsage{.text = options.help()};
+      return ProgramUsage{options.help()};
     }
 
     if (parsed_options.count("service") == 0) {
@@ -104,17 +104,16 @@ namespace signlang::speech_tts {
       throw std::runtime_error("--pinyin-dict must not be empty");
     }
 
-    return ProgramOptionsParseResult{ProgramOptions{
-        .service_name = parsed_options["service"].as<std::string>(),
-        .audio_device_name = parsed_options["device"].as<std::string>(),
-        .encoder_model_path = std::move(encoder_model_path),
-        .decoder_model_path = std::move(decoder_model_path),
-        .config_path = std::move(config_path),
-        .pinyin_dictionary_path = std::move(pinyin_dictionary_path),
-        .decoder_npu_core_mask = parse_npu_core_mask(parsed_options["npu-core"].as<std::string>()),
-        .rknn_priority_flag = parse_rknn_priority_flag(parsed_options["rknn-priority"].as<std::string>()),
-        .logging = signlang::logging::parse_cli_options(parsed_options),
-    }};
+    return ProgramOptionsParseResult{ProgramOptions{parsed_options["service"].as<std::string>(),
+                                                    parsed_options["device"].as<std::string>(),
+                                                    std::move(encoder_model_path),
+                                                    std::move(decoder_model_path),
+                                                    std::move(config_path),
+                                                    std::move(pinyin_dictionary_path),
+                                                    parse_npu_core_mask(parsed_options["npu-core"].as<std::string>()),
+                                                    parse_rknn_priority_flag(
+                                                        parsed_options["rknn-priority"].as<std::string>()),
+                                                    signlang::logging::parse_cli_options(parsed_options)}};
   }
 
 } // namespace signlang::speech_tts

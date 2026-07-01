@@ -50,10 +50,7 @@ namespace {
     const auto output_width = output_request.width.value_or(capture_format.width);
     const auto output_height = output_request.height.value_or(capture_format.height);
     return signlang::video_frontend::VideoFormat{
-        .width = output_width,
-        .height = output_height,
-        .pixel_format = signlang::video_frontend::kPixelFormatRgb24,
-    };
+        output_width, output_height, signlang::video_frontend::kPixelFormatRgb24};
   }
 
 } // namespace

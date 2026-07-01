@@ -130,14 +130,12 @@ namespace signlang::speech_tts {
       inference = require_object(*inference_value, "Piper inference config");
     }
 
-    return PiperVoiceConfig{
-        .sample_rate_hz = required_uint32(audio, "sample_rate"),
-        .noise_scale = optional_float(inference, "noise_scale", kDefaultNoiseScale),
-        .length_scale = optional_float(inference, "length_scale", kDefaultLengthScale),
-        .noise_w = optional_float(inference, "noise_w", kDefaultNoiseW),
-        .num_speakers = optional_uint32(root, "num_speakers", 1),
-        .phoneme_id_map = load_phoneme_id_map(root),
-    };
+    return PiperVoiceConfig{required_uint32(audio, "sample_rate"),
+                            optional_float(inference, "noise_scale", kDefaultNoiseScale),
+                            optional_float(inference, "length_scale", kDefaultLengthScale),
+                            optional_float(inference, "noise_w", kDefaultNoiseW),
+                            optional_uint32(root, "num_speakers", 1),
+                            load_phoneme_id_map(root)};
   }
 
   PiperPhonemizer::PiperPhonemizer(PiperVoiceConfig config, const std::string& dictionary_path) :

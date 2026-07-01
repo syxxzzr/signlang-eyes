@@ -25,7 +25,7 @@ namespace signlang::speech_tts {
       const std::lock_guard lock{mutex_};
       ++generation_;
       response.generation = generation_;
-      pending_task_ = SpeechTtsTask{.generation = generation_, .text = std::move(text)};
+      pending_task_ = SpeechTtsTask{generation_, std::move(text)};
       response.status = SpeechTtsStatus::Ok;
       common::copy_fixed_string("accepted", response.message);
     }
