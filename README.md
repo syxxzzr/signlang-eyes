@@ -49,6 +49,7 @@ Modular architecture using iceoryx2 zero-copy IPC for high-performance inter-pro
 - **audio_frontend**: ALSA audio capture with TDOA-based sound source localization and adaptive resampling
 - **video_frontend**: V4L2 camera capture with RGA hardware-accelerated format conversion (YUYV/MJPEG→RGB24) and scaling
 - **speech_asr**: Whisper base encoder-decoder speech recognition with 15s sliding window for Chinese/English
+- **speech_tts**: Piper/cpp-pinyin Chinese text-to-speech playback from iceoryx2 request-response requests
 - **env_sound_det**: YAMNet (MobileNetV1) environmental sound classification with threshold-based dangerous sound alerts
 - **handpose_det**: MediaPipe dual-model pipeline (palm detector + hand landmarks) with single-hand or dual-hand output
 - **signlang_det**: Dual-hand sign language recognition using BiLSTM encoder + DTW matching against SQLite prototype database
@@ -179,6 +180,9 @@ output_height = 480        # Output height in pixels
 language = "zh"            # Recognition language: "zh" or "en"
 npu_core = "1"             # NPU core: "0", "1", "2", "0_1", "0_1_2", "auto", "all"
 
+[speech_tts]
+device = "default"         # ALSA playback device
+
 [env_sound_det]
 npu_core = "0"
 score_threshold = 0.3      # Detection threshold (0.0-1.0)
@@ -301,6 +305,7 @@ src/
 ├── audio_frontend/   Audio capture module
 ├── video_frontend/   Video capture module
 ├── speech_asr/       Speech recognition module
+├── speech_tts/       Piper text-to-speech playback module
 ├── env_sound_det/    Environmental sound detection module
 ├── handpose_det/     Hand pose detection module
 ├── signlang_det/     Sign language recognition module
@@ -317,6 +322,7 @@ Detailed documentation for each module:
 - [audio_frontend](src/audio_frontend/README.md) - Audio capture and source localization
 - [video_frontend](src/video_frontend/README.md) - Video capture and hardware acceleration
 - [speech_asr](src/speech_asr/README.md) - Whisper speech recognition
+- [speech_tts](src/speech_tts/README.md) - Piper text-to-speech playback
 - [env_sound_det](src/env_sound_det/README.md) - YAMNet environmental sound detection
 - [handpose_det](src/handpose_det/README.md) - MediaPipe hand pose detection
 - [signlang_det](src/signlang_det/README.md) - DTW sign language recognition
@@ -330,6 +336,7 @@ Inter-module communication via iceoryx2 services (hardcoded names):
 - `video_capture`: Video frame data stream (RGB24, publish-subscribe with user header)
 - `handpose_result`: Hand keypoint data stream (21 landmarks for one or two hands, publish-subscribe with user header)
 - `speech_asr_result`: Speech recognition transcription results (publish-subscribe)
+- `speech_tts`: Text-to-speech requests (request-response)
 - `signlang_result`: Sign language recognition results (publish-subscribe)
 - `signlang_prototype_control`: Prototype reload/status control between signlang_manager and signlang_det (request-response)
 - `app_state_event`: State change event notifications (event notifier)

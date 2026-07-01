@@ -34,6 +34,7 @@ namespace signlang::launcher::ipc {
   constexpr auto kSignlangOutput = "signlang_result";
   constexpr auto kSignlangPrototypeControl = "signlang_prototype_control";
   constexpr auto kSignlangGestureManagement = "signlang_gesture_management";
+  constexpr auto kSpeechTts = "speech_tts";
   constexpr auto kStateEvent = "app_state_event";
   constexpr auto kStateBlackboard = "app_state_blackboard";
   constexpr auto kStateControl = "app_state_control";
@@ -48,6 +49,7 @@ namespace {
   constexpr auto kExeAudioFrontend = "bin/audio_frontend";
   constexpr auto kExeVideoFrontend = "bin/video_frontend";
   constexpr auto kExeSpeechAsr = "bin/speech_asr";
+  constexpr auto kExeSpeechTts = "bin/speech_tts";
   constexpr auto kExeEnvSoundDet = "bin/env_sound_det";
   constexpr auto kExeHandposeDet = "bin/handpose_det";
   constexpr auto kExeSignlangManager = "bin/signlang_manager";
@@ -77,7 +79,7 @@ namespace {
   void warn_ipc_keys_in_config(const toml::table& config) {
     constexpr std::array kSections = {
         "state_machine", "audio_frontend", "video_frontend",   "speech_asr",   "env_sound_det",
-        "handpose_det",   "signlang_manager", "signlang_det", "position_service", "llm_client",
+        "handpose_det", "signlang_manager", "signlang_det", "speech_tts", "position_service", "llm_client",
     };
 
     for (const auto* section_name : kSections) {
@@ -507,6 +509,22 @@ static auto build_env_sound_det_args(const toml::table& cfg) -> std::vector<std:
   return args;
 }
 
+static auto build_speech_tts_args(const toml::table& cfg) -> std::vector<std::string> {
+  using namespace signlang::launcher::ipc;
+  std::vector<std::string> args = {kExeSpeechTts, "--service", kSpeechTts};
+
+  if (const auto* tbl = cfg["speech_tts"].as_table()) {
+    add_opt_str(args, "--device", opt_string(*tbl, "device"));
+    add_opt_str(args, "--encoder-model", opt_string(*tbl, "encoder_model"));
+    add_opt_str(args, "--decoder-model", opt_string(*tbl, "decoder_model"));
+    add_opt_str(args, "--config", opt_string(*tbl, "config"));
+    add_opt_str(args, "--pinyin-dict", opt_string(*tbl, "pinyin_dict"));
+    add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
+    add_opt_str(args, "--rknn-priority", opt_string(*tbl, "rknn_priority"));
+  }
+  return args;
+}
+
 static auto build_handpose_det_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
@@ -639,7 +657,8 @@ static auto build_modules(const toml::table& config) -> std::vector<ModuleEntry>
   return {
       {"state_machine", build_state_machine_args(config)},       {"audio_frontend", build_audio_frontend_args(config)},
       {"video_frontend", build_video_frontend_args(config)},     {"speech_asr", build_speech_asr_args(config)},
-      {"env_sound_det", build_env_sound_det_args(config)},       {"handpose_det", build_handpose_det_args(config)},
+      {"speech_tts", build_speech_tts_args(config)},             {"env_sound_det", build_env_sound_det_args(config)},
+      {"handpose_det", build_handpose_det_args(config)},
       {"signlang_manager", build_signlang_manager_args(config)}, {"signlang_det", build_signlang_det_args(config)},
       {"position_service", build_position_service_args(config)}, {"llm_client", build_llm_client_args(config)},
   };

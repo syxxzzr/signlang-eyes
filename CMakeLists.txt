@@ -46,6 +46,7 @@ find_package(spdlog REQUIRED CONFIG)
 find_package(FFTW3 REQUIRED CONFIG)
 find_package(libjpeg-turbo REQUIRED CONFIG)
 find_package(iceoryx2-cxx REQUIRED CONFIG)
+find_package(onnxruntime REQUIRED CONFIG)
 find_package(rknn-runtime REQUIRED CONFIG)
 find_package(librga REQUIRED CONFIG)
 
