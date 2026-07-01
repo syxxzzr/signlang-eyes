@@ -50,10 +50,8 @@ auto main(int argc, char** argv) -> int {
                  capture_format.channel_count, options.publish_period_ms);
 
     const AudioFormat publish_format{
-        .sample_rate_hz =
-            options.publish_format.sample_rate_hz.value_or(signlang::audio_frontend::kDefaultSampleRateHz),
-        .channel_count = options.publish_format.channel_count.value_or(signlang::audio_frontend::kDefaultChannelCount),
-    };
+        options.publish_format.sample_rate_hz.value_or(signlang::audio_frontend::kDefaultSampleRateHz),
+        options.publish_format.channel_count.value_or(signlang::audio_frontend::kDefaultChannelCount)};
     validate_publish_format(capture_format, publish_format);
     spdlog::info("Output format: {}Hz, {} channels", publish_format.sample_rate_hz, publish_format.channel_count);
 

@@ -31,12 +31,10 @@ namespace signlang::logging {
   }
 
   inline auto parse_cli_options(const cxxopts::ParseResult& parsed_options) -> Options {
-    return Options{
-        .log_file = parsed_options.count("log-file") == 0
-            ? std::nullopt
-            : std::optional<std::string>{parsed_options["log-file"].as<std::string>()},
-        .rotate_size = parse_positive_u64(parsed_options["log-rotate-size"].as<std::string>(), "--log-rotate-size"),
-    };
+    return Options{parsed_options.count("log-file") == 0
+                       ? std::nullopt
+                       : std::optional<std::string>{parsed_options["log-file"].as<std::string>()},
+                   parse_positive_u64(parsed_options["log-rotate-size"].as<std::string>(), "--log-rotate-size")};
   }
 
 } // namespace signlang::logging

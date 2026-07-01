@@ -45,12 +45,8 @@ auto main(int argc, char** argv) -> int {
         const auto result = model.run(*sample.metadata, sample.payload, sample.payload_size, detections);
         transport.publish(*sample.metadata, sequence_number++,
                           signlang::handpose_det::HandPosePublishInfo{
-                              .detection_count = result.detection_count,
-                              .image_width = result.image_width,
-                              .image_height = result.image_height,
-                              .model_width = result.model_width,
-                              .model_height = result.model_height,
-                          },
+                              result.detection_count, result.image_width, result.image_height, result.model_width,
+                              result.model_height},
                           detection_buffer.data());
       });
     }

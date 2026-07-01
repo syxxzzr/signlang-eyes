@@ -82,7 +82,7 @@ namespace signlang::env_sound_det {
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
-      return ProgramUsage{.text = options.help()};
+      return ProgramUsage{options.help()};
     }
 
     if (parsed_options.count("input-service") == 0 || parsed_options.count("state-control-service") == 0) {
@@ -109,19 +109,18 @@ namespace signlang::env_sound_det {
       throw std::runtime_error("--subscriber-buffer must be greater than 0");
     }
 
-    return ProgramOptionsParseResult{ProgramOptions{
-        .audio_service_name = parsed_options["input-service"].as<std::string>(),
-        .state_control_service_name = parsed_options["state-control-service"].as<std::string>(),
-        .model_path = parsed_options["model"].as<std::string>(),
-        .class_map_path = parsed_options["class-map"].as<std::string>(),
-        .window_ms = window_ms,
-        .overlap_ratio = overlap_ratio,
-        .score_threshold = score_threshold,
-        .subscriber_buffer_size = subscriber_buffer_size,
-        .npu_core_mask = parse_npu_core_mask(parsed_options["npu-core"].as<std::string>()),
-        .rknn_priority_flag = parse_rknn_priority_flag(parsed_options["rknn-priority"].as<std::string>()),
-        .logging = signlang::logging::parse_cli_options(parsed_options),
-    }};
+    return ProgramOptionsParseResult{ProgramOptions{parsed_options["input-service"].as<std::string>(),
+                                                    parsed_options["state-control-service"].as<std::string>(),
+                                                    parsed_options["model"].as<std::string>(),
+                                                    parsed_options["class-map"].as<std::string>(),
+                                                    window_ms,
+                                                    overlap_ratio,
+                                                    score_threshold,
+                                                    subscriber_buffer_size,
+                                                    parse_npu_core_mask(parsed_options["npu-core"].as<std::string>()),
+                                                    parse_rknn_priority_flag(
+                                                        parsed_options["rknn-priority"].as<std::string>()),
+                                                    signlang::logging::parse_cli_options(parsed_options)}};
   }
 
 } // namespace signlang::env_sound_det

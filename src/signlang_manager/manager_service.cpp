@@ -244,13 +244,7 @@ namespace signlang::signlang_manager {
     append_u16(response_payload, status);
     response_payload.insert(response_payload.end(), payload.begin(), payload.end());
 
-    return ProtocolPacket{
-        .type = PacketType::Response,
-        .command_id = request.command_id,
-        .request_id = request.request_id,
-        .flags = 0,
-        .payload = std::move(response_payload),
-    };
+    return ProtocolPacket{PacketType::Response, request.command_id, request.request_id, 0, std::move(response_payload)};
   }
 
   auto ManagerService::handle_get_status(const ProtocolPacket& request) -> ProtocolPacket {
@@ -332,14 +326,8 @@ namespace signlang::signlang_manager {
                                " bytes");
     }
 
-    upload_ = UploadSession{
-        .transfer_id = transfer_id,
-        .gesture_name = gesture_name,
-        .replace_existing = replace_existing,
-        .total_size = total_size,
-        .data = std::vector<std::uint8_t>(total_size),
-        .received = std::vector<std::uint8_t>(total_size, 0),
-    };
+    upload_ = UploadSession{transfer_id, gesture_name, replace_existing, total_size, std::vector<std::uint8_t>(total_size),
+                            std::vector<std::uint8_t>(total_size, 0)};
     return make_response(request, kStatusOk);
   }
 

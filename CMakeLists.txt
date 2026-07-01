@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.20)
 
 project(signlang_eyes LANGUAGES CXX C)
 
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12.3)
+    message(FATAL_ERROR
+        "This project requires GCC 12.3 or newer.\n"
+        "Current C++ compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+endif()
+
 # This project ONLY supports aarch64 target platform
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
     message(FATAL_ERROR
@@ -10,9 +16,10 @@ if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
         "Please configure with: -DCMAKE_SYSTEM_PROCESSOR=aarch64")
 endif()
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-pedantic-errors>)
 
 # RPATH settings for runtime library search
 set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
@@ -37,6 +44,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # Conan-managed dependencies
 find_package(cxxopts REQUIRED CONFIG)
+find_package(cpp-pinyin REQUIRED CONFIG)
 find_package(tomlplusplus REQUIRED CONFIG)
 find_package(Boost REQUIRED CONFIG)
 find_package(minmea REQUIRED CONFIG)
@@ -45,6 +53,7 @@ find_package(spdlog REQUIRED CONFIG)
 find_package(FFTW3 REQUIRED CONFIG)
 find_package(libjpeg-turbo REQUIRED CONFIG)
 find_package(iceoryx2-cxx REQUIRED CONFIG)
+find_package(onnxruntime REQUIRED CONFIG)
 find_package(rknn-runtime REQUIRED CONFIG)
 find_package(librga REQUIRED CONFIG)
 

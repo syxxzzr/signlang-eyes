@@ -43,6 +43,15 @@ npu_core = "1"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 # rknn_priority = "medium"         # high, medium, low
 # subscriber_buffer = 2            # iceoryx2 subscriber queue size
 
+[speech_tts]
+device = "default"                 # ALSA playback device name
+npu_core = "auto"                  # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
+# encoder_model = "models/piper/zh_CN-huayan-x_low.encoder.onnx"
+# decoder_model = "models/piper/zh_CN-huayan-x_low.decoder.int8.rknn"
+# config = "models/piper/zh_CN-huayan-x_low.json"
+# pinyin_dict = "share/cpp-pinyin/dict"
+# rknn_priority = "medium"         # high, medium, low
+
 [env_sound_det]
 npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
 # window_ms = 3000                 # Detection window length in milliseconds

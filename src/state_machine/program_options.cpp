@@ -25,7 +25,7 @@ namespace signlang::state_machine {
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
-      return ProgramUsage{.text = options.help()};
+      return ProgramUsage{options.help()};
     }
 
     if (parsed_options.count("state-event-service") == 0 || parsed_options.count("state-blackboard-service") == 0 ||
@@ -42,13 +42,11 @@ namespace signlang::state_machine {
                                "'. Expected one of: normal, asr, sign_language_chat, sign_language_ai.");
     }
 
-    return ProgramOptionsParseResult{ProgramOptions{
-        .state_event_service_name = parsed_options["state-event-service"].as<std::string>(),
-        .state_blackboard_service_name = parsed_options["state-blackboard-service"].as<std::string>(),
-        .state_control_service_name = parsed_options["state-control-service"].as<std::string>(),
-        .initial_state = initial_state.value(),
-        .logging = signlang::logging::parse_cli_options(parsed_options),
-    }};
+    return ProgramOptionsParseResult{ProgramOptions{parsed_options["state-event-service"].as<std::string>(),
+                                                    parsed_options["state-blackboard-service"].as<std::string>(),
+                                                    parsed_options["state-control-service"].as<std::string>(),
+                                                    initial_state.value(),
+                                                    signlang::logging::parse_cli_options(parsed_options)}};
   }
 
 } // namespace signlang::state_machine

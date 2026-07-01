@@ -16,6 +16,8 @@ namespace signlang::llm_client {
     std::string model;
     std::string system_prompt_file;
     std::uint32_t request_timeout_ms;
+    std::uint32_t concurrency;
+    std::uint32_t worker_queue_capacity;
     signlang::logging::Options logging;
   };
 

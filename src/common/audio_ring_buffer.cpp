@@ -1,6 +1,7 @@
 #include "common/audio_ring_buffer.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <stdexcept>
 
@@ -8,6 +9,7 @@ namespace signlang::common {
   namespace {
 
     constexpr auto kInt16ToFloatScale = 1.0F / 32768.0F;
+    constexpr auto kWakeTimeout = std::chrono::milliseconds{5};
 
   } // namespace
 
@@ -45,7 +47,7 @@ namespace signlang::common {
     start_sample_index_.store(start_sample_index, std::memory_order_relaxed);
     next_sample_index_.store(next_sample_index, std::memory_order_release);
     wake_sequence_.fetch_add(1, std::memory_order_release);
-    wake_sequence_.notify_all();
+    wake_condition_.notify_all();
     return true;
   }
 
@@ -103,12 +105,12 @@ namespace signlang::common {
   void AudioRingBuffer::clear() {
     start_sample_index_.store(next_sample_index_.load(std::memory_order_acquire), std::memory_order_release);
     wake_sequence_.fetch_add(1, std::memory_order_release);
-    wake_sequence_.notify_all();
+    wake_condition_.notify_all();
   }
 
   void AudioRingBuffer::notify_stop() {
     wake_sequence_.fetch_add(1, std::memory_order_release);
-    wake_sequence_.notify_all();
+    wake_condition_.notify_all();
   }
 
   auto AudioRingBuffer::accepts_metadata(const signlang::audio_frontend::AudioFrame& frame) const -> bool {
@@ -155,7 +157,11 @@ namespace signlang::common {
   void AudioRingBuffer::wait_for_samples(std::uint64_t observed_wake_sequence,
                                          const std::atomic_bool& should_stop) const {
     if (!should_stop.load(std::memory_order_relaxed)) {
-      wake_sequence_.wait(observed_wake_sequence, std::memory_order_acquire);
+      auto lock = std::unique_lock<std::mutex>{wake_mutex_};
+      wake_condition_.wait_for(lock, kWakeTimeout, [&] {
+        return should_stop.load(std::memory_order_relaxed) ||
+               wake_sequence_.load(std::memory_order_acquire) != observed_wake_sequence;
+      });
     }
   }
 

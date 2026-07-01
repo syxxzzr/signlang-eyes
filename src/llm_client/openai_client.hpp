@@ -3,7 +3,6 @@
 
 #include "program_options.hpp"
 
-#include <boost/asio/awaitable.hpp>
 #include <boost/asio/io_context.hpp>
 
 #include <cstdint>
@@ -21,7 +20,7 @@ namespace signlang::llm_client {
   public:
     OpenAiClient(boost::asio::io_context& io_context, ProgramOptions options, std::string builtin_prompt);
 
-    auto complete(const std::string& prompt) -> boost::asio::awaitable<LlmCompletionResult>;
+    [[nodiscard]] auto complete(const std::string& prompt) -> LlmCompletionResult;
 
   private:
     struct ParsedUrl {

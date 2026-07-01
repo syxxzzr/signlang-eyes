@@ -227,9 +227,8 @@ namespace signlang::handpose_det {
           wrapbuffer_handle(src_handle, static_cast<int>(src_width), static_cast<int>(src_height), RK_FORMAT_RGB_888);
       auto dst_img =
           wrapbuffer_handle(dst_handle, static_cast<int>(dst_width), static_cast<int>(dst_height), RK_FORMAT_RGB_888);
-      const auto dst_rect =
-          im_rect{.x = 0, .y = 0, .width = static_cast<int>(dst_width), .height = static_cast<int>(dst_height)};
-      constexpr auto empty_rect = im_rect{.x = 0, .y = 0, .width = 0, .height = 0};
+      const auto dst_rect = im_rect{0, 0, static_cast<int>(dst_width), static_cast<int>(dst_height)};
+      constexpr auto empty_rect = im_rect{0, 0, 0, 0};
       const auto status = improcess(src_img, dst_img, {}, src_rect, dst_rect, empty_rect, IM_SYNC);
 
       releasebuffer_handle(dst_handle);
@@ -384,13 +383,7 @@ namespace signlang::handpose_det {
     for (auto& hand_filters : keypoint_filters_) {
       hand_filters.resize(kHandPoseKeypointCount * 3);
       for (auto& filter : hand_filters) {
-        filter = OneEuroFilter{.x = 0.0F,
-                               .dx = 0.0F,
-                               .min_cutoff = euro_min_cutoff_,
-                               .beta = euro_beta_,
-                               .d_cutoff = euro_d_cutoff_,
-                               .last_time = 0,
-                               .initialized = false};
+        filter = OneEuroFilter{0.0F, 0.0F, euro_min_cutoff_, euro_beta_, euro_d_cutoff_, 0, false};
       }
     }
   }
@@ -431,7 +424,8 @@ namespace signlang::handpose_det {
   }
 
   void HandPoseModel::sync_source_dma_buffer(std::uint64_t flags) const {
-    auto sync = dma_buf_sync{.flags = flags};
+    auto sync = dma_buf_sync{};
+    sync.flags = flags;
     if (::ioctl(source_dma_fd(), DMA_BUF_IOCTL_SYNC, &sync) < 0) {
       throw std::runtime_error("Failed to sync handpose DMA source buffer, errno=" + std::to_string(errno));
     }
@@ -524,11 +518,8 @@ namespace signlang::handpose_det {
     for (std::size_t i = 0; i < tracked_hands_.size(); ++i) {
       const auto& tracked = tracked_hands_[i];
       if (tracked.last_seen_frame == current_frame_number_) {
-        handedness_candidates.push_back(HandednessCandidate{
-            .index = static_cast<std::uint32_t>(i),
-            .confidence = tracked.palm_confidence,
-            .handedness_score = tracked.handedness_score,
-        });
+        handedness_candidates.push_back(
+            HandednessCandidate{static_cast<std::uint32_t>(i), tracked.palm_confidence, tracked.handedness_score});
       }
     }
 
@@ -539,28 +530,21 @@ namespace signlang::handpose_det {
     for (const auto& selection : selections) {
       if (selection.candidate_index < tracked_hands_.size() && output_idx < hand_slots_) {
         const auto& tracked = tracked_hands_[selection.candidate_index];
-        detections[output_idx] = HandPoseDetection{
-            .box = tracked.roi,
-            .keypoints = tracked.smoothed_keypoints,
-            .confidence = tracked.palm_confidence,
-            .presence_confidence = tracked.presence_confidence,
-            .class_id = 0,
-            .present = true,
-            .is_left_hand = selection.is_left_hand,
-        };
+        detections[output_idx] = HandPoseDetection{tracked.roi,
+                                                   tracked.smoothed_keypoints,
+                                                   tracked.palm_confidence,
+                                                   tracked.presence_confidence,
+                                                   0,
+                                                   true,
+                                                   selection.is_left_hand};
         output_idx++;
       }
     }
 
     previous_tracked_count_ = output_idx;
 
-    return InferenceResult{
-        .detection_count = output_idx,
-        .image_width = metadata.output_width,
-        .image_height = metadata.output_height,
-        .model_width = palm_detector_->width(),
-        .model_height = palm_detector_->height(),
-    };
+    return InferenceResult{output_idx, metadata.output_width, metadata.output_height, palm_detector_->width(),
+                           palm_detector_->height()};
   }
 
   void HandPoseModel::initialize_models(const ProgramOptions& options) {
@@ -619,8 +603,8 @@ namespace signlang::handpose_det {
         for (std::uint32_t x = 0; x < feature_map_size; ++x) {
           const auto x_center = (static_cast<float>(x) + 0.5F) / static_cast<float>(feature_map_size);
           const auto y_center = (static_cast<float>(y) + 0.5F) / static_cast<float>(feature_map_size);
-          anchors_.push_back(Anchor{.x_center = x_center, .y_center = y_center});
-          anchors_.push_back(Anchor{.x_center = x_center, .y_center = y_center});
+          anchors_.push_back(Anchor{x_center, y_center});
+          anchors_.push_back(Anchor{x_center, y_center});
         }
       }
     }
@@ -644,10 +628,8 @@ namespace signlang::handpose_det {
       throw std::runtime_error("Upstream RGB video frame payload is smaller than metadata dimensions");
     }
 
-    const auto full_frame = im_rect{.x = 0,
-                                    .y = 0,
-                                    .width = static_cast<int>(metadata.output_width),
-                                    .height = static_cast<int>(metadata.output_height)};
+    const auto full_frame =
+        im_rect{0, 0, static_cast<int>(metadata.output_width), static_cast<int>(metadata.output_height)};
     resize_rgb_with_rga(source_dma_fd(), metadata.output_width, metadata.output_height, palm_detector_->input_data(),
                         palm_detector_->width(), palm_detector_->height(), full_frame);
     palm_detector_->run();
@@ -668,15 +650,14 @@ namespace signlang::handpose_det {
 
       auto candidate = PalmCandidate{};
       candidate.detection.box = HandPoseBox{
-          .left = std::clamp((cx_norm - w_norm * 0.5F) * static_cast<float>(metadata.output_width), 0.0F,
-                             static_cast<float>(metadata.output_width)),
-          .top = std::clamp((cy_norm - h_norm * 0.5F) * static_cast<float>(metadata.output_height), 0.0F,
-                            static_cast<float>(metadata.output_height)),
-          .right = std::clamp((cx_norm + w_norm * 0.5F) * static_cast<float>(metadata.output_width), 0.0F,
-                              static_cast<float>(metadata.output_width)),
-          .bottom = std::clamp((cy_norm + h_norm * 0.5F) * static_cast<float>(metadata.output_height), 0.0F,
-                               static_cast<float>(metadata.output_height)),
-      };
+          std::clamp((cx_norm - w_norm * 0.5F) * static_cast<float>(metadata.output_width), 0.0F,
+                     static_cast<float>(metadata.output_width)),
+          std::clamp((cy_norm - h_norm * 0.5F) * static_cast<float>(metadata.output_height), 0.0F,
+                     static_cast<float>(metadata.output_height)),
+          std::clamp((cx_norm + w_norm * 0.5F) * static_cast<float>(metadata.output_width), 0.0F,
+                     static_cast<float>(metadata.output_width)),
+          std::clamp((cy_norm + h_norm * 0.5F) * static_cast<float>(metadata.output_height), 0.0F,
+                     static_cast<float>(metadata.output_height))};
       candidate.detection.confidence = score;
       candidate.detection.class_id = 0;
       candidate.handedness_score = 0.5F;
@@ -709,7 +690,7 @@ namespace signlang::handpose_det {
     const auto right = std::clamp(center_x + size * 0.5F, left + 1.0F, static_cast<float>(image_width));
     const auto bottom = std::clamp(center_y + size * 0.5F, top + 1.0F, static_cast<float>(image_height));
     const auto crop_size = std::min(right - left, bottom - top);
-    return CropTransform{.left = left, .top = top, .size = std::max(1.0F, crop_size)};
+    return CropTransform{left, top, std::max(1.0F, crop_size)};
   }
 
   auto HandPoseModel::extract_landmarks(const signlang::video_frontend::VideoFrameMetadata& metadata,
@@ -717,12 +698,10 @@ namespace signlang::handpose_det {
                                         const CropTransform& transform,
                                         std::array<HandPoseKeypoint, kHandPoseKeypointCount>& out, float& out_presence,
                                         bool& out_is_left, float& out_handedness_score) const -> bool {
-    const auto src_rect = im_rect{
-        .x = static_cast<int>(std::floor(transform.left)),
-        .y = static_cast<int>(std::floor(transform.top)),
-        .width = std::max(1, static_cast<int>(std::floor(transform.size))),
-        .height = std::max(1, static_cast<int>(std::floor(transform.size))),
-    };
+    const auto src_rect = im_rect{static_cast<int>(std::floor(transform.left)),
+                                  static_cast<int>(std::floor(transform.top)),
+                                  std::max(1, static_cast<int>(std::floor(transform.size))),
+                                  std::max(1, static_cast<int>(std::floor(transform.size)))};
     if (payload_size < checked_rgb_size_bytes(metadata.output_width, metadata.output_height)) {
       return false;
     }
@@ -750,12 +729,8 @@ namespace signlang::handpose_det {
       const auto x = transform.left + landmark_model_->output_value(0, base) * scale;
       const auto y = transform.top + landmark_model_->output_value(0, base + 1) * scale;
       const auto z = landmark_model_->output_value(0, base + 2) * scale;
-      out[i] = HandPoseKeypoint{
-          .x = std::clamp(x, 0.0F, static_cast<float>(metadata.output_width)),
-          .y = std::clamp(y, 0.0F, static_cast<float>(metadata.output_height)),
-          .z = z,
-          .confidence = out_presence,
-      };
+      out[i] = HandPoseKeypoint{std::clamp(x, 0.0F, static_cast<float>(metadata.output_width)),
+                                std::clamp(y, 0.0F, static_cast<float>(metadata.output_height)), z, out_presence};
     }
     return true;
   }
@@ -794,7 +769,7 @@ namespace signlang::handpose_det {
       right = std::max(right, kp.x);
       bottom = std::max(bottom, kp.y);
     }
-    candidate.detection.box = HandPoseBox{.left = left, .top = top, .right = right, .bottom = bottom};
+    candidate.detection.box = HandPoseBox{left, top, right, bottom};
   }
 
   auto HandPoseModel::compute_iou(const HandPoseBox& box1, const HandPoseBox& box2) -> float {
@@ -948,7 +923,7 @@ namespace signlang::handpose_det {
     const auto bottom = std::clamp(palm_center_y + roi_size * 0.5F, top + 1.0F, static_cast<float>(image_height));
     const auto crop_size = std::min(right - left, bottom - top);
 
-    return CropTransform{.left = left, .top = top, .size = std::max(1.0F, crop_size)};
+    return CropTransform{left, top, std::max(1.0F, crop_size)};
   }
 
   void HandPoseModel::try_tracking_from_previous_frame(const signlang::video_frontend::VideoFrameMetadata& metadata,
@@ -989,7 +964,7 @@ namespace signlang::handpose_det {
         right = std::max(right, kp.x);
         bottom = std::max(bottom, kp.y);
       }
-      tracked.roi = HandPoseBox{.left = left, .top = top, .right = right, .bottom = bottom};
+      tracked.roi = HandPoseBox{left, top, right, bottom};
     }
   }
 
@@ -1022,15 +997,10 @@ namespace signlang::handpose_det {
         t.is_left_hand = detected.detection.is_left_hand;
         t.handedness_score = detected.handedness_score;
       } else {
-        auto new_hand = TrackedHand{
-            .roi = detected.detection.box,
-            .palm_confidence = detected.detection.confidence,
-            .presence_confidence = detected.detection.presence_confidence,
-            .last_seen_frame = current_frame_number_,
-            .is_left_hand = detected.detection.is_left_hand,
-            .handedness_score = detected.handedness_score,
-            .smoothed_keypoints = detected.detection.keypoints,
-        };
+        auto new_hand =
+            TrackedHand{detected.detection.box, detected.detection.confidence, detected.detection.presence_confidence,
+                        current_frame_number_, detected.detection.is_left_hand, detected.handedness_score,
+                        detected.detection.keypoints};
 
         auto added = false;
         for (auto& tracked : tracked_hands_) {

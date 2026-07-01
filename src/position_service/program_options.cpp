@@ -66,7 +66,7 @@ namespace signlang::position_service {
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
-      return ProgramUsage{.text = options.help()};
+      return ProgramUsage{options.help()};
     }
 
     const auto baud_rate = parsed_options["baud-rate"].as<std::uint32_t>();
@@ -88,22 +88,20 @@ namespace signlang::position_service {
       throw std::runtime_error("--alert-mqtt-topic must not be empty");
     }
 
-    return ProgramOptionsParseResult{ProgramOptions{
-        .serial_device = parsed_options["device"].as<std::string>(),
-        .baud_rate = baud_rate,
-        .mqtt_host = parsed_options["mqtt-host"].as<std::string>(),
-        .mqtt_port = parse_port(parsed_options, "mqtt-port"),
-        .mqtt_client_id = parsed_options["mqtt-client-id"].as<std::string>(),
-        .mqtt_topic = std::move(mqtt_topic),
-        .alert_event_service = parsed_options["alert-event-service"].as<std::string>(),
-        .alert_mqtt_topic = std::move(alert_mqtt_topic),
-        .mqtt_username = parsed_options["mqtt-username"].as<std::string>(),
-        .mqtt_password = parsed_options["mqtt-password"].as<std::string>(),
-        .keep_alive_seconds = static_cast<std::uint16_t>(keep_alive),
-        .qos = parse_qos(parsed_options),
-        .retain = parsed_options["mqtt-retain"].as<bool>(),
-        .logging = signlang::logging::parse_cli_options(parsed_options),
-    }};
+    return ProgramOptionsParseResult{ProgramOptions{parsed_options["device"].as<std::string>(),
+                                                    baud_rate,
+                                                    parsed_options["mqtt-host"].as<std::string>(),
+                                                    parse_port(parsed_options, "mqtt-port"),
+                                                    parsed_options["mqtt-client-id"].as<std::string>(),
+                                                    std::move(mqtt_topic),
+                                                    parsed_options["alert-event-service"].as<std::string>(),
+                                                    std::move(alert_mqtt_topic),
+                                                    parsed_options["mqtt-username"].as<std::string>(),
+                                                    parsed_options["mqtt-password"].as<std::string>(),
+                                                    static_cast<std::uint16_t>(keep_alive),
+                                                    parse_qos(parsed_options),
+                                                    parsed_options["mqtt-retain"].as<bool>(),
+                                                    signlang::logging::parse_cli_options(parsed_options)}};
   }
 
 } // namespace signlang::position_service

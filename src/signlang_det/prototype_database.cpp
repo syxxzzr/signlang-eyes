@@ -136,11 +136,8 @@ namespace signlang::signlang_det {
                                            "ORDER BY id"};
 
     while (gesture_query.executeStep()) {
-      auto gesture = GesturePrototypeSet{
-          .gesture_id = static_cast<std::uint32_t>(gesture_query.getColumn(0).getUInt()),
-          .name = gesture_query.getColumn(1).getString(),
-          .samples = {},
-      };
+      auto gesture = GesturePrototypeSet{static_cast<std::uint32_t>(gesture_query.getColumn(0).getUInt()),
+                                         gesture_query.getColumn(1).getString(), {}};
       if (gesture.name.empty()) {
         throw std::runtime_error("Enabled gesture has an empty name: " + std::to_string(gesture.gesture_id));
       }
@@ -176,7 +173,7 @@ namespace signlang::signlang_det {
           throw std::runtime_error("Prototype sample blob size mismatch for sample " + std::to_string(sample_id));
         }
 
-        auto sample = GesturePrototype{.sample_id = sample_id, .frames = EncodedSequence(frame_count)};
+        auto sample = GesturePrototype{sample_id, EncodedSequence(frame_count)};
         for (std::uint32_t frame_index = 0; frame_index < frame_count; ++frame_index) {
           const auto* frame_begin = blob + (static_cast<std::size_t>(frame_index) * embedding_dim);
           sample.frames[frame_index].assign(frame_begin, frame_begin + embedding_dim);
@@ -311,12 +308,8 @@ namespace signlang::signlang_det {
 
     auto gestures = std::vector<GestureInfo>{};
     while (query.executeStep()) {
-      gestures.push_back(GestureInfo{
-          .id = query.getColumn(0).getUInt(),
-          .name = query.getColumn(1).getString(),
-          .enabled = query.getColumn(2).getInt() != 0,
-          .sample_count = query.getColumn(3).getUInt(),
-      });
+      gestures.push_back(GestureInfo{query.getColumn(0).getUInt(), query.getColumn(1).getString(),
+                                     query.getColumn(2).getInt() != 0, query.getColumn(3).getUInt()});
     }
 
     return gestures;

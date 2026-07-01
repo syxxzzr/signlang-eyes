@@ -106,11 +106,7 @@ namespace signlang::handpose_det {
     const auto& current_sample = latest_sample.value().value();
     const auto payload = current_sample.payload();
     const auto& metadata = current_sample.user_header();
-    handler(VideoSampleView{
-        .metadata = &metadata,
-        .payload = payload.data(),
-        .payload_size = payload.number_of_elements(),
-    });
+    handler(VideoSampleView{&metadata, payload.data(), payload.number_of_elements()});
 
     return true;
   }

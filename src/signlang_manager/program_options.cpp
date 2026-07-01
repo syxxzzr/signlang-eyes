@@ -32,7 +32,7 @@ namespace signlang::signlang_manager {
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
-      return ProgramUsage{.text = options.help()};
+      return ProgramUsage{options.help()};
     }
 
     if (parsed_options.count("input-service") == 0 || parsed_options.count("signlang-result-service") == 0 ||
@@ -62,19 +62,17 @@ namespace signlang::signlang_manager {
       throw std::runtime_error("--max-upload-bytes must be greater than 0");
     }
 
-    return ProgramOptions{
-        .input_service_name = parsed_options["input-service"].as<std::string>(),
-        .signlang_result_service_name = parsed_options["signlang-result-service"].as<std::string>(),
-        .gesture_management_service_name = parsed_options["gesture-management-service"].as<std::string>(),
-        .bluetooth_name = parsed_options["bluetooth-name"].as<std::string>(),
-        .adapter_path = parsed_options["adapter-path"].as<std::string>(),
-        .subscriber_buffer_size = subscriber_buffer_size,
-        .stream_fps = stream_fps,
-        .max_notify_payload = max_notify_payload,
-        .max_upload_bytes = max_upload_bytes,
-        .enable_streaming_by_default = parsed_options.count("enable-streaming-by-default") != 0,
-        .logging = signlang::logging::parse_cli_options(parsed_options),
-    };
+    return ProgramOptions{parsed_options["input-service"].as<std::string>(),
+                          parsed_options["signlang-result-service"].as<std::string>(),
+                          parsed_options["gesture-management-service"].as<std::string>(),
+                          parsed_options["bluetooth-name"].as<std::string>(),
+                          parsed_options["adapter-path"].as<std::string>(),
+                          subscriber_buffer_size,
+                          stream_fps,
+                          max_notify_payload,
+                          max_upload_bytes,
+                          parsed_options.count("enable-streaming-by-default") != 0,
+                          signlang::logging::parse_cli_options(parsed_options)};
   }
 
 } // namespace signlang::signlang_manager

@@ -11,19 +11,7 @@ namespace signlang::audio_frontend {
   namespace {
 
     auto empty_localization_result() -> SoundSourceLocalizationResult {
-      return SoundSourceLocalizationResult{
-          .sequence_number = 0,
-          .timestamp_ns = 0,
-          .sample_rate_hz = 0,
-          .frame_count = 0,
-          .channel_count = 0,
-          .strongest_channel = 0,
-          .confidence = 0.0F,
-          .valid = false,
-          .proximity = {},
-          .rms = {},
-          .tdoa_score = {},
-      };
+      return SoundSourceLocalizationResult{0, 0, 0, 0, 0, 0, 0.0F, false, {}, {}, {}};
     }
 
   } // namespace

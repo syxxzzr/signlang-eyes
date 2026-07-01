@@ -9,7 +9,6 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
-#include <numbers>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -28,6 +27,7 @@ namespace signlang::speech_asr {
     constexpr std::int64_t kTranscribeToken = 50359;
     constexpr std::int64_t kNoTimestampsToken = 50363;
     constexpr std::int64_t kTimestampBeginToken = 50364;
+    constexpr float kPi = 3.14159265358979323846F;
 
     class RknnOutputReleaseGuard {
     public:
@@ -174,15 +174,13 @@ namespace signlang::speech_asr {
     auto [transcript, decoder_time_ms] = run_decoder(language, decoded_token_count);
 
     const auto end_time = std::chrono::steady_clock::now();
-    return WhisperInferenceResult{
-        .transcript = std::move(transcript),
-        .model_input_sample_count = model_input_sample_count_,
-        .mel_frame_count = mel_frame_count_,
-        .decoded_token_count = decoded_token_count,
-        .encoder_time_ms = encoder_time_ms,
-        .decoder_time_ms = decoder_time_ms,
-        .inference_time_ms = steady_elapsed_ms(start_time, end_time),
-    };
+    return WhisperInferenceResult{std::move(transcript),
+                                  model_input_sample_count_,
+                                  mel_frame_count_,
+                                  decoded_token_count,
+                                  encoder_time_ms,
+                                  decoder_time_ms,
+                                  steady_elapsed_ms(start_time, end_time)};
   }
 
   void WhisperModel::initialize_contexts(const ProgramOptions& options) {
@@ -384,7 +382,7 @@ namespace signlang::speech_asr {
         begin = 0;
         end = 0;
       }
-      mel_filter_spans_[mel_index] = MelFilterSpan{.begin = begin, .end = end};
+      mel_filter_spans_[mel_index] = MelFilterSpan{begin, end};
     }
   }
 
@@ -392,9 +390,7 @@ namespace signlang::speech_asr {
     hann_window_.resize(kNfft);
     for (std::uint32_t sample_index = 0; sample_index < kNfft; ++sample_index) {
       hann_window_[sample_index] = 0.5F *
-          (1.0F -
-           std::cos((2.0F * std::numbers::pi_v<float> * static_cast<float>(sample_index)) /
-                    static_cast<float>(kNfft - 1)));
+          (1.0F - std::cos((2.0F * kPi * static_cast<float>(sample_index)) / static_cast<float>(kNfft - 1)));
     }
 
     fft_input_ = static_cast<float*>(fftwf_malloc(sizeof(float) * kNfft));

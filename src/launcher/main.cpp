@@ -34,6 +34,7 @@ namespace signlang::launcher::ipc {
   constexpr auto kSignlangOutput = "signlang_result";
   constexpr auto kSignlangPrototypeControl = "signlang_prototype_control";
   constexpr auto kSignlangGestureManagement = "signlang_gesture_management";
+  constexpr auto kSpeechTts = "speech_tts";
   constexpr auto kStateEvent = "app_state_event";
   constexpr auto kStateBlackboard = "app_state_blackboard";
   constexpr auto kStateControl = "app_state_control";
@@ -48,6 +49,7 @@ namespace {
   constexpr auto kExeAudioFrontend = "bin/audio_frontend";
   constexpr auto kExeVideoFrontend = "bin/video_frontend";
   constexpr auto kExeSpeechAsr = "bin/speech_asr";
+  constexpr auto kExeSpeechTts = "bin/speech_tts";
   constexpr auto kExeEnvSoundDet = "bin/env_sound_det";
   constexpr auto kExeHandposeDet = "bin/handpose_det";
   constexpr auto kExeSignlangManager = "bin/signlang_manager";
@@ -77,7 +79,7 @@ namespace {
   void warn_ipc_keys_in_config(const toml::table& config) {
     constexpr std::array kSections = {
         "state_machine", "audio_frontend", "video_frontend",   "speech_asr",   "env_sound_det",
-        "handpose_det",   "signlang_manager", "signlang_det", "position_service", "llm_client",
+        "handpose_det", "signlang_manager", "signlang_det", "speech_tts", "position_service", "llm_client",
     };
 
     for (const auto* section_name : kSections) {
@@ -365,7 +367,7 @@ namespace {
         error.clear();
         continue;
       }
-      log_files.push_back(LogFile{.path = entry.path(), .modified_time = modified_time});
+      log_files.push_back(LogFile{entry.path(), modified_time});
     }
 
     if (log_files.size() <= retain_files) {
@@ -404,7 +406,7 @@ namespace {
   }
 
   void sleep_before_restart() {
-    struct timespec ts{.tv_sec = 1, .tv_nsec = 0};
+    struct timespec ts{1, 0};
     nanosleep(&ts, nullptr);
   }
 
@@ -503,6 +505,22 @@ static auto build_env_sound_det_args(const toml::table& cfg) -> std::vector<std:
     add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
     add_opt_str(args, "--rknn-priority", opt_string(*tbl, "rknn_priority"));
     add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
+  }
+  return args;
+}
+
+static auto build_speech_tts_args(const toml::table& cfg) -> std::vector<std::string> {
+  using namespace signlang::launcher::ipc;
+  std::vector<std::string> args = {kExeSpeechTts, "--service", kSpeechTts};
+
+  if (const auto* tbl = cfg["speech_tts"].as_table()) {
+    add_opt_str(args, "--device", opt_string(*tbl, "device"));
+    add_opt_str(args, "--encoder-model", opt_string(*tbl, "encoder_model"));
+    add_opt_str(args, "--decoder-model", opt_string(*tbl, "decoder_model"));
+    add_opt_str(args, "--config", opt_string(*tbl, "config"));
+    add_opt_str(args, "--pinyin-dict", opt_string(*tbl, "pinyin_dict"));
+    add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
+    add_opt_str(args, "--rknn-priority", opt_string(*tbl, "rknn_priority"));
   }
   return args;
 }
@@ -639,7 +657,8 @@ static auto build_modules(const toml::table& config) -> std::vector<ModuleEntry>
   return {
       {"state_machine", build_state_machine_args(config)},       {"audio_frontend", build_audio_frontend_args(config)},
       {"video_frontend", build_video_frontend_args(config)},     {"speech_asr", build_speech_asr_args(config)},
-      {"env_sound_det", build_env_sound_det_args(config)},       {"handpose_det", build_handpose_det_args(config)},
+      {"speech_tts", build_speech_tts_args(config)},             {"env_sound_det", build_env_sound_det_args(config)},
+      {"handpose_det", build_handpose_det_args(config)},
       {"signlang_manager", build_signlang_manager_args(config)}, {"signlang_det", build_signlang_det_args(config)},
       {"position_service", build_position_service_args(config)}, {"llm_client", build_llm_client_args(config)},
   };
@@ -696,7 +715,7 @@ static auto run_modules_once(const std::vector<ModuleEntry>& modules) -> bool {
     }
 
     if (pid == 0) {
-      struct timespec ts{.tv_sec = 0, .tv_nsec = 500000000};
+      struct timespec ts{0, 500000000};
       nanosleep(&ts, nullptr);
       continue;
     }
@@ -747,12 +766,9 @@ auto main(int argc, char** argv) -> int {
     const auto logging_config = logging_config_from_toml(config);
     const auto launcher_config = launcher_config_from_toml(config);
     const auto start_timestamp = utc_start_timestamp();
-    signlang::logging::initialize(
-        signlang::logging::Options{
-            .log_file = log_path_for(start_timestamp, "launcher"),
-            .rotate_size = logging_config.rotate_size,
-        },
-        logging_config.retain_files, "launcher");
+    signlang::logging::initialize(signlang::logging::Options{log_path_for(start_timestamp, "launcher"),
+                                                             logging_config.rotate_size},
+                                  logging_config.retain_files, "launcher");
     cleanup_old_log_files(logging_config.retain_files);
 
     spdlog::info("loaded config: {}", config_path.string());
