@@ -14,6 +14,6 @@ target_include_directories(signlang_eyes_state_machine PRIVATE
 target_link_libraries(signlang_eyes_state_machine PRIVATE
         cxxopts::cxxopts
         spdlog::spdlog
-        iceoryx2-cxx::shared-lib-cxx)
+        iceoryx2_runtime)
 
 install(TARGETS signlang_eyes_state_machine DESTINATION bin)

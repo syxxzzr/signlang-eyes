@@ -21,7 +21,7 @@ target_include_directories(signlang_eyes_handpose_det PRIVATE
 target_link_libraries(signlang_eyes_handpose_det PRIVATE
         cxxopts::cxxopts
         spdlog::spdlog
-        iceoryx2-cxx::shared-lib-cxx
+        iceoryx2_runtime
         signlang::common
         signlang::rknn_runtime
         librga::rga)

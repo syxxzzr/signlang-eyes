@@ -33,7 +33,7 @@ target_include_directories(signlang_eyes_env_sound_det PRIVATE
 target_link_libraries(signlang_eyes_env_sound_det PRIVATE
         cxxopts::cxxopts
         spdlog::spdlog
-        iceoryx2-cxx::shared-lib-cxx
+        iceoryx2_runtime
         signlang::rknn_runtime
         signlang::common
         Threads::Threads)

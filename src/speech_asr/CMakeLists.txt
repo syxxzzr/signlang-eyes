@@ -44,7 +44,7 @@ target_include_directories(signlang_eyes_speech_asr PRIVATE
 target_link_libraries(signlang_eyes_speech_asr PRIVATE
         cxxopts::cxxopts
         spdlog::spdlog
-        iceoryx2-cxx::shared-lib-cxx
+        iceoryx2_runtime
         signlang::rknn_runtime
         signlang::common
         FFTW3::fftw3f

@@ -14,11 +14,13 @@ tomlplusplus/3.4.0
 
 [options]
 boost/*:shared=True
+cpp-pinyin/*:shared=False
 fftw/*:precision_single=True
 fftw/*:precision_double=False
 fftw/*:precision_longdouble=False
 fftw/*:precision_quad=False
 fmt/*:header_only=True
+onnxruntime/*:shared=True
 spdlog/*:header_only=False
 spdlog/*:shared=True
 sqlite3/*:threadsafe=1

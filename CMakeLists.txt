@@ -51,15 +51,26 @@ find_package(minmea REQUIRED CONFIG)
 find_package(SQLiteCpp REQUIRED CONFIG)
 find_package(spdlog REQUIRED CONFIG)
 find_package(FFTW3 REQUIRED CONFIG)
-find_package(libjpeg-turbo REQUIRED CONFIG)
 find_package(iceoryx2-cxx REQUIRED CONFIG)
 find_package(onnxruntime REQUIRED CONFIG)
 find_package(rknn-runtime REQUIRED CONFIG)
 find_package(librga REQUIRED CONFIG)
 
-if(NOT TARGET libjpeg-turbo::turbojpeg)
-    message(FATAL_ERROR "libjpeg-turbo was found, but target libjpeg-turbo::turbojpeg is unavailable")
-endif()
+add_library(boost_json_runtime INTERFACE)
+target_include_directories(boost_json_runtime INTERFACE ${boost_INCLUDE_DIRS_RELEASE})
+target_link_directories(boost_json_runtime INTERFACE ${boost_LIB_DIRS_RELEASE})
+target_link_libraries(boost_json_runtime INTERFACE boost_json boost_container)
+
+add_library(iceoryx2_runtime INTERFACE)
+target_include_directories(iceoryx2_runtime INTERFACE ${iceoryx2_INCLUDE_DIRS_RELEASE})
+target_link_directories(iceoryx2_runtime INTERFACE ${iceoryx2_LIB_DIRS_RELEASE})
+target_link_options(iceoryx2_runtime INTERFACE ${iceoryx2_LINKER_FLAGS_RELEASE})
+target_link_libraries(iceoryx2_runtime INTERFACE iceoryx2_cxx iceoryx2_ffi_c dl rt m pthread)
+
+add_library(onnxruntime_runtime INTERFACE)
+target_include_directories(onnxruntime_runtime INTERFACE ${onnxruntime_INCLUDE_DIRS_RELEASE})
+target_link_directories(onnxruntime_runtime INTERFACE ${onnxruntime_LIB_DIRS_RELEASE})
+target_link_libraries(onnxruntime_runtime INTERFACE onnxruntime m pthread)
 
 # Threads
 find_package(Threads REQUIRED)
@@ -80,6 +91,8 @@ find_path(SIGNLANG_GIO_INCLUDE_DIR
 find_library(SIGNLANG_GIO_LIBRARY NAMES gio-2.0)
 find_library(SIGNLANG_GOBJECT_LIBRARY NAMES gobject-2.0)
 find_library(SIGNLANG_GLIB_LIBRARY NAMES glib-2.0)
+find_path(SIGNLANG_TURBOJPEG_INCLUDE_DIR NAMES turbojpeg.h)
+find_library(SIGNLANG_TURBOJPEG_LIBRARY NAMES turbojpeg)
 
 if(SIGNLANG_GLIB_INCLUDE_DIR AND SIGNLANG_GLIB_CONFIG_INCLUDE_DIR AND SIGNLANG_GIO_INCLUDE_DIR
         AND SIGNLANG_GIO_LIBRARY AND SIGNLANG_GOBJECT_LIBRARY AND SIGNLANG_GLIB_LIBRARY)
@@ -97,6 +110,14 @@ else()
     message(WARNING "GLib/GIO development files were not found; signlang_manager will be skipped")
 endif()
 
+if(SIGNLANG_TURBOJPEG_INCLUDE_DIR AND SIGNLANG_TURBOJPEG_LIBRARY)
+    add_library(turbojpeg_runtime INTERFACE)
+    target_include_directories(turbojpeg_runtime INTERFACE ${SIGNLANG_TURBOJPEG_INCLUDE_DIR})
+    target_link_libraries(turbojpeg_runtime INTERFACE ${SIGNLANG_TURBOJPEG_LIBRARY})
+else()
+    message(FATAL_ERROR "libjpeg-turbo headers/libraries were not found in the target sysroot")
+endif()
+
 # Modules
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/common)
 file(GLOB MODULE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src/*)
@@ -105,6 +126,47 @@ foreach(MODULE_DIR ${MODULE_DIRS})
             AND NOT "${MODULE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}/src/common")
         add_subdirectory(${MODULE_DIR})
     endif()
+endforeach()
+
+string(TOUPPER "${CMAKE_BUILD_TYPE}" SIGNLANG_INSTALL_CONFIG)
+if(NOT SIGNLANG_INSTALL_CONFIG)
+    set(SIGNLANG_INSTALL_CONFIG RELEASE)
+endif()
+
+function(signlang_install_conan_shared_libs PACKAGE_FOLDER_VARIABLE)
+    if(NOT DEFINED ${PACKAGE_FOLDER_VARIABLE})
+        return()
+    endif()
+
+    set(PACKAGE_FOLDER "${${PACKAGE_FOLDER_VARIABLE}}")
+    if(EXISTS "${PACKAGE_FOLDER}/lib")
+        set(SIGNLANG_SHARED_LIB_PATTERNS ${ARGN})
+        if(NOT SIGNLANG_SHARED_LIB_PATTERNS)
+            set(SIGNLANG_SHARED_LIB_PATTERNS
+                PATTERN "*.so"
+                PATTERN "*.so.*")
+        endif()
+
+        install(DIRECTORY "${PACKAGE_FOLDER}/lib/"
+            DESTINATION lib
+            FILES_MATCHING
+            ${SIGNLANG_SHARED_LIB_PATTERNS}
+            PATTERN "cmake" EXCLUDE
+            PATTERN "pkgconfig" EXCLUDE)
+    endif()
+endfunction()
+
+signlang_install_conan_shared_libs(boost_PACKAGE_FOLDER_${SIGNLANG_INSTALL_CONFIG}
+    PATTERN "libboost_json.so*"
+    PATTERN "libboost_container.so*")
+
+foreach(SIGNLANG_RUNTIME_PACKAGE
+        iceoryx2
+        librga
+        onnxruntime
+        rknn-runtime
+        spdlog)
+    signlang_install_conan_shared_libs("${SIGNLANG_RUNTIME_PACKAGE}_PACKAGE_FOLDER_${SIGNLANG_INSTALL_CONFIG}")
 endforeach()
 
 # Install default launcher configuration

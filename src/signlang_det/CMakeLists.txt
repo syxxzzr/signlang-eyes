@@ -37,7 +37,7 @@ target_link_libraries(signlang_eyes_signlang_det PRIVATE
         cxxopts::cxxopts
         SQLiteCpp
         spdlog::spdlog
-        iceoryx2-cxx::shared-lib-cxx
+        iceoryx2_runtime
         signlang::common
         signlang::rknn_runtime
         Threads::Threads

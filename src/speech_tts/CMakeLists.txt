@@ -48,16 +48,6 @@ if(NOT EXISTS "${SPEECH_TTS_CPP_PINYIN_DICT_DIR}/mandarin")
     message(FATAL_ERROR "Missing cpp-pinyin mandarin dictionary: ${SPEECH_TTS_CPP_PINYIN_DICT_DIR}/mandarin")
 endif()
 
-if(TARGET onnxruntime::onnxruntime)
-    set(SPEECH_TTS_ONNXRUNTIME_TARGET onnxruntime::onnxruntime)
-elseif(TARGET onnxruntime::onnxruntime_lib)
-    set(SPEECH_TTS_ONNXRUNTIME_TARGET onnxruntime::onnxruntime_lib)
-elseif(TARGET onnxruntime)
-    set(SPEECH_TTS_ONNXRUNTIME_TARGET onnxruntime)
-else()
-    message(FATAL_ERROR "onnxruntime package was found, but no known CMake target is available")
-endif()
-
 add_library(signlang_speech_tts_core STATIC
         speech_tts_service.cpp)
 target_include_directories(signlang_speech_tts_core PUBLIC
@@ -87,11 +77,11 @@ target_link_libraries(signlang_eyes_speech_tts PRIVATE
         signlang_speech_tts_core
         cxxopts::cxxopts
         spdlog::spdlog
-        iceoryx2-cxx::shared-lib-cxx
+        iceoryx2_runtime
         cpp-pinyin::cpp-pinyin
-        ${SPEECH_TTS_ONNXRUNTIME_TARGET}
+        onnxruntime_runtime
         signlang::rknn_runtime
-        Boost::json
+        boost_json_runtime
         ALSA::ALSA
         Threads::Threads
         m)
