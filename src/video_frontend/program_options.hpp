@@ -1,6 +1,7 @@
 #ifndef SIGNLANG_EYES_VIDEO_FRONTEND_PROGRAM_OPTIONS_HPP
 #define SIGNLANG_EYES_VIDEO_FRONTEND_PROGRAM_OPTIONS_HPP
 
+#include "common/cpu_affinity.hpp"
 #include "common/logging.hpp"
 #include "video_format.hpp"
 
@@ -17,6 +18,7 @@ namespace signlang::video_frontend {
     std::uint32_t fps;
     bool mirror_output;
     signlang::logging::Options logging;
+    signlang::runtime::CpuAffinityOptions cpu_affinity;
   };
 
   struct ProgramUsage {

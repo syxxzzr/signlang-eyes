@@ -1,24 +1,15 @@
 #include "video_publisher.hpp"
 
 #include "common/ipc_utils.hpp"
+#include "common/time.hpp"
 #include "v4l2_capture_device.hpp"
 #include "video_processor.hpp"
 
-#include <chrono>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 namespace signlang::video_frontend {
-  namespace {
-
-    auto steady_timestamp_ns() -> std::uint64_t {
-      const auto now = std::chrono::steady_clock::now().time_since_epoch();
-      return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
-    }
-
-  } // namespace
-
   VideoPublisher::VideoPublisher(const std::string& service_name, std::uint32_t max_payload_size_bytes) :
       node_{create_node()}, service_{create_service(node_, service_name)},
       publisher_{create_publisher(service_, max_payload_size_bytes)}, max_payload_size_bytes_{max_payload_size_bytes} {}
@@ -42,7 +33,7 @@ namespace signlang::video_frontend {
     const auto output_format = video_processor.output_format();
     auto& metadata = loaned_sample.user_header_mut();
     metadata.sequence_number = sequence_number;
-    metadata.timestamp_ns = steady_timestamp_ns();
+    metadata.timestamp_ns = common::steady_timestamp_ns();
     metadata.capture_width = capture_format.width;
     metadata.capture_height = capture_format.height;
     metadata.output_width = output_format.width;

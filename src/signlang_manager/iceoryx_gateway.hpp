@@ -2,6 +2,7 @@
 #define SIGNLANG_EYES_SIGNLANG_MANAGER_ICEORYX_GATEWAY_HPP
 
 #include "handpose_det/handpose_frame.hpp"
+#include "signlang_det/gesture_management.hpp"
 #include "signlang_det/prototype_control.hpp"
 #include "signlang_det/signlang_result.hpp"
 
@@ -41,32 +42,33 @@ namespace signlang::signlang_manager {
         subscriber_;
   };
 
-  class IpcPrototypeControlClient {
+  class IpcGestureManagementClient {
   public:
-    explicit IpcPrototypeControlClient(const std::string& service_name);
+    explicit IpcGestureManagementClient(const std::string& service_name);
 
-    IpcPrototypeControlClient(const IpcPrototypeControlClient&) = delete;
-    auto operator=(const IpcPrototypeControlClient&) -> IpcPrototypeControlClient& = delete;
-    IpcPrototypeControlClient(IpcPrototypeControlClient&&) = delete;
-    auto operator=(IpcPrototypeControlClient&&) -> IpcPrototypeControlClient& = delete;
+    IpcGestureManagementClient(const IpcGestureManagementClient&) = delete;
+    auto operator=(const IpcGestureManagementClient&) -> IpcGestureManagementClient& = delete;
+    IpcGestureManagementClient(IpcGestureManagementClient&&) = delete;
+    auto operator=(IpcGestureManagementClient&&) -> IpcGestureManagementClient& = delete;
 
-    [[nodiscard]] auto request_reload() const -> signlang_det::PrototypeControlResponse;
+    [[nodiscard]] auto request(const signlang_det::GestureManagementRequest& request) const
+        -> signlang_det::GestureManagementResponse;
 
   private:
-    using PrototypeControlService =
-        iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, signlang_det::PrototypeControlRequest, void,
-                                         signlang_det::PrototypeControlResponse, void>;
-    using PrototypeControlClient = iox2::Client<iox2::ServiceType::Ipc, signlang_det::PrototypeControlRequest, void,
-                                                signlang_det::PrototypeControlResponse, void>;
+    using GestureManagementService =
+        iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, signlang_det::GestureManagementRequest, void,
+                                         signlang_det::GestureManagementResponse, void>;
+    using GestureManagementClient = iox2::Client<iox2::ServiceType::Ipc, signlang_det::GestureManagementRequest, void,
+                                                signlang_det::GestureManagementResponse, void>;
 
     static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
     static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
-        -> PrototypeControlService;
-    static auto create_client(const PrototypeControlService& service) -> PrototypeControlClient;
+        -> GestureManagementService;
+    static auto create_client(const GestureManagementService& service) -> GestureManagementClient;
 
     iox2::Node<iox2::ServiceType::Ipc> node_;
-    PrototypeControlService service_;
-    PrototypeControlClient client_;
+    GestureManagementService service_;
+    GestureManagementClient client_;
   };
 
   class IpcSignlangResultSubscriber {

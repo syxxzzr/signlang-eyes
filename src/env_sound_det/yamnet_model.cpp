@@ -134,12 +134,7 @@ namespace signlang::env_sound_det {
     const auto inference_time_ms = std::chrono::duration<float, std::milli>(end_time - start_time).count();
 
     return YamnetInferenceResult{
-        .model_input_sample_count = input_attrs_[0].n_elems,
-        .score_frame_count = score_frame_count_,
-        .detected_class_count = detected_class_count,
-        .inference_time_ms = inference_time_ms,
-        .detected_classes = detected_classes_,
-    };
+        input_attrs_[0].n_elems, score_frame_count_, detected_class_count, inference_time_ms, detected_classes_};
   }
 
   void YamnetModel::query_model_io() {

@@ -88,6 +88,10 @@ auto main(int argc, char** argv) -> int {
 
         while (!should_stop.load()) {
           if (!downstream_active.load()) {
+            if (audio_subscriber.has_value()) {
+              spdlog::info(
+                  "Environment sound detector state-control server inactive; detaching audio subscriber and clearing buffered audio");
+            }
             audio_subscriber.reset();
             audio_buffer.clear();
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -95,6 +99,7 @@ auto main(int argc, char** argv) -> int {
           }
 
           if (!audio_subscriber.has_value()) {
+            spdlog::info("Environment sound detector attaching audio subscriber to {}", options.audio_service_name);
             audio_subscriber.emplace(options.audio_service_name, options.subscriber_buffer_size);
           }
 
@@ -116,15 +121,25 @@ auto main(int argc, char** argv) -> int {
 
         IpcStateControlClient state_control_client{options.state_control_service_name};
         std::optional<std::uint64_t> next_window_start_sample;
+        auto downstream_was_active = false;
+        auto window_sequence = std::uint64_t{0};
 
         while (!should_stop.load()) {
           const auto has_downstream = state_control_client.has_server();
           downstream_active.store(has_downstream);
           if (!has_downstream) {
+            if (downstream_was_active) {
+              spdlog::info("Environment sound detector state-control server disconnected; pausing inference");
+              downstream_was_active = false;
+            }
             audio_buffer.clear();
             next_window_start_sample = std::nullopt;
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             continue;
+          }
+          if (!downstream_was_active) {
+            spdlog::info("Environment sound detector state-control server connected; resuming inference");
+            downstream_was_active = true;
           }
 
           AudioWindow audio_window;
@@ -134,9 +149,21 @@ auto main(int argc, char** argv) -> int {
           }
 
           const auto inference_result = model.infer(audio_window);
+          if (window_sequence % 200 == 0) {
+            spdlog::info("Processed environment sound window seq={} detected_classes={} inference_ms={:.2f}",
+                         window_sequence, inference_result.detected_class_count, inference_result.inference_time_ms);
+          }
+          ++window_sequence;
 
           if (has_dangerous_sound(inference_result)) {
             spdlog::warn("Dangerous sound detected!");
+            for (std::uint32_t index = 0; index < inference_result.detected_class_count; ++index) {
+              const auto& detected_class = inference_result.detected_classes[index];
+              if (is_dangerous_sound_label(detected_class.label)) {
+                spdlog::warn("Dangerous sound class: {} score={:.3f}", detected_class.label.data(),
+                             detected_class.score);
+              }
+            }
             state_control_client.enter_dangerous_sound_state();
           }
           next_window_start_sample = audio_window.start_sample_index + hop_sample_count;
@@ -160,6 +187,7 @@ auto main(int argc, char** argv) -> int {
       std::rethrow_exception(worker_error);
     }
 
+    spdlog::info("Environment sound detector stopped");
     return 0;
   });
 }

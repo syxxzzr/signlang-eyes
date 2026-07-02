@@ -21,11 +21,15 @@ namespace signlang::signlang_det {
   constexpr auto kDefaultConfidenceThreshold = float{0.6F};
   constexpr auto kDefaultConfidenceMargin = float{0.1F};
   constexpr auto kDefaultDuplicateSuppressionMs = std::uint32_t{1000};
+  constexpr auto kDefaultUploadWindowOverlap = float{0.5F};
+  constexpr auto kDefaultMaxRepresentativeSamples = std::uint32_t{3};
+  constexpr auto kDefaultConsecutiveHitWindows = std::uint32_t{2};
 
   struct ProgramOptions {
     std::string input_service_name;
     std::string output_service_name;
     std::optional<std::string> prototype_control_service_name;
+    std::optional<std::string> gesture_management_service_name;
     std::string model_path;
     std::string prototypes_path;
     std::uint32_t sequence_length;
@@ -38,6 +42,9 @@ namespace signlang::signlang_det {
     float confidence_threshold;
     float confidence_margin;
     std::uint32_t duplicate_suppression_ms;
+    float upload_window_overlap;
+    std::uint32_t max_representative_samples;
+    std::uint32_t consecutive_hit_windows;
     signlang::logging::Options logging;
   };
 

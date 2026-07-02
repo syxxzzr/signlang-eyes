@@ -47,18 +47,7 @@ namespace signlang::audio_frontend {
                                       std::uint64_t sequence_number, std::uint64_t timestamp_ns) const
       -> SoundSourceLocalizationResult {
     SoundSourceLocalizationResult result{
-        .sequence_number = sequence_number,
-        .timestamp_ns = timestamp_ns,
-        .sample_rate_hz = format.sample_rate_hz,
-        .frame_count = 0,
-        .channel_count = format.channel_count,
-        .strongest_channel = 0,
-        .confidence = 0.0F,
-        .valid = false,
-        .proximity = {},
-        .rms = {},
-        .tdoa_score = {},
-    };
+        sequence_number, timestamp_ns, format.sample_rate_hz, 0, format.channel_count, 0, 0.0F, false, {}, {}, {}};
 
     if (format.channel_count == 0 || format.channel_count > kMaxChannelCount ||
         interleaved_samples.size() < format.channel_count) {
@@ -157,7 +146,7 @@ namespace signlang::audio_frontend {
                                           std::uint32_t first_frame, std::uint32_t frame_count,
                                           std::uint16_t channel_count, std::uint16_t channel_a, std::uint16_t channel_b,
                                           std::uint32_t max_lag_samples) -> LagEstimate {
-    LagEstimate best{.lag_samples = 0, .correlation = -1.0F};
+    LagEstimate best{0, -1.0F};
     const auto max_lag = static_cast<int>(max_lag_samples);
 
     for (int lag = -max_lag; lag <= max_lag; ++lag) {
@@ -185,7 +174,7 @@ namespace signlang::audio_frontend {
 
       const auto correlation = static_cast<float>(cross / std::sqrt(square_a * square_b));
       if (correlation > best.correlation) {
-        best = LagEstimate{.lag_samples = lag, .correlation = correlation};
+        best = LagEstimate{lag, correlation};
       }
     }
 

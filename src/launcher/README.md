@@ -30,12 +30,13 @@ See `conf/conf.toml` for the default configuration with all available keys docum
 - `[launcher]` — Launcher supervision configuration (restart_attempts)
 - `[logging]` — Global logging configuration (rotate_size, retain_files)
 - `[audio_frontend]` — Audio capture parameters (device, capture_rate, capture_channels, etc.)
-- `[video_frontend]` — Video capture parameters (device, output_width, output_height, etc.)
-- `[speech_asr]` — Whisper ASR parameters (language, npu_core, window_ms, etc.)
+- `[video_frontend]` — Video capture parameters (device, output_width, output_height, cpu_core, etc.)
+- `[speech_asr]` — Whisper ASR parameters (language, npu_core, cpu_core, window_ms, etc.)
 - `[env_sound_det]` — YAMNet environmental sound detection parameters (npu_core, score_threshold, etc.)
 - `[handpose_det]` — MediaPipe hand pose detection parameters (npu_core, confidence, single_hand, etc.)
 - `[signlang_det]` — Sign language recognition parameters (npu_core, sequence_length, confidence_threshold, etc.)
 - `[signlang_manager]` — BLE GATT streaming and prototype database management parameters
+- `[llm_client]` — OpenAI-compatible LLM request service parameters
 
 ## Technical Details
 
@@ -54,6 +55,7 @@ app_state_blackboard   ↔ state_machine
 app_state_control      ↔ state_machine ← env_sound_det
 signlang_prototype_control ↔ signlang_manager → signlang_det
 audio_source_localization ↔ audio_frontend (sound source localization blackboard)
+llm_client           ↔ OpenAI-compatible LLM request-response service
 ```
 
 ### Startup Order
@@ -68,6 +70,7 @@ Modules are started sequentially in this order:
 6. `handpose_det` — hand keypoint detection
 7. `signlang_manager` — BLE streaming and prototype database management
 8. `signlang_det` — sign language recognition
+9. `llm_client` — OpenAI-compatible LLM request-response service
 
 ### Process Lifecycle
 
@@ -102,6 +105,7 @@ Example mapping:
 language = "zh"
 window_ms = 15000
 npu_core = "1"
+cpu_core = 1
 ```
 
 Becomes:
@@ -110,7 +114,8 @@ bin/speech_asr --input-service audio_capture \
                --output-service speech_asr_result \
                --language zh \
                --window-ms 15000 \
-               --npu-core 1
+               --npu-core 1 \
+               --cpu-core 1
 ```
 
 ## Architecture
@@ -226,10 +231,16 @@ device = "/dev/video21"    # V4L2 camera
 output_width = 640         # Published width
 output_height = 480        # Published height
 mirror_output = false      # Horizontally mirror published frames
+# cpu_core = 0              # Optional CPU core binding
 
 [speech_asr]
 language = "zh"            # Chinese recognition
 npu_core = "1"             # NPU core 1
+# cpu_core = 1              # Optional CPU core binding
+
+[speech_tts]
+device = "default"         # ALSA playback device
+# cpu_core = 2              # Optional CPU core binding
 
 [env_sound_det]
 npu_core = "0"             # NPU core 0
@@ -243,9 +254,10 @@ confidence = 0.5           # Detection confidence
 npu_core = "0"             # NPU core 0
 sequence_length = 30       # 30-frame window
 confidence_threshold = 0.6 # Recognition confidence
+max_representative_samples = 3
+consecutive_hit_windows = 2
 
 [signlang_manager]
-npu_core = "0"             # NPU core 0
 bluetooth_name = "SignLang Eyes"
 stream_fps = 30
 ```

@@ -9,7 +9,6 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
-#include <numbers>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -28,6 +27,7 @@ namespace signlang::speech_asr {
     constexpr std::int64_t kTranscribeToken = 50359;
     constexpr std::int64_t kNoTimestampsToken = 50363;
     constexpr std::int64_t kTimestampBeginToken = 50364;
+    constexpr float kPi = 3.14159265358979323846F;
 
     class RknnOutputReleaseGuard {
     public:
@@ -127,13 +127,38 @@ namespace signlang::speech_asr {
 
     auto is_special_token(std::int64_t token) -> bool { return token >= kEndOfTextToken; }
 
+    auto static_tensor_element_count(const std::vector<std::int64_t>& shape, const std::string& tensor_name)
+        -> std::uint32_t {
+      if (shape.empty()) {
+        throw std::runtime_error("Unexpected Whisper ONNX tensor rank for " + tensor_name);
+      }
+
+      auto element_count = std::uint64_t{1};
+      for (const auto dimension : shape) {
+        if (dimension <= 0) {
+          throw std::runtime_error("Whisper ONNX tensor must have static shape for " + tensor_name);
+        }
+        element_count *= static_cast<std::uint64_t>(dimension);
+        if (element_count > std::numeric_limits<std::uint32_t>::max()) {
+          throw std::runtime_error("Whisper ONNX tensor is too large for " + tensor_name);
+        }
+      }
+
+      return static_cast<std::uint32_t>(element_count);
+    }
+
   } // namespace
 
   WhisperModel::WhisperModel(const ProgramOptions& options) :
-      encoder_context_{0}, decoder_context_{0}, encoder_io_num_{}, decoder_io_num_{}, mel_bin_count_{0},
-      mel_frame_count_{0}, model_input_sample_count_{0}, encoder_output_count_{0}, decoder_token_count_{0},
-      vocab_size_{0}, max_decode_steps_{0}, decoder_tokens_input_index_{0}, decoder_audio_input_index_{1},
-      fft_input_{nullptr}, fft_output_{nullptr}, fft_plan_{nullptr} {
+      onnx_env_{ORT_LOGGING_LEVEL_WARNING, "signlang_eyes_speech_asr"}, onnx_session_options_{},
+      encoder_session_{nullptr},
+      onnx_memory_info_{Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemTypeDefault)},
+      decoder_context_{0}, decoder_io_num_{}, mel_bin_count_{0}, mel_frame_count_{0}, model_input_sample_count_{0},
+      encoder_output_count_{0}, decoder_token_count_{0}, vocab_size_{0}, max_decode_steps_{0},
+      decoder_tokens_input_index_{0}, decoder_audio_input_index_{1}, fft_input_{nullptr}, fft_output_{nullptr},
+      fft_plan_{nullptr} {
+    onnx_session_options_.SetIntraOpNumThreads(1);
+    onnx_session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
     load_assets(options);
     initialize_contexts(options);
     validate_model_io();
@@ -159,10 +184,6 @@ namespace signlang::speech_asr {
       rknn_destroy(decoder_context_);
       decoder_context_ = 0;
     }
-    if (encoder_context_ != 0) {
-      rknn_destroy(encoder_context_);
-      encoder_context_ = 0;
-    }
   }
 
   auto WhisperModel::infer(const AudioWindow& audio_window, AsrLanguage language) -> WhisperInferenceResult {
@@ -174,40 +195,62 @@ namespace signlang::speech_asr {
     auto [transcript, decoder_time_ms] = run_decoder(language, decoded_token_count);
 
     const auto end_time = std::chrono::steady_clock::now();
-    return WhisperInferenceResult{
-        .transcript = std::move(transcript),
-        .model_input_sample_count = model_input_sample_count_,
-        .mel_frame_count = mel_frame_count_,
-        .decoded_token_count = decoded_token_count,
-        .encoder_time_ms = encoder_time_ms,
-        .decoder_time_ms = decoder_time_ms,
-        .inference_time_ms = steady_elapsed_ms(start_time, end_time),
-    };
+    return WhisperInferenceResult{std::move(transcript),
+                                  model_input_sample_count_,
+                                  mel_frame_count_,
+                                  decoded_token_count,
+                                  encoder_time_ms,
+                                  decoder_time_ms,
+                                  steady_elapsed_ms(start_time, end_time)};
   }
 
   void WhisperModel::initialize_contexts(const ProgramOptions& options) {
-    initialize_context(options.encoder_model_path, options.encoder_npu_core_mask, options.rknn_priority_flag,
-                       encoder_context_, encoder_io_num_, encoder_input_attrs_, encoder_output_attrs_);
-    initialize_context(options.decoder_model_path, options.decoder_npu_core_mask, options.rknn_priority_flag,
-                       decoder_context_, decoder_io_num_, decoder_input_attrs_, decoder_output_attrs_);
+    initialize_encoder(options);
+    initialize_decoder(options);
   }
 
-  void WhisperModel::initialize_context(const std::string& model_path, rknn_core_mask npu_core_mask,
-                                        std::uint32_t rknn_priority_flag, rknn_context& context,
-                                        rknn_input_output_num& io_num, std::vector<rknn_tensor_attr>& input_attrs,
-                                        std::vector<rknn_tensor_attr>& output_attrs) {
-    auto* model_path_buffer = const_cast<char*>(model_path.c_str());
-    const auto init_result = rknn_init(&context, model_path_buffer, 0, rknn_priority_flag, nullptr);
+  void WhisperModel::initialize_encoder(const ProgramOptions& options) {
+    encoder_session_ = Ort::Session{onnx_env_, options.encoder_model_path.c_str(), onnx_session_options_};
+
+    auto allocator = Ort::AllocatorWithDefaultOptions{};
+    encoder_input_names_.clear();
+    encoder_input_names_.reserve(encoder_session_.GetInputCount());
+    for (std::size_t input_index = 0; input_index < encoder_session_.GetInputCount(); ++input_index) {
+      auto input_name = encoder_session_.GetInputNameAllocated(input_index, allocator);
+      encoder_input_names_.emplace_back(input_name.get());
+    }
+
+    encoder_output_names_.clear();
+    encoder_output_names_.reserve(encoder_session_.GetOutputCount());
+    for (std::size_t output_index = 0; output_index < encoder_session_.GetOutputCount(); ++output_index) {
+      auto output_name = encoder_session_.GetOutputNameAllocated(output_index, allocator);
+      encoder_output_names_.emplace_back(output_name.get());
+    }
+
+    if (encoder_session_.GetInputCount() == 1) {
+      encoder_input_shape_ =
+          encoder_session_.GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+    }
+    if (encoder_session_.GetOutputCount() == 1) {
+      encoder_output_shape_ =
+          encoder_session_.GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+    }
+  }
+
+  void WhisperModel::initialize_decoder(const ProgramOptions& options) {
+    auto* model_path_buffer = const_cast<char*>(options.decoder_model_path.c_str());
+    const auto init_result =
+        rknn_init(&decoder_context_, model_path_buffer, 0, options.rknn_priority_flag, nullptr);
     if (init_result < 0) {
-      throw rknn_error("Failed to initialize RKNN Whisper model " + model_path, init_result);
+      throw rknn_error("Failed to initialize RKNN Whisper decoder model " + options.decoder_model_path, init_result);
     }
 
-    const auto core_result = rknn_set_core_mask(context, npu_core_mask);
+    const auto core_result = rknn_set_core_mask(decoder_context_, options.decoder_npu_core_mask);
     if (core_result < 0) {
-      throw rknn_error("Failed to set RKNN Whisper NPU core mask", core_result);
+      throw rknn_error("Failed to set RKNN Whisper decoder NPU core mask", core_result);
     }
 
-    query_model_io(context, io_num, input_attrs, output_attrs);
+    query_model_io(decoder_context_, decoder_io_num_, decoder_input_attrs_, decoder_output_attrs_);
   }
 
   void WhisperModel::query_model_io(rknn_context context, rknn_input_output_num& io_num,
@@ -240,24 +283,25 @@ namespace signlang::speech_asr {
   }
 
   void WhisperModel::validate_model_io() {
-    if (encoder_io_num_.n_input != 1 || encoder_io_num_.n_output != 1) {
-      throw std::runtime_error("Unexpected RKNN Whisper encoder input/output count");
+    if (encoder_session_.GetInputCount() != 1 || encoder_session_.GetOutputCount() != 1 ||
+        encoder_input_names_.size() != 1 || encoder_output_names_.size() != 1) {
+      throw std::runtime_error("Unexpected ONNX Whisper encoder input/output count");
     }
     if (decoder_io_num_.n_input != 2 || decoder_io_num_.n_output != 1) {
       throw std::runtime_error("Unexpected RKNN Whisper decoder input/output count");
     }
 
-    const auto& encoder_input_attr = encoder_input_attrs_[0];
-    if (encoder_input_attr.n_elems == 0 || encoder_input_attr.n_elems % kExpectedMelBinCount != 0) {
-      throw std::runtime_error("Unexpected RKNN Whisper encoder mel input shape");
+    const auto encoder_input_count = static_tensor_element_count(encoder_input_shape_, "encoder input");
+    if (encoder_input_count == 0 || encoder_input_count % kExpectedMelBinCount != 0) {
+      throw std::runtime_error("Unexpected ONNX Whisper encoder mel input shape");
     }
 
     mel_bin_count_ = kExpectedMelBinCount;
-    mel_frame_count_ = encoder_input_attr.n_elems / mel_bin_count_;
+    mel_frame_count_ = encoder_input_count / mel_bin_count_;
     model_input_sample_count_ = mel_frame_count_ * kHopLength;
-    encoder_output_count_ = encoder_output_attrs_[0].n_elems;
+    encoder_output_count_ = static_tensor_element_count(encoder_output_shape_, "encoder output");
     if (encoder_output_count_ == 0) {
-      throw std::runtime_error("RKNN Whisper encoder output tensor has no elements");
+      throw std::runtime_error("ONNX Whisper encoder output tensor has no elements");
     }
 
     decoder_tokens_input_index_ = decoder_io_num_.n_input;
@@ -291,7 +335,7 @@ namespace signlang::speech_asr {
 
   void WhisperModel::allocate_workspaces(std::uint32_t max_decode_steps) {
     max_decode_steps_ = max_decode_steps;
-    mel_input_.resize(encoder_input_attrs_[0].n_elems);
+    mel_input_.resize(static_tensor_element_count(encoder_input_shape_, "encoder input"));
     frame_magnitudes_.resize(kStftBinCount);
     encoder_output_.resize(encoder_output_count_);
     decoder_output_.resize(decoder_output_attrs_[0].n_elems);
@@ -384,7 +428,7 @@ namespace signlang::speech_asr {
         begin = 0;
         end = 0;
       }
-      mel_filter_spans_[mel_index] = MelFilterSpan{.begin = begin, .end = end};
+      mel_filter_spans_[mel_index] = MelFilterSpan{begin, end};
     }
   }
 
@@ -392,9 +436,7 @@ namespace signlang::speech_asr {
     hann_window_.resize(kNfft);
     for (std::uint32_t sample_index = 0; sample_index < kNfft; ++sample_index) {
       hann_window_[sample_index] = 0.5F *
-          (1.0F -
-           std::cos((2.0F * std::numbers::pi_v<float> * static_cast<float>(sample_index)) /
-                    static_cast<float>(kNfft - 1)));
+          (1.0F - std::cos((2.0F * kPi * static_cast<float>(sample_index)) / static_cast<float>(kNfft - 1)));
     }
 
     fft_input_ = static_cast<float*>(fftwf_malloc(sizeof(float) * kNfft));
@@ -498,43 +540,24 @@ namespace signlang::speech_asr {
   }
 
   auto WhisperModel::run_encoder() -> float {
-    rknn_input input{};
-    input.index = 0;
-    input.buf = mel_input_.data();
-    input.size = static_cast<std::uint32_t>(mel_input_.size() * sizeof(float));
-    input.pass_through = 0;
-    input.type = RKNN_TENSOR_FLOAT32;
-    input.fmt = encoder_input_attrs_[0].fmt;
+    auto input_tensor = Ort::Value::CreateTensor<float>(onnx_memory_info_, mel_input_.data(), mel_input_.size(),
+                                                        encoder_input_shape_.data(), encoder_input_shape_.size());
 
-    rknn_output output{};
-    output.want_float = 1;
-    output.is_prealloc = 1;
-    output.index = 0;
-    output.buf = encoder_output_.data();
-    output.size = static_cast<std::uint32_t>(encoder_output_.size() * sizeof(float));
+    const std::array<const char*, 1> input_names = {encoder_input_names_[0].c_str()};
+    const std::array<const char*, 1> output_names = {encoder_output_names_[0].c_str()};
 
     const auto start_time = std::chrono::steady_clock::now();
-
-    auto result = rknn_inputs_set(encoder_context_, 1, &input);
-    if (result < 0) {
-      throw rknn_error("Failed to set RKNN Whisper encoder input", result);
+    auto output_tensors = encoder_session_.Run(Ort::RunOptions{nullptr}, input_names.data(), &input_tensor, 1,
+                                               output_names.data(), output_names.size());
+    if (output_tensors.size() != 1 || !output_tensors[0].IsTensor()) {
+      throw std::runtime_error("Unexpected ONNX Whisper encoder outputs");
     }
 
-    result = rknn_run(encoder_context_, nullptr);
-    if (result < 0) {
-      throw rknn_error("Failed to run RKNN Whisper encoder", result);
+    const auto output_count = output_tensors[0].GetTensorTypeAndShapeInfo().GetElementCount();
+    if (output_count != encoder_output_.size()) {
+      throw std::runtime_error("ONNX Whisper encoder output size mismatch");
     }
-
-    result = rknn_outputs_get(encoder_context_, 1, &output, nullptr);
-    if (result < 0) {
-      throw rknn_error("Failed to get RKNN Whisper encoder output", result);
-    }
-    RknnOutputReleaseGuard output_release_guard{encoder_context_, 1, &output};
-
-    result = output_release_guard.release();
-    if (result < 0) {
-      throw rknn_error("Failed to release RKNN Whisper encoder output", result);
-    }
+    std::copy_n(output_tensors[0].GetTensorData<float>(), encoder_output_.size(), encoder_output_.begin());
 
     const auto end_time = std::chrono::steady_clock::now();
     return steady_elapsed_ms(start_time, end_time);

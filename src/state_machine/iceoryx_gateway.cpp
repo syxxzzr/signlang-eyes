@@ -9,6 +9,35 @@
 #include <utility>
 
 namespace signlang::state_machine {
+  namespace {
+
+    auto state_control_command_name(StateControlCommand command) -> const char* {
+      switch (command) {
+      case StateControlCommand::NextBase:
+        return "NextBase";
+      case StateControlCommand::SetBase:
+        return "SetBase";
+      case StateControlCommand::EnterSpecial:
+        return "EnterSpecial";
+      }
+      return "Unknown";
+    }
+
+    auto state_control_error_name(StateControlErrorCode error_code) -> const char* {
+      switch (error_code) {
+      case StateControlErrorCode::None:
+        return "None";
+      case StateControlErrorCode::InvalidTargetState:
+        return "InvalidTargetState";
+      case StateControlErrorCode::IgnoredDuringSpecialState:
+        return "IgnoredDuringSpecialState";
+      case StateControlErrorCode::InvalidCommand:
+        return "InvalidCommand";
+      }
+      return "Unknown";
+    }
+
+  } // namespace
 
   IpcStatePublisher::IpcStatePublisher(const std::string& event_service_name,
                                        const std::string& blackboard_service_name, AppState initial_state) :
@@ -92,8 +121,12 @@ namespace signlang::state_machine {
   auto IpcStatePublisher::create_event_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
                                                const std::string& service_name)
       -> iox2::PortFactoryEvent<iox2::ServiceType::Ipc> {
-    auto service =
-        node.service_builder(signlang::common::ipc::service_name_from_string(service_name)).event().open_or_create();
+    auto service = node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
+                       .event()
+                       .max_notifiers(4)
+                       .max_listeners(8)
+                       .max_nodes(16)
+                       .open_or_create();
     if (!service.has_value()) {
       throw std::runtime_error("Failed to open or create iceoryx2 app state event service: " + service_name);
     }
@@ -133,10 +166,18 @@ namespace signlang::state_machine {
     auto active_request = std::move(receive_result.value());
     while (active_request.has_value()) {
       const auto previous_state = controller.current_published_state();
-      const auto response = controller.handle_request(active_request.value().payload(), now);
+      const auto request = active_request.value().payload();
+      spdlog::info("State control request command={} target={} timeout_ms={} current_base={} current_published={}",
+                   state_control_command_name(request.command), app_state_name(request.target_state),
+                   request.timeout_ms, app_state_name(controller.current_base_state()),
+                   app_state_name(controller.current_published_state()));
+      const auto response = controller.handle_request(request, now);
       if (controller.current_published_state() != previous_state) {
         publisher.set_state(controller.current_published_state());
       }
+      spdlog::info("State control response accepted={} error={} base={} special={}", response.accepted,
+                   state_control_error_name(response.error_code), app_state_name(response.current_base_state),
+                   response.current_special_state);
 
       const auto send_result = active_request.value().send_copy(response);
       if (!send_result.has_value()) {

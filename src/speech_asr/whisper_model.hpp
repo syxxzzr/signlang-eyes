@@ -8,6 +8,8 @@
 #include "fftw3.h"
 #include "rknn_api.h"
 
+#include <onnxruntime_cxx_api.h>
+
 #include <string>
 #include <vector>
 
@@ -44,9 +46,8 @@ namespace signlang::speech_asr {
     };
 
     void initialize_contexts(const ProgramOptions& options);
-    void initialize_context(const std::string& model_path, rknn_core_mask npu_core_mask,
-                            std::uint32_t rknn_priority_flag, rknn_context& context, rknn_input_output_num& io_num,
-                            std::vector<rknn_tensor_attr>& input_attrs, std::vector<rknn_tensor_attr>& output_attrs);
+    void initialize_encoder(const ProgramOptions& options);
+    void initialize_decoder(const ProgramOptions& options);
     static void query_model_io(rknn_context context, rknn_input_output_num& io_num,
                                std::vector<rknn_tensor_attr>& input_attrs, std::vector<rknn_tensor_attr>& output_attrs);
     void validate_model_io();
@@ -67,12 +68,16 @@ namespace signlang::speech_asr {
     [[nodiscard]] auto vocabulary(AsrLanguage language) const -> const std::vector<std::string>&;
     [[nodiscard]] static auto language_token(AsrLanguage language) -> std::int64_t;
 
-    rknn_context encoder_context_;
+    Ort::Env onnx_env_;
+    Ort::SessionOptions onnx_session_options_;
+    Ort::Session encoder_session_;
+    Ort::MemoryInfo onnx_memory_info_;
+    std::vector<std::string> encoder_input_names_;
+    std::vector<std::string> encoder_output_names_;
+    std::vector<std::int64_t> encoder_input_shape_;
+    std::vector<std::int64_t> encoder_output_shape_;
     rknn_context decoder_context_;
-    rknn_input_output_num encoder_io_num_;
     rknn_input_output_num decoder_io_num_;
-    std::vector<rknn_tensor_attr> encoder_input_attrs_;
-    std::vector<rknn_tensor_attr> encoder_output_attrs_;
     std::vector<rknn_tensor_attr> decoder_input_attrs_;
     std::vector<rknn_tensor_attr> decoder_output_attrs_;
     std::uint32_t mel_bin_count_;

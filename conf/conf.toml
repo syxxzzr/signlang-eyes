@@ -26,6 +26,7 @@ output_height = 480                # Published output height; omit to match capt
 # capture_width = 1920             # Requested capture width; omit to use largest supported camera mode
 # capture_height = 1080            # Requested capture height; omit to use largest supported camera mode
 # fps = 30                         # Requested frame rate
+# cpu_core = 0                     # Optional CPU core binding; invalid or rejected values warn and fall back to system default scheduling
 
 [speech_asr]
 language = "zh"                    # Recognition language: en, zh; default is en
@@ -33,15 +34,29 @@ npu_core = "1"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 # window_ms = 15000                # ASR window length in milliseconds
 # overlap = 0.2                    # Overlap ratio between adjacent windows
 # max_decode_steps = 96            # Max autoregressive decoder steps per window
-# encoder_model = "models/whisper/whisper_encoder_base_15s.rknn"
+# encoder_model = "models/whisper/whisper_encoder_base_15s.onnx"
 # decoder_model = "models/whisper/whisper_decoder_base_15s.rknn"
 # vocab_en = "models/whisper/vocab_en.txt"
 # vocab_zh = "models/whisper/vocab_zh.txt"
 # mel_filters = "models/whisper/mel_80_filters.txt"
-# encoder_npu_core = "1"           # Encoder NPU core override; defaults to npu_core when omitted
 # decoder_npu_core = "1"           # Decoder NPU core override; defaults to npu_core when omitted
 # rknn_priority = "medium"         # high, medium, low
 # subscriber_buffer = 2            # iceoryx2 subscriber queue size
+# cpu_core = 1                     # Optional CPU core binding; invalid or rejected values warn and fall back to system default scheduling
+
+[speech_tts]
+device = "default"                 # ALSA playback device name
+npu_core = "auto"                  # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
+# encoder_model = "models/piper/zh_CN-huayan-x_low.encoder.onnx"
+# decoder_model = "models/piper/zh_CN-huayan-x_low.decoder.rknn"
+# config = "models/piper/zh_CN-huayan-x_low.json"
+# pinyin_dict = "share/cpp-pinyin/dict"
+# rknn_priority = "medium"         # high, medium, low
+# cpu_core = 2                     # Optional CPU core binding; invalid or rejected values warn and fall back to system default scheduling
+
+[dataflow_dispatcher]
+# subscriber_buffer = 2            # signlang_det result subscriber queue size
+# signlang_ai_window_ms = 5000     # Send SignLanguageAi prompt after no new signlang_det result for this long
 
 [env_sound_det]
 npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
@@ -77,8 +92,7 @@ swap_handedness = true             # Swap left/right handedness for mirrored cam
 # handedness_threshold = 0.5       # Threshold for left/right hand classification
 # max_tracking_gap = 2             # Max frames gap before tracking is considered lost
 # max_stale_frames = 5             # Max frames before stale tracked hand slot is reclaimed
-# single_hand_full_frame_interval = 5 # Full-frame palm detection interval while one hand is tracked; 0 disables
-# stable_hands_full_frame_interval = 15 # Full-frame palm detection interval while all hand slots are tracked; 0 disables
+# full_frame_interval = 10         # Full-frame palm detection interval in frames; first frame always runs; 0 disables periodic refresh
 # single_hand = false              # true: recognize/publish one hand; false: two hands
 # palm_npu_core = "2"              # Palm detector NPU core override; defaults to npu_core when omitted
 # landmark_npu_core = "2"          # Landmark model NPU core override; defaults to npu_core when omitted
@@ -96,19 +110,55 @@ npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 # confidence_threshold = 0.6       # Minimum recognition confidence
 # confidence_margin = 0.1          # Min top-1 vs top-2 confidence margin
 # duplicate_suppression_ms = 1000  # Suppress repeated same recognized word within this window; 0 disables
+# upload_window_overlap = 0.5      # Overlap ratio when long gesture uploads split into prototype samples
+# max_representative_samples = 3   # Maximum retained representative samples per gesture
+# consecutive_hit_windows = 2      # Same gesture windows required before publishing a result
 # subscriber_buffer = 2            # iceoryx2 subscriber queue size
 
 [signlang_manager]
-npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
 # bluetooth_name = "SignLang Eyes"
 # adapter_path = "/org/bluez/hci0"
-# model = "models/bilstm/biltsm.rknn"
-# prototypes = "conf/prototypes.sqlite"
-# min_confidence = 0.3             # Minimum keypoint confidence for uploaded samples
-# motion_weight = 0.0              # Motion feature weight for uploaded samples
-# upload_window_overlap = 0.5      # Overlap ratio when long uploads split into samples
 # subscriber_buffer = 2            # iceoryx2 subscriber queue size
 # stream_fps = 30                  # Maximum BLE handpose streaming frame rate
 # max_notify_payload = 180         # Maximum BLE notification payload chunk size
 # max_upload_bytes = 8388608       # Maximum BLE gesture upload size in bytes
 # enable_streaming_by_default = false
+
+[position_service]
+device = "/dev/ttyS9"              # GNSS serial device path
+baud_rate = 115200                 # GNSS serial baud rate
+# mqtt_host = "127.0.0.1"          # MQTT broker host
+# mqtt_port = 1883                 # MQTT broker TCP port
+# mqtt_client_id = "signlang_eyes_position_service"
+# mqtt_topic = "signlang/position" # MQTT topic for position JSON payloads
+# alert_event_service = "position_alert"
+# alert_mqtt_topic = "signlang/alert"
+# mqtt_username = ""
+# mqtt_password = ""
+# mqtt_keep_alive = 30             # MQTT keep-alive in seconds
+# mqtt_qos = 0                     # MQTT publish QoS: 0, 1, 2
+# mqtt_retain = false              # Publish retained MQTT messages
+
+[peripheral_service]
+device = "/dev/ttyS3"              # Peripheral MCU serial device path
+baud_rate = 115200                 # Peripheral MCU serial baud rate
+# data_bits = 8                    # Serial data bits
+# stop_bits = 1                    # Serial stop bits: 1 or 2
+# parity = "none"                  # none, odd, even
+# flow_control = "none"            # none, software, hardware
+# font_file = "conf/unifont-17.0.05.hex"
+# display_width = 128              # OLED width in pixels
+# display_height = 32              # OLED height in pixels
+# font_size = 16                   # Rendered glyph height in pixels
+# char_spacing = 1                 # Pixel spacing between glyphs
+# line_gap = 0                     # Pixel gap between the two text lines
+# scroll_step_px = 1               # Horizontal scroll pixels per tick
+# scroll_interval_ms = 80          # Horizontal scroll tick interval
+# refresh_interval_ms = 50         # Display worker refresh interval
+
+[llm_client]
+# base_url = "https://api.openai.com/v1" # OpenAI-compatible API base URL
+# api_key = ""                           # API secret key; empty omits Authorization
+# model = "gpt-5.5"             # OpenAI-compatible model name
+# system_prompt_file = "conf/system_prompt.txt"
+# request_timeout_ms = 60000             # HTTP request timeout in milliseconds

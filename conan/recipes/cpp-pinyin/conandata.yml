@@ -1,0 +1,5 @@
+version: "1.0.2"
+sources:
+  "1.0.2":
+    url: "https://github.com/wolfgitpr/cpp-pinyin/archive/refs/tags/1.0.2.tar.gz"
+    sha256: "a7b869a1bfdeff066257f3ae903638a1913a0fb17f40fb72433a1a084259b892"

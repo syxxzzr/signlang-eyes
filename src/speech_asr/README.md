@@ -2,13 +2,13 @@
 
 ## Overview
 
-The **speech_asr** module performs real-time speech-to-text recognition using an OpenAI Whisper base encoder-decoder model running on the RKNN NPU. It subscribes to audio frames, processes them through a sliding-window log-Mel spectrogram pipeline, runs encoder-decoder inference, and publishes transcription results. Supports English and Chinese languages.
+The **speech_asr** module performs real-time speech-to-text recognition using an OpenAI Whisper base encoder-decoder model. The encoder runs on CPU through ONNX Runtime, while the decoder runs on the RKNN NPU. It subscribes to audio frames, processes them through a sliding-window log-Mel spectrogram pipeline, runs encoder-decoder inference, and publishes transcription results. Supports English and Chinese languages.
 
 - **Executable**: `speech_asr` (installed under `bin/`)
 - **IPC Pattern**: Publish-Subscribe (audio subscriber + result publisher)
 - **Input**: `signlang::audio_frontend::AudioFrame` from iceoryx2
 - **Output**: `signlang::speech_asr::SpeechAsrResult` on iceoryx2
-- **Model**: Whisper base (encoder + decoder, 15s window, RKNN-accelerated)
+- **Model**: Whisper base (CPU ONNX encoder + RKNN decoder, 15s window)
 
 ## Command-Line Parameters
 
@@ -27,7 +27,7 @@ All module executables also accept `--log-file <path>` and `--log-rotate-size <b
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `--encoder-model` | `models/whisper/whisper_encoder_base_15s.rknn` | Whisper encoder RKNN model path |
+| `--encoder-model` | `models/whisper/whisper_encoder_base_15s.onnx` | Whisper encoder ONNX model path |
 | `--decoder-model` | `models/whisper/whisper_decoder_base_15s.rknn` | Whisper decoder RKNN model path |
 | `--vocab-en` | `models/whisper/vocab_en.txt` | English vocabulary file |
 | `--vocab-zh` | `models/whisper/vocab_zh.txt` | Chinese vocabulary file (base64-encoded) |
@@ -46,11 +46,11 @@ All module executables also accept `--log-file <path>` and `--log-rotate-size <b
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `--npu-core` | `auto` | Default NPU core mask: `auto`, `all`, `0`, `1`, `2`, `0_1`, `0_1_2` |
-| `--encoder-npu-core` | *(from `--npu-core`)* | Encoder-specific NPU core mask (overrides `--npu-core`) |
+| `--npu-core` | `auto` | Default decoder NPU core mask: `auto`, `all`, `0`, `1`, `2`, `0_1`, `0_1_2` |
 | `--decoder-npu-core` | *(from `--npu-core`)* | Decoder-specific NPU core mask (overrides `--npu-core`) |
 | `--rknn-priority` | `medium` | RKNN context priority: `high`, `medium`, `low` |
 | `--subscriber-buffer` | `2` | iceoryx2 subscriber queue size (must be > 0) |
+| `--cpu-core` | *(system default)* | Best-effort bind to one CPU core; invalid values or binding failures log a warning and keep system default scheduling |
 
 ## Technical Details
 
@@ -60,8 +60,8 @@ All module executables also accept `--log-file <path>` and `--log-rotate-size <b
 2. **STFT**: 400-point FFT with Hann window, 160-sample hop length → 201 frequency bins (FFTW3f)
 3. **Mel Filtering**: 80-bin Mel filterbank maps 201-bin power spectra to perceptual Mel scale
 4. **Log Compression & Normalization**: `log10(mel_value)`, threshold at max − 8 dB, scale to [−1, 1]
-5. **Encoder**: Single-pass RKNN encoding of the Mel spectrogram → fixed-length feature vector
-6. **Decoder**: Autoregressive token generation with prompt `<|startoftranscript|> <language> <|transcribe|> <|notimestamps|>`, terminates on `<|endoftext|>` or max steps
+5. **Encoder**: Single-pass ONNX Runtime CPU encoding of the Mel spectrogram → fixed-length feature vector
+6. **Decoder**: RKNN autoregressive token generation with prompt `<|startoftranscript|> <language> <|transcribe|> <|notimestamps|>`, terminates on `<|endoftext|>` or max steps
 
 **Window dimensions**: 15s @ 16kHz = 240,000 samples → 80×1500 Mel spectrogram
 
@@ -147,24 +147,12 @@ install/bin/speech_asr \
 ### Multi-Core NPU
 
 ```bash
-# Use NPU cores 0 and 1
+# Use NPU cores 0 and 1 for the RKNN decoder
 install/bin/speech_asr \
     --input-service audio_capture \
     --output-service speech_asr_result \
     --language en \
     --npu-core 0_1
-```
-
-### Separate Encoder/Decoder Cores
-
-```bash
-# Encoder on core 0, decoder on core 1
-install/bin/speech_asr \
-    --input-service audio_capture \
-    --output-service speech_asr_result \
-    --language en \
-    --encoder-npu-core 0 \
-    --decoder-npu-core 1
 ```
 
 ## File Organization

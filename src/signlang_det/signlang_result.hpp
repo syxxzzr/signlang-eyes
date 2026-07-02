@@ -68,9 +68,6 @@ namespace signlang::signlang_det {
   static_assert(std::is_trivially_copyable_v<GestureCandidate>);
   static_assert(std::is_trivially_copyable_v<SignlangResult>);
 
-  auto steady_timestamp_ns() -> std::uint64_t;
-  void copy_string(const char* source, std::array<char, kMaxGestureNameLength>& dest);
-
 } // namespace signlang::signlang_det
 
 #endif // SIGNLANG_EYES_SIGNLANG_DET_SIGNLANG_RESULT_HPP

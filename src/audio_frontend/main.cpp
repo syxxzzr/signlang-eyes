@@ -2,22 +2,17 @@
 #include "audio_processor.hpp"
 #include "audio_publisher.hpp"
 #include "common/runtime.hpp"
+#include "common/time.hpp"
 #include "program_options.hpp"
 #include "sound_source_blackboard.hpp"
 #include "sound_source_localization.hpp"
 #include "spdlog/spdlog.h"
 
-#include <chrono>
 #include <memory>
 #include <stdexcept>
 #include <thread>
 
 namespace {
-
-  auto steady_timestamp_ns() -> std::uint64_t {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
-  }
 
   void validate_publish_format(const signlang::audio_frontend::AudioFormat& capture_format,
                                const signlang::audio_frontend::AudioFormat& publish_format) {
@@ -55,10 +50,8 @@ auto main(int argc, char** argv) -> int {
                  capture_format.channel_count, options.publish_period_ms);
 
     const AudioFormat publish_format{
-        .sample_rate_hz =
-            options.publish_format.sample_rate_hz.value_or(signlang::audio_frontend::kDefaultSampleRateHz),
-        .channel_count = options.publish_format.channel_count.value_or(signlang::audio_frontend::kDefaultChannelCount),
-    };
+        options.publish_format.sample_rate_hz.value_or(signlang::audio_frontend::kDefaultSampleRateHz),
+        options.publish_format.channel_count.value_or(signlang::audio_frontend::kDefaultChannelCount)};
     validate_publish_format(capture_format, publish_format);
     spdlog::info("Output format: {}Hz, {} channels", publish_format.sample_rate_hz, publish_format.channel_count);
 
@@ -72,22 +65,35 @@ auto main(int argc, char** argv) -> int {
     }
 
     std::uint64_t sequence_number = 0;
+    auto downstream_active = false;
     while (!signlang::runtime::shutdown_requested()) {
       if (!publisher.has_subscribers()) {
+        if (downstream_active) {
+          spdlog::info("Audio frontend downstream subscriber disconnected; pausing capture");
+          downstream_active = false;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         continue;
+      }
+      if (!downstream_active) {
+        spdlog::info("Audio frontend downstream subscriber connected; resuming capture");
+        downstream_active = true;
       }
 
       const auto& input_samples = capture_device.capture_samples();
       const auto current_sequence_number = sequence_number++;
       if (sound_source_blackboard != nullptr) {
-        const auto localization = sound_source_localizer.estimate(input_samples, capture_format,
-                                                                  current_sequence_number, steady_timestamp_ns());
+        const auto localization = sound_source_localizer.estimate(
+            input_samples, capture_format, current_sequence_number, signlang::common::steady_timestamp_ns());
         sound_source_blackboard->publish(localization);
       }
       publisher.publish(input_samples, audio_processor, current_sequence_number);
+      if (current_sequence_number % 500 == 0) {
+        spdlog::info("Published audio frame sequence {}", current_sequence_number);
+      }
     }
 
+    spdlog::info("Audio frontend stopped after publishing {} frames", sequence_number);
     return 0;
   });
 }

@@ -2,7 +2,6 @@
 #define SIGNLANG_EYES_HANDPOSE_DET_HANDPOSE_SELECTION_HPP
 
 #include <cstdint>
-#include <span>
 #include <vector>
 
 namespace signlang::handpose_det {
@@ -18,7 +17,7 @@ namespace signlang::handpose_det {
     bool is_left_hand;
   };
 
-  auto select_handedness_detections(std::span<const HandednessCandidate> candidates, float handedness_threshold,
+  auto select_handedness_detections(const std::vector<HandednessCandidate>& candidates, float handedness_threshold,
                                     bool swap_handedness, std::size_t max_output_count)
       -> std::vector<HandednessSelection>;
 

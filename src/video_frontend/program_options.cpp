@@ -1,5 +1,6 @@
 #include "program_options.hpp"
 
+#include "common/cpu_affinity_cli.hpp"
 #include "common/logging_cli.hpp"
 #include "cxxopts.hpp"
 
@@ -49,10 +50,11 @@ namespace signlang::video_frontend {
         "mirror-output", "Horizontally mirror the published RGB output frame",
         cxxopts::value<bool>()->default_value("false")->implicit_value("true"))("h,help", "Print usage");
     signlang::logging::add_cli_options(options);
+    signlang::runtime::add_cpu_affinity_cli_options(options);
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
-      return ProgramUsage{.text = options.help()};
+      return ProgramUsage{options.help()};
     }
 
     if (parsed_options.count("device") == 0 || parsed_options.count("service") == 0) {
@@ -64,27 +66,22 @@ namespace signlang::video_frontend {
       throw std::runtime_error("--fps must be greater than 0.\n\n" + options.help());
     }
 
-    const VideoFormatRequest capture_format{
-        .width = optional_dimension(parsed_options, "capture-width"),
-        .height = optional_dimension(parsed_options, "capture-height"),
-    };
-    const VideoFormatRequest output_format{
-        .width = optional_dimension(parsed_options, "output-width"),
-        .height = optional_dimension(parsed_options, "output-height"),
-    };
+    const VideoFormatRequest capture_format{optional_dimension(parsed_options, "capture-width"),
+                                            optional_dimension(parsed_options, "capture-height")};
+    const VideoFormatRequest output_format{optional_dimension(parsed_options, "output-width"),
+                                           optional_dimension(parsed_options, "output-height")};
 
     validate_dimension_pair(capture_format, "capture-width", "capture-height");
     validate_dimension_pair(output_format, "output-width", "output-height");
 
-    return ProgramOptionsParseResult{ProgramOptions{
-        .camera_device_name = parsed_options["device"].as<std::string>(),
-        .service_name = parsed_options["service"].as<std::string>(),
-        .capture_format = capture_format,
-        .output_format = output_format,
-        .fps = fps,
-        .mirror_output = parsed_options["mirror-output"].as<bool>(),
-        .logging = signlang::logging::parse_cli_options(parsed_options),
-    }};
+    return ProgramOptionsParseResult{ProgramOptions{parsed_options["device"].as<std::string>(),
+                                                    parsed_options["service"].as<std::string>(),
+                                                    capture_format,
+                                                    output_format,
+                                                    fps,
+                                                    parsed_options["mirror-output"].as<bool>(),
+                                                    signlang::logging::parse_cli_options(parsed_options),
+                                                    signlang::runtime::parse_cpu_affinity_cli_options(parsed_options)}};
   }
 
 } // namespace signlang::video_frontend

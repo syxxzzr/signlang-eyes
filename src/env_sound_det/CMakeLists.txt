@@ -10,14 +10,6 @@ if(NOT TARGET signlang::rknn_runtime)
     return()
 endif()
 
-foreach(required_file
-        ${ENV_SOUND_DET_MODEL_FILE}
-        ${ENV_SOUND_DET_CLASS_MAP_FILE})
-    if(NOT EXISTS ${required_file})
-        message(FATAL_ERROR "Missing required environment sound detector asset: ${required_file}")
-    endif()
-endforeach()
-
 add_executable(signlang_eyes_env_sound_det
         iceoryx_gateway.cpp
         program_options.cpp
@@ -33,23 +25,21 @@ target_include_directories(signlang_eyes_env_sound_det PRIVATE
 target_link_libraries(signlang_eyes_env_sound_det PRIVATE
         cxxopts::cxxopts
         spdlog::spdlog
-        iceoryx2-cxx::shared-lib-cxx
+        iceoryx2_runtime
         signlang::rknn_runtime
         signlang::common
         Threads::Threads)
 
-add_custom_command(TARGET signlang_eyes_env_sound_det POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory
+add_optional_post_build_asset_runtime(signlang_eyes_env_sound_det
+        "${ENV_SOUND_DET_MODEL_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_env_sound_det>/${ENV_SOUND_DET_INSTALL_MODEL_DIR}"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${ENV_SOUND_DET_MODEL_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_env_sound_det>/${ENV_SOUND_DET_INSTALL_MODEL_DIR}/yamnet_3s.rknn"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${ENV_SOUND_DET_CLASS_MAP_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_env_sound_det>/${ENV_SOUND_DET_INSTALL_MODEL_DIR}/yamnet_class_map.txt")
+        yamnet_3s.rknn)
+add_optional_post_build_asset_runtime(signlang_eyes_env_sound_det
+        "${ENV_SOUND_DET_CLASS_MAP_FILE}"
+        "$<TARGET_FILE_DIR:signlang_eyes_env_sound_det>/${ENV_SOUND_DET_INSTALL_MODEL_DIR}"
+        yamnet_class_map.txt)
 
 install(TARGETS signlang_eyes_env_sound_det DESTINATION bin)
-install(FILES
+install_optional_files_runtime(${ENV_SOUND_DET_INSTALL_MODEL_DIR}
         ${ENV_SOUND_DET_MODEL_FILE}
-        ${ENV_SOUND_DET_CLASS_MAP_FILE}
-        DESTINATION ${ENV_SOUND_DET_INSTALL_MODEL_DIR})
+        ${ENV_SOUND_DET_CLASS_MAP_FILE})

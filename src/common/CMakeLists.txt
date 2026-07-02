@@ -1,5 +1,6 @@
 add_library(signlang_common STATIC
-        audio_ring_buffer.cpp)
+        audio_ring_buffer.cpp
+        time.cpp)
 
 target_include_directories(signlang_common PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/..)

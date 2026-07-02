@@ -2,6 +2,7 @@
 
 #include "speech_asr_result.hpp"
 
+#include "common/cpu_affinity_cli.hpp"
 #include "common/logging_cli.hpp"
 #include "cxxopts.hpp"
 
@@ -11,7 +12,7 @@
 namespace signlang::speech_asr {
   namespace {
 
-    constexpr auto kDefaultEncoderModelPath = "models/whisper/whisper_encoder_base_15s.rknn";
+    constexpr auto kDefaultEncoderModelPath = "models/whisper/whisper_encoder_base_15s.onnx";
     constexpr auto kDefaultDecoderModelPath = "models/whisper/whisper_decoder_base_15s.rknn";
     constexpr auto kDefaultVocabEnPath = "models/whisper/vocab_en.txt";
     constexpr auto kDefaultVocabZhPath = "models/whisper/vocab_zh.txt";
@@ -42,8 +43,7 @@ namespace signlang::speech_asr {
         return RKNN_NPU_CORE_0_1_2;
       }
 
-      throw std::runtime_error("--npu-core, --encoder-npu-core and --decoder-npu-core must be one of auto, all, 0, "
-                               "1, 2, 0_1, 0_1_2");
+      throw std::runtime_error("--npu-core and --decoder-npu-core must be one of auto, all, 0, 1, 2, 0_1, 0_1_2");
     }
 
     auto parse_rknn_priority_flag(const std::string& value) -> std::uint32_t {
@@ -71,7 +71,7 @@ namespace signlang::speech_asr {
                           cxxopts::value<std::string>())(
         "o,output-service", "iceoryx2 ASR result publish-subscribe service name", cxxopts::value<std::string>())(
         "language", "ASR recognition language: en or zh", cxxopts::value<std::string>()->default_value("en"))(
-        "encoder-model", "Whisper encoder RKNN model path",
+        "encoder-model", "Whisper encoder ONNX model path",
         cxxopts::value<std::string>()->default_value(kDefaultEncoderModelPath))(
         "decoder-model", "Whisper decoder RKNN model path",
         cxxopts::value<std::string>()->default_value(kDefaultDecoderModelPath))(
@@ -87,17 +87,17 @@ namespace signlang::speech_asr {
         cxxopts::value<std::uint32_t>()->default_value(std::to_string(kDefaultMaxDecodeSteps)))(
         "subscriber-buffer", "iceoryx2 subscriber queue size",
         cxxopts::value<std::uint64_t>()->default_value(std::to_string(kDefaultSubscriberBufferSize)))(
-        "npu-core", "Default RK3588 NPU core mask for both encoder and decoder: auto, all, 0, 1, 2, 0_1, 0_1_2",
+        "npu-core", "Default RK3588 NPU core mask for decoder: auto, all, 0, 1, 2, 0_1, 0_1_2",
         cxxopts::value<std::string>()->default_value("auto"))(
-        "encoder-npu-core", "RK3588 NPU core mask for encoder; overrides --npu-core", cxxopts::value<std::string>())(
         "decoder-npu-core", "RK3588 NPU core mask for decoder; overrides --npu-core",
         cxxopts::value<std::string>())("rknn-priority", "RKNN context priority: high, medium, low",
                                        cxxopts::value<std::string>()->default_value("medium"))("h,help", "Print usage");
     signlang::logging::add_cli_options(options);
+    signlang::runtime::add_cpu_affinity_cli_options(options);
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
-      return ProgramUsage{.text = options.help()};
+      return ProgramUsage{options.help()};
     }
 
     if (parsed_options.count("input-service") == 0 || parsed_options.count("output-service") == 0) {
@@ -135,30 +135,27 @@ namespace signlang::speech_asr {
     }
 
     const auto default_npu_core = parsed_options["npu-core"].as<std::string>();
-    const auto encoder_npu_core = parsed_options.count("encoder-npu-core") != 0
-        ? parsed_options["encoder-npu-core"].as<std::string>()
-        : default_npu_core;
     const auto decoder_npu_core = parsed_options.count("decoder-npu-core") != 0
         ? parsed_options["decoder-npu-core"].as<std::string>()
         : default_npu_core;
 
     return ProgramOptionsParseResult{ProgramOptions{
-        .audio_service_name = parsed_options["input-service"].as<std::string>(),
-        .result_service_name = parsed_options["output-service"].as<std::string>(),
-        .encoder_model_path = parsed_options["encoder-model"].as<std::string>(),
-        .decoder_model_path = parsed_options["decoder-model"].as<std::string>(),
-        .vocab_en_path = parsed_options["vocab-en"].as<std::string>(),
-        .vocab_zh_path = parsed_options["vocab-zh"].as<std::string>(),
-        .mel_filters_path = parsed_options["mel-filters"].as<std::string>(),
-        .window_ms = window_ms,
-        .overlap_ratio = overlap_ratio,
-        .language = language,
-        .max_decode_steps = max_decode_steps,
-        .subscriber_buffer_size = subscriber_buffer_size,
-        .encoder_npu_core_mask = parse_npu_core_mask(encoder_npu_core),
-        .decoder_npu_core_mask = parse_npu_core_mask(decoder_npu_core),
-        .rknn_priority_flag = parse_rknn_priority_flag(parsed_options["rknn-priority"].as<std::string>()),
-        .logging = signlang::logging::parse_cli_options(parsed_options),
+        parsed_options["input-service"].as<std::string>(),
+        parsed_options["output-service"].as<std::string>(),
+        parsed_options["encoder-model"].as<std::string>(),
+        parsed_options["decoder-model"].as<std::string>(),
+        parsed_options["vocab-en"].as<std::string>(),
+        parsed_options["vocab-zh"].as<std::string>(),
+        parsed_options["mel-filters"].as<std::string>(),
+        window_ms,
+        overlap_ratio,
+        language,
+        max_decode_steps,
+        subscriber_buffer_size,
+        parse_npu_core_mask(decoder_npu_core),
+        parse_rknn_priority_flag(parsed_options["rknn-priority"].as<std::string>()),
+        signlang::logging::parse_cli_options(parsed_options),
+        signlang::runtime::parse_cpu_affinity_cli_options(parsed_options),
     }};
   }
 

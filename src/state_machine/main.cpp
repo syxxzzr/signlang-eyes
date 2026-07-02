@@ -40,6 +40,7 @@ auto main(int argc, char** argv) -> int {
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
+    spdlog::info("State machine stopped with current state {}", app_state_name(state_publisher.current_state()));
     return 0;
   });
 }

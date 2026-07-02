@@ -16,7 +16,8 @@ target_include_directories(signlang_eyes_audio_frontend PRIVATE
 target_link_libraries(signlang_eyes_audio_frontend PRIVATE
         cxxopts::cxxopts
         spdlog::spdlog
-        iceoryx2-cxx::shared-lib-cxx
+        iceoryx2_runtime
+        signlang::common
         ALSA::ALSA
         m)
 

@@ -13,12 +13,10 @@ namespace signlang::launcher {
 
     const auto parsed_options = options.parse(argc, argv);
     if (parsed_options.count("help") != 0) {
-      return ProgramUsage{.text = options.help()};
+      return ProgramUsage{options.help()};
     }
 
-    return ProgramOptions{
-        .config_path = parsed_options["config"].as<std::string>(),
-    };
+    return ProgramOptions{parsed_options["config"].as<std::string>()};
   }
 
 } // namespace signlang::launcher

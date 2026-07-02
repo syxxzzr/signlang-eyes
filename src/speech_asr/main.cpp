@@ -1,5 +1,7 @@
 #include "common/audio_ring_buffer.hpp"
+#include "common/fixed_string.hpp"
 #include "common/runtime.hpp"
+#include "common/time.hpp"
 #include "iceoryx_gateway.hpp"
 #include "program_options.hpp"
 #include "spdlog/spdlog.h"
@@ -9,7 +11,6 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <chrono>
 #include <exception>
 #include <mutex>
 #include <optional>
@@ -26,24 +27,9 @@ namespace {
     return std::max(minimum_capacity, window_sample_count + one_second);
   }
 
-  auto steady_timestamp_ns() -> std::uint64_t {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
-  }
-
-  void copy_string(const std::string& source, std::array<char, signlang::speech_asr::kMaxTranscriptLength>& output) {
-    output.fill('\0');
-    const auto copy_size = std::min(source.size(), output.size() - 1);
-    std::copy_n(source.data(), copy_size, output.data());
-  }
-
   void copy_language_code(signlang::speech_asr::AsrLanguage language,
                           std::array<char, signlang::speech_asr::kMaxLanguageCodeLength>& output) {
-    output.fill('\0');
-    const auto* code = signlang::speech_asr::language_code(language);
-    const auto code_length = std::char_traits<char>::length(code);
-    const auto copy_size = std::min<std::size_t>(code_length, output.size() - 1);
-    std::copy_n(code, copy_size, output.data());
+    signlang::common::copy_fixed_string(signlang::speech_asr::language_code(language), output);
   }
 
   void copy_inference_result(const signlang::speech_asr::WhisperInferenceResult& inference_result,
@@ -54,7 +40,7 @@ namespace {
     output_result.encoder_time_ms = inference_result.encoder_time_ms;
     output_result.decoder_time_ms = inference_result.decoder_time_ms;
     output_result.inference_time_ms = inference_result.inference_time_ms;
-    copy_string(inference_result.transcript, output_result.transcript);
+    signlang::common::copy_fixed_string(inference_result.transcript, output_result.transcript);
   }
 
 } // namespace
@@ -108,6 +94,9 @@ auto main(int argc, char** argv) -> int {
 
         while (!should_stop.load()) {
           if (!downstream_active.load()) {
+            if (audio_subscriber.has_value()) {
+              spdlog::info("Speech ASR downstream inactive; detaching audio subscriber and clearing buffered audio");
+            }
             audio_subscriber.reset();
             audio_buffer.clear();
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -115,6 +104,7 @@ auto main(int argc, char** argv) -> int {
           }
 
           if (!audio_subscriber.has_value()) {
+            spdlog::info("Speech ASR attaching audio subscriber to {}", options.audio_service_name);
             audio_subscriber.emplace(options.audio_service_name, options.subscriber_buffer_size);
           }
 
@@ -136,15 +126,24 @@ auto main(int argc, char** argv) -> int {
         IpcResultPublisher result_publisher{options.result_service_name};
         std::optional<std::uint64_t> next_window_start_sample;
         std::uint64_t result_sequence_number = 0;
+        auto downstream_was_active = false;
 
         while (!should_stop.load()) {
           const auto has_downstream = result_publisher.has_subscribers();
           downstream_active.store(has_downstream);
           if (!has_downstream) {
+            if (downstream_was_active) {
+              spdlog::info("Speech ASR result subscriber disconnected; pausing inference");
+              downstream_was_active = false;
+            }
             audio_buffer.clear();
             next_window_start_sample = std::nullopt;
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             continue;
+          }
+          if (!downstream_was_active) {
+            spdlog::info("Speech ASR result subscriber connected; resuming inference");
+            downstream_was_active = true;
           }
 
           AudioWindow audio_window;
@@ -161,7 +160,7 @@ auto main(int argc, char** argv) -> int {
 
           SpeechAsrResult result{};
           result.sequence_number = result_sequence_number++;
-          result.timestamp_ns = steady_timestamp_ns();
+          result.timestamp_ns = signlang::common::steady_timestamp_ns();
           result.audio_start_sample_index = audio_window.start_sample_index;
           result.audio_end_sample_index = audio_window.end_sample_index;
           result.latest_audio_sequence_number = audio_window.latest_audio_sequence_number;
@@ -180,6 +179,8 @@ auto main(int argc, char** argv) -> int {
           copy_inference_result(inference_result, result);
 
           result_publisher.publish(result);
+          spdlog::info("Published ASR result seq={} transcript_len={} inference_ms={:.2f}", result.sequence_number,
+                       inference_result.transcript.size(), inference_result.inference_time_ms);
           next_window_start_sample = audio_window.start_sample_index + hop_sample_count;
         }
       } catch (...) {
@@ -201,6 +202,7 @@ auto main(int argc, char** argv) -> int {
       std::rethrow_exception(worker_error);
     }
 
+    spdlog::info("Speech ASR stopped");
     return 0;
   });
 }

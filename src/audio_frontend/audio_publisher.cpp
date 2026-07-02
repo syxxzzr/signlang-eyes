@@ -2,8 +2,8 @@
 
 #include "audio_processor.hpp"
 #include "common/ipc_utils.hpp"
+#include "common/time.hpp"
 
-#include <chrono>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -11,15 +11,6 @@
 #include <vector>
 
 namespace signlang::audio_frontend {
-  namespace {
-
-    auto steady_timestamp_ns() -> std::uint64_t {
-      const auto now = std::chrono::steady_clock::now().time_since_epoch();
-      return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
-    }
-
-  } // namespace
-
   AudioPublisher::AudioPublisher(const std::string& service_name) :
       node_{create_node()}, service_{create_service(node_, service_name)}, publisher_{create_publisher(service_)} {}
 
@@ -37,7 +28,7 @@ namespace signlang::audio_frontend {
     const auto output_format = audio_processor.output_format();
 
     frame->sequence_number = sequence_number;
-    frame->timestamp_ns = steady_timestamp_ns();
+    frame->timestamp_ns = common::steady_timestamp_ns();
     frame->sample_rate_hz = output_format.sample_rate_hz;
     frame->publish_period_ms = audio_processor.publish_period_ms();
     frame->frame_count = audio_processor.output_frame_count();

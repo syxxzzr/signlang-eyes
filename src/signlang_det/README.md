@@ -37,6 +37,9 @@ All module executables also accept `--log-file <path>` and `--log-rotate-size <b
 | `--sequence-length` | `30` | Sliding window size in frames (must be > 0) |
 | `--overlap-ratio` | `0.2` | Overlap ratio between adjacent sliding windows (0.0-1.0) |
 | `--min-confidence` | `0.3` | Minimum hand keypoint detection confidence (0.0-1.0) |
+| `--upload-window-overlap` | `0.5` | Overlap ratio when long gesture uploads are split into prototype samples |
+| `--max-representative-samples` | `3` | Maximum retained representative prototype samples per gesture |
+| `--consecutive-hit-windows` | `2` | Same recognized gesture windows required before publishing |
 
 ### Feature Weighting
 

@@ -33,10 +33,15 @@ namespace signlang::launcher::ipc {
   constexpr auto kHandposeOutput = "handpose_result";
   constexpr auto kSignlangOutput = "signlang_result";
   constexpr auto kSignlangPrototypeControl = "signlang_prototype_control";
+  constexpr auto kSignlangGestureManagement = "signlang_gesture_management";
+  constexpr auto kSpeechTts = "speech_tts";
   constexpr auto kStateEvent = "app_state_event";
   constexpr auto kStateBlackboard = "app_state_blackboard";
   constexpr auto kStateControl = "app_state_control";
   constexpr auto kAudioLocalizationBlackboard = "audio_source_localization";
+  constexpr auto kLlmClient = "llm_client";
+  constexpr auto kPeripheralDisplay = "peripheral_display";
+  constexpr auto kPositionAlert = "position_alert";
 
 } // namespace signlang::launcher::ipc
 
@@ -46,15 +51,22 @@ namespace {
   constexpr auto kExeAudioFrontend = "bin/audio_frontend";
   constexpr auto kExeVideoFrontend = "bin/video_frontend";
   constexpr auto kExeSpeechAsr = "bin/speech_asr";
+  constexpr auto kExeSpeechTts = "bin/speech_tts";
+  constexpr auto kExeDataflowDispatcher = "bin/dataflow_dispatcher";
   constexpr auto kExeEnvSoundDet = "bin/env_sound_det";
   constexpr auto kExeHandposeDet = "bin/handpose_det";
   constexpr auto kExeSignlangManager = "bin/signlang_manager";
   constexpr auto kExeSignlangDet = "bin/signlang_det";
+  constexpr auto kExePositionService = "bin/position_service";
+  constexpr auto kExeLlmClient = "bin/llm_client";
+  constexpr auto kExePeripheralService = "bin/peripheral_service";
 
   constexpr std::array kIpcKeys = {
       "input_service",         "input-service",         "output_service",           "output-service",
       "state_event_service",   "state-event-service",   "state_blackboard_service", "state-blackboard-service",
       "state_control_service", "state-control-service", "localization_blackboard",  "localization-blackboard",
+      "alert_event_service",   "alert-event-service",   "display_service",         "display-service",
+      "service",
   };
 
   void warn_ipc_keys_in_table(const toml::table& tbl, const std::string& section_name) {
@@ -71,8 +83,9 @@ namespace {
 
   void warn_ipc_keys_in_config(const toml::table& config) {
     constexpr std::array kSections = {
-        "state_machine", "audio_frontend", "video_frontend",   "speech_asr",
-        "env_sound_det", "handpose_det",   "signlang_manager", "signlang_det",
+        "state_machine", "audio_frontend", "video_frontend",   "speech_asr",   "env_sound_det",
+        "handpose_det", "signlang_manager", "signlang_det", "speech_tts", "dataflow_dispatcher", "position_service",
+        "llm_client", "peripheral_service"
     };
 
     for (const auto* section_name : kSections) {
@@ -159,6 +172,7 @@ namespace {
       return -1;
     }
 
+    spdlog::debug("exec succeeded for {}", args[0]);
     return pid;
   }
 
@@ -327,6 +341,7 @@ namespace {
 
     const auto log_dir = fs::path{"log"};
     fs::create_directories(log_dir);
+    spdlog::info("scanning log directory '{}' with retain_files={}", log_dir.string(), retain_files);
 
     struct LogFile {
       fs::path path;
@@ -360,7 +375,7 @@ namespace {
         error.clear();
         continue;
       }
-      log_files.push_back(LogFile{.path = entry.path(), .modified_time = modified_time});
+      log_files.push_back(LogFile{entry.path(), modified_time});
     }
 
     if (log_files.size() <= retain_files) {
@@ -399,7 +414,7 @@ namespace {
   }
 
   void sleep_before_restart() {
-    struct timespec ts{.tv_sec = 1, .tv_nsec = 0};
+    struct timespec ts{1, 0};
     nanosleep(&ts, nullptr);
   }
 
@@ -454,6 +469,7 @@ static auto build_video_frontend_args(const toml::table& cfg) -> std::vector<std
     add_opt_int(args, "--output-height", opt_int(*tbl, "output_height"));
     add_opt_int(args, "--fps", opt_int(*tbl, "fps"));
     add_opt_bool_assignment(args, "--mirror-output", opt_bool(*tbl, "mirror_output"));
+    add_opt_int(args, "--cpu-core", opt_int(*tbl, "cpu_core"));
   }
   return args;
 }
@@ -475,10 +491,10 @@ static auto build_speech_asr_args(const toml::table& cfg) -> std::vector<std::st
     add_opt_str(args, "--vocab-zh", opt_string(*tbl, "vocab_zh"));
     add_opt_str(args, "--mel-filters", opt_string(*tbl, "mel_filters"));
     add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
-    add_opt_str(args, "--encoder-npu-core", opt_string(*tbl, "encoder_npu_core"));
     add_opt_str(args, "--decoder-npu-core", opt_string(*tbl, "decoder_npu_core"));
     add_opt_str(args, "--rknn-priority", opt_string(*tbl, "rknn_priority"));
     add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
+    add_opt_int(args, "--cpu-core", opt_int(*tbl, "cpu_core"));
   }
   return args;
 }
@@ -499,6 +515,41 @@ static auto build_env_sound_det_args(const toml::table& cfg) -> std::vector<std:
     add_opt_str(args, "--rknn-priority", opt_string(*tbl, "rknn_priority"));
     add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
   }
+  return args;
+}
+
+static auto build_speech_tts_args(const toml::table& cfg) -> std::vector<std::string> {
+  using namespace signlang::launcher::ipc;
+  std::vector<std::string> args = {kExeSpeechTts, "--service", kSpeechTts};
+
+  if (const auto* tbl = cfg["speech_tts"].as_table()) {
+    add_opt_str(args, "--device", opt_string(*tbl, "device"));
+    add_opt_str(args, "--encoder-model", opt_string(*tbl, "encoder_model"));
+    add_opt_str(args, "--decoder-model", opt_string(*tbl, "decoder_model"));
+    add_opt_str(args, "--config", opt_string(*tbl, "config"));
+    add_opt_str(args, "--pinyin-dict", opt_string(*tbl, "pinyin_dict"));
+    add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
+    add_opt_str(args, "--rknn-priority", opt_string(*tbl, "rknn_priority"));
+    add_opt_int(args, "--cpu-core", opt_int(*tbl, "cpu_core"));
+  }
+  return args;
+}
+
+static auto build_dataflow_dispatcher_args(const toml::table& cfg) -> std::vector<std::string> {
+  using namespace signlang::launcher::ipc;
+  std::vector<std::string> args = {
+      kExeDataflowDispatcher,      "--state-event-service",      kStateEvent,
+      "--state-blackboard-service", kStateBlackboard,             "--signlang-result-service",
+      kSignlangOutput,             "--speech-asr-result-service", kSpeechAsrOutput,
+      "--speech-tts-service",      kSpeechTts,                   "--llm-client-service",
+      kLlmClient,                  "--peripheral-display-service", kPeripheralDisplay,
+  };
+
+  if (const auto* tbl = cfg["dataflow_dispatcher"].as_table()) {
+    add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
+    add_opt_int(args, "--signlang-ai-window-ms", opt_int(*tbl, "signlang_ai_window_ms"));
+  }
+
   return args;
 }
 
@@ -531,8 +582,7 @@ static auto build_handpose_det_args(const toml::table& cfg) -> std::vector<std::
     add_opt_bool_assignment(args, "--swap-handedness", opt_bool(*tbl, "swap_handedness"));
     add_opt_int(args, "--max-tracking-gap", opt_int(*tbl, "max_tracking_gap"));
     add_opt_int(args, "--max-stale-frames", opt_int(*tbl, "max_stale_frames"));
-    add_opt_int(args, "--single-hand-full-frame-interval", opt_int(*tbl, "single_hand_full_frame_interval"));
-    add_opt_int(args, "--stable-hands-full-frame-interval", opt_int(*tbl, "stable_hands_full_frame_interval"));
+    add_opt_int(args, "--full-frame-interval", opt_int(*tbl, "full_frame_interval"));
     add_opt_bool_assignment(args, "--single-hand", opt_bool(*tbl, "single_hand"));
     add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
     add_opt_str(args, "--palm-npu-core", opt_string(*tbl, "palm_npu_core"));
@@ -547,7 +597,7 @@ static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::
   std::vector<std::string> args = {
       kExeSignlangDet,           "--input-service", kHandposeOutput,
       "--output-service",        kSignlangOutput,   "--prototype-control-service",
-      kSignlangPrototypeControl,
+      kSignlangPrototypeControl, "--gesture-management-service", kSignlangGestureManagement,
   };
 
   if (const auto* tbl = cfg["signlang_det"].as_table()) {
@@ -561,6 +611,9 @@ static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::
     add_opt_double(args, "--confidence-threshold", opt_double(*tbl, "confidence_threshold"));
     add_opt_double(args, "--confidence-margin", opt_double(*tbl, "confidence_margin"));
     add_opt_int(args, "--duplicate-suppression-ms", opt_int(*tbl, "duplicate_suppression_ms"));
+    add_opt_double(args, "--upload-window-overlap", opt_double(*tbl, "upload_window_overlap"));
+    add_opt_int(args, "--max-representative-samples", opt_int(*tbl, "max_representative_samples"));
+    add_opt_int(args, "--consecutive-hit-windows", opt_int(*tbl, "consecutive_hit_windows"));
     add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
     add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
   }
@@ -571,23 +624,17 @@ static auto build_signlang_manager_args(const toml::table& cfg) -> std::vector<s
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
       kExeSignlangManager,         "--input-service", kHandposeOutput,
-      "--signlang-result-service", kSignlangOutput,   "--signlang-control-service",
-      kSignlangPrototypeControl,
+      "--signlang-result-service", kSignlangOutput,   "--gesture-management-service",
+      kSignlangGestureManagement,
   };
 
   if (const auto* tbl = cfg["signlang_manager"].as_table()) {
     add_opt_str(args, "--bluetooth-name", opt_string(*tbl, "bluetooth_name"));
     add_opt_str(args, "--adapter-path", opt_string(*tbl, "adapter_path"));
-    add_opt_str(args, "--model", opt_string(*tbl, "model"));
-    add_opt_str(args, "--prototypes", opt_string(*tbl, "prototypes"));
-    add_opt_double(args, "--min-confidence", opt_double(*tbl, "min_confidence"));
-    add_opt_double(args, "--motion-weight", opt_double(*tbl, "motion_weight"));
-    add_opt_double(args, "--upload-window-overlap", opt_double(*tbl, "upload_window_overlap"));
     add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
     add_opt_int(args, "--stream-fps", opt_int(*tbl, "stream_fps"));
     add_opt_int(args, "--max-notify-payload", opt_int(*tbl, "max_notify_payload"));
     add_opt_int(args, "--max-upload-bytes", opt_int(*tbl, "max_upload_bytes"));
-    add_opt_str(args, "--npu-core", opt_string(*tbl, "npu_core"));
     if (const auto enable_streaming = opt_bool(*tbl, "enable_streaming_by_default");
         enable_streaming && *enable_streaming) {
       args.emplace_back("--enable-streaming-by-default");
@@ -597,17 +644,95 @@ static auto build_signlang_manager_args(const toml::table& cfg) -> std::vector<s
   return args;
 }
 
+static auto build_position_service_args(const toml::table& cfg) -> std::vector<std::string> {
+  using namespace signlang::launcher::ipc;
+  std::vector<std::string> args = {kExePositionService};
+
+  if (const auto* tbl = cfg["position_service"].as_table()) {
+    add_opt_str(args, "--device", opt_string(*tbl, "device"));
+    add_opt_int(args, "--baud-rate", opt_int(*tbl, "baud_rate"));
+    add_opt_str(args, "--mqtt-host", opt_string(*tbl, "mqtt_host"));
+    add_opt_int(args, "--mqtt-port", opt_int(*tbl, "mqtt_port"));
+    add_opt_str(args, "--mqtt-client-id", opt_string(*tbl, "mqtt_client_id"));
+    add_opt_str(args, "--mqtt-topic", opt_string(*tbl, "mqtt_topic"));
+    add_opt_str(args, "--alert-event-service", opt_string(*tbl, "alert_event_service"));
+    add_opt_str(args, "--alert-mqtt-topic", opt_string(*tbl, "alert_mqtt_topic"));
+    add_opt_str(args, "--mqtt-username", opt_string(*tbl, "mqtt_username"));
+    add_opt_str(args, "--mqtt-password", opt_string(*tbl, "mqtt_password"));
+    add_opt_int(args, "--mqtt-keep-alive", opt_int(*tbl, "mqtt_keep_alive"));
+    add_opt_int(args, "--mqtt-qos", opt_int(*tbl, "mqtt_qos"));
+    add_opt_bool_assignment(args, "--mqtt-retain", opt_bool(*tbl, "mqtt_retain"));
+  }
+
+  return args;
+}
+
+static auto build_peripheral_service_args(const toml::table& cfg) -> std::vector<std::string> {
+  using namespace signlang::launcher::ipc;
+  std::vector<std::string> args = {
+      kExePeripheralService,
+      "--display-service",
+      kPeripheralDisplay,
+      "--state-control-service",
+      kStateControl,
+      "--alert-event-service",
+      kPositionAlert,
+  };
+
+  if (const auto* tbl = cfg["peripheral_service"].as_table()) {
+    add_opt_str(args, "--device", opt_string(*tbl, "device"));
+    add_opt_int(args, "--baud-rate", opt_int(*tbl, "baud_rate"));
+    add_opt_int(args, "--data-bits", opt_int(*tbl, "data_bits"));
+    add_opt_int(args, "--stop-bits", opt_int(*tbl, "stop_bits"));
+    add_opt_str(args, "--parity", opt_string(*tbl, "parity"));
+    add_opt_str(args, "--flow-control", opt_string(*tbl, "flow_control"));
+    add_opt_str(args, "--font-file", opt_string(*tbl, "font_file"));
+    add_opt_int(args, "--display-width", opt_int(*tbl, "display_width"));
+    add_opt_int(args, "--display-height", opt_int(*tbl, "display_height"));
+    add_opt_int(args, "--font-size", opt_int(*tbl, "font_size"));
+    add_opt_int(args, "--char-spacing", opt_int(*tbl, "char_spacing"));
+    add_opt_int(args, "--line-gap", opt_int(*tbl, "line_gap"));
+    add_opt_int(args, "--scroll-step-px", opt_int(*tbl, "scroll_step_px"));
+    add_opt_int(args, "--scroll-interval-ms", opt_int(*tbl, "scroll_interval_ms"));
+    add_opt_int(args, "--refresh-interval-ms", opt_int(*tbl, "refresh_interval_ms"));
+  }
+
+  return args;
+}
+
+static auto build_llm_client_args(const toml::table& cfg) -> std::vector<std::string> {
+  using namespace signlang::launcher::ipc;
+  std::vector<std::string> args = {kExeLlmClient, "--service", kLlmClient};
+
+  if (const auto* tbl = cfg["llm_client"].as_table()) {
+    add_opt_str(args, "--base-url", opt_string(*tbl, "base_url"));
+    add_opt_str(args, "--api-key", opt_string(*tbl, "api_key"));
+    add_opt_str(args, "--model", opt_string(*tbl, "model"));
+    add_opt_str(args, "--system-prompt-file", opt_string(*tbl, "system_prompt_file"));
+    add_opt_int(args, "--request-timeout-ms", opt_int(*tbl, "request_timeout_ms"));
+  }
+
+  return args;
+}
+
 static auto build_modules(const toml::table& config) -> std::vector<ModuleEntry> {
   return {
       {"state_machine", build_state_machine_args(config)},       {"audio_frontend", build_audio_frontend_args(config)},
       {"video_frontend", build_video_frontend_args(config)},     {"speech_asr", build_speech_asr_args(config)},
-      {"env_sound_det", build_env_sound_det_args(config)},       {"handpose_det", build_handpose_det_args(config)},
+      {"speech_tts", build_speech_tts_args(config)},
+      {"dataflow_dispatcher", build_dataflow_dispatcher_args(config)},
+      {"env_sound_det", build_env_sound_det_args(config)},
+      {"handpose_det", build_handpose_det_args(config)},
       {"signlang_manager", build_signlang_manager_args(config)}, {"signlang_det", build_signlang_det_args(config)},
+      {"position_service", build_position_service_args(config)},
+      {"peripheral_service", build_peripheral_service_args(config)},
+      {"llm_client", build_llm_client_args(config)},
   };
 }
 
 static auto run_modules_once(const std::vector<ModuleEntry>& modules) -> bool {
   g_children.clear();
+  spdlog::info("launching {} modules", modules.size());
 
   for (const auto& mod : modules) {
     auto args_text = std::string{};
@@ -657,12 +782,13 @@ static auto run_modules_once(const std::vector<ModuleEntry>& modules) -> bool {
     }
 
     if (pid == 0) {
-      struct timespec ts{.tv_sec = 0, .tv_nsec = 500000000};
+      struct timespec ts{0, 500000000};
       nanosleep(&ts, nullptr);
       continue;
     }
 
     if (errno == ECHILD) {
+      spdlog::warn("launcher monitor found no remaining child processes");
       break;
     }
 
@@ -672,6 +798,7 @@ static auto run_modules_once(const std::vector<ModuleEntry>& modules) -> bool {
   }
 
   terminate_all_children();
+  spdlog::info("launcher module run stopped normally");
   return true;
 }
 
@@ -708,15 +835,13 @@ auto main(int argc, char** argv) -> int {
     const auto logging_config = logging_config_from_toml(config);
     const auto launcher_config = launcher_config_from_toml(config);
     const auto start_timestamp = utc_start_timestamp();
-    signlang::logging::initialize(
-        signlang::logging::Options{
-            .log_file = log_path_for(start_timestamp, "launcher"),
-            .rotate_size = logging_config.rotate_size,
-        },
-        logging_config.retain_files, "launcher");
+    signlang::logging::initialize(signlang::logging::Options{log_path_for(start_timestamp, "launcher"),
+                                                             logging_config.rotate_size},
+                                  logging_config.retain_files, "launcher");
     cleanup_old_log_files(logging_config.retain_files);
 
     spdlog::info("loaded config: {}", config_path.string());
+    spdlog::info("launcher restart_attempts={}", launcher_config.restart_attempts);
 
     // Warn about any IPC service keys in the TOML
     warn_ipc_keys_in_config(config);
@@ -729,6 +854,7 @@ auto main(int argc, char** argv) -> int {
     for (auto& mod : modules) {
       append_logging_args(mod.args, start_timestamp, mod.name, logging_config.rotate_size);
     }
+    spdlog::info("prepared {} modules with log timestamp {}", modules.size(), start_timestamp);
 
     auto completed_restarts = std::int64_t{0};
     while (!signlang::runtime::shutdown_requested()) {

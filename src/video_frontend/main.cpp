@@ -50,10 +50,7 @@ namespace {
     const auto output_width = output_request.width.value_or(capture_format.width);
     const auto output_height = output_request.height.value_or(capture_format.height);
     return signlang::video_frontend::VideoFormat{
-        .width = output_width,
-        .height = output_height,
-        .pixel_format = signlang::video_frontend::kPixelFormatRgb24,
-    };
+        output_width, output_height, signlang::video_frontend::kPixelFormatRgb24};
   }
 
 } // namespace
@@ -89,18 +86,32 @@ auto main(int argc, char** argv) -> int {
                              video_processor.max_output_size_bytes(capture_device.max_frame_size_bytes())};
 
     std::uint64_t sequence_number = 0;
+    auto downstream_active = false;
     while (!signlang::runtime::shutdown_requested()) {
       if (!publisher.has_subscribers()) {
+        if (downstream_active) {
+          spdlog::info("Video frontend downstream subscriber disconnected; pausing capture");
+          downstream_active = false;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         continue;
+      }
+      if (!downstream_active) {
+        spdlog::info("Video frontend downstream subscriber connected; resuming capture");
+        downstream_active = true;
       }
 
       const auto frame = capture_device.capture_frame();
       auto frame_guard = CapturedFrameGuard{capture_device};
-      publisher.publish(frame, video_processor, capture_device.fps(), sequence_number++);
+      const auto current_sequence_number = sequence_number++;
+      publisher.publish(frame, video_processor, capture_device.fps(), current_sequence_number);
+      if (current_sequence_number % 300 == 0) {
+        spdlog::info("Published video frame sequence {}", current_sequence_number);
+      }
       frame_guard.release();
     }
 
+    spdlog::info("Video frontend stopped after publishing {} frames", sequence_number);
     return 0;
   });
 }

@@ -1,9 +1,9 @@
 #include "handpose_transport.hpp"
 
 #include "common/ipc_utils.hpp"
+#include "common/time.hpp"
 
 #include <algorithm>
-#include <chrono>
 #include <stdexcept>
 #include <utility>
 
@@ -94,9 +94,6 @@ namespace signlang::handpose_det {
     return std::move(publisher.value());
   }
 
-  auto HandPoseTransport::timestamp_ns() -> std::uint64_t {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
-  }
+  auto HandPoseTransport::timestamp_ns() -> std::uint64_t { return common::steady_timestamp_ns(); }
 
 } // namespace signlang::handpose_det

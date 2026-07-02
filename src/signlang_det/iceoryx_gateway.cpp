@@ -56,8 +56,11 @@ namespace signlang::signlang_det {
 
   auto IpcSignlangPublisher::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
                                             const std::string& service_name) -> ResultService {
+    constexpr auto kMaxSignlangResultSubscribers = std::uint64_t{4};
+
     auto service_result = node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
                               .publish_subscribe<SignlangResult>()
+                              .max_subscribers(kMaxSignlangResultSubscribers)
                               .open_or_create();
 
     if (!service_result.has_value()) {
@@ -140,6 +143,48 @@ namespace signlang::signlang_det {
   }
 
   IpcPrototypeControlServer::IpcPrototypeControlServer(const std::string& service_name) :
+      node_{create_node()}, service_{create_service(node_, service_name)}, server_{create_server(service_)} {}
+
+  auto IpcGestureManagementServer::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
+    iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
+
+    auto node =
+        iox2::NodeBuilder().signal_handling_mode(iox2::SignalHandlingMode::Disabled).create<iox2::ServiceType::Ipc>();
+    if (!node.has_value()) {
+      throw std::runtime_error("Failed to create iceoryx2 node for signlang gesture management server");
+    }
+    return std::move(node.value());
+  }
+
+  auto IpcGestureManagementServer::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                                  const std::string& service_name)
+      -> iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, GestureManagementRequest, void,
+                                          GestureManagementResponse, void> {
+    auto service = node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
+                       .request_response<GestureManagementRequest, GestureManagementResponse>()
+                       .max_servers(1)
+                       .max_clients(4)
+                       .max_active_requests_per_client(1)
+                       .max_response_buffer_size(1)
+                       .open_or_create();
+    if (!service.has_value()) {
+      throw std::runtime_error("Failed to open or create signlang gesture management service: " + service_name);
+    }
+    return std::move(service.value());
+  }
+
+  auto IpcGestureManagementServer::create_server(
+      const iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc, GestureManagementRequest, void,
+                                             GestureManagementResponse, void>& service)
+      -> iox2::Server<iox2::ServiceType::Ipc, GestureManagementRequest, void, GestureManagementResponse, void> {
+    auto server = service.server_builder().create();
+    if (!server.has_value()) {
+      throw std::runtime_error("Failed to create signlang gesture management server");
+    }
+    return std::move(server.value());
+  }
+
+  IpcGestureManagementServer::IpcGestureManagementServer(const std::string& service_name) :
       node_{create_node()}, service_{create_service(node_, service_name)}, server_{create_server(service_)} {}
 
 } // namespace signlang::signlang_det

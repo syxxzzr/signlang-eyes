@@ -13,13 +13,13 @@ namespace signlang::handpose_det {
 
     void consider_candidate(std::optional<BestCandidate>& best, std::uint32_t index, float confidence, float score) {
       if (!best.has_value() || confidence > best->confidence) {
-        best = BestCandidate{.index = index, .confidence = confidence, .score = score};
+        best = BestCandidate{index, confidence, score};
       }
     }
 
   } // namespace
 
-  auto select_handedness_detections(std::span<const HandednessCandidate> candidates, float handedness_threshold,
+  auto select_handedness_detections(const std::vector<HandednessCandidate>& candidates, float handedness_threshold,
                                     bool swap_handedness, std::size_t max_output_count)
       -> std::vector<HandednessSelection> {
     auto best_left = std::optional<BestCandidate>{};
@@ -54,10 +54,10 @@ namespace signlang::handpose_det {
     }
 
     if (best_left.has_value() && selected.size() < max_output_count) {
-      selected.push_back(HandednessSelection{.candidate_index = best_left->index, .is_left_hand = true});
+      selected.push_back(HandednessSelection{best_left->index, true});
     }
     if (best_right.has_value() && selected.size() < max_output_count) {
-      selected.push_back(HandednessSelection{.candidate_index = best_right->index, .is_left_hand = false});
+      selected.push_back(HandednessSelection{best_right->index, false});
     }
 
     return selected;

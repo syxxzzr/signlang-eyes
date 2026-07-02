@@ -1,6 +1,7 @@
 #ifndef SIGNLANG_EYES_COMMON_RUNTIME_HPP
 #define SIGNLANG_EYES_COMMON_RUNTIME_HPP
 
+#include "common/cpu_affinity.hpp"
 #include "common/logging.hpp"
 
 #include <csignal>
@@ -19,15 +20,31 @@ namespace signlang::runtime {
 
   namespace detail {
 
+    template <typename T, typename = void>
+    struct IsUsageResult : std::false_type {};
+
     template <typename T>
-    concept UsageResult = requires(const T& value) {
-      { value.text };
+    struct IsUsageResult<T, std::void_t<decltype(std::declval<const T&>().text)>> : std::true_type {};
+
+    template <typename T, typename = void>
+    struct IsRuntimeOptions : std::false_type {};
+
+    template <typename T>
+    struct IsRuntimeOptions<T, std::void_t<decltype(std::declval<const T&>().logging)>> : std::true_type {};
+
+    template <typename T, typename = void>
+    struct HasCpuAffinityOptions : std::false_type {};
+
+    template <typename T>
+    struct HasCpuAffinityOptions<T, std::void_t<decltype(std::declval<const T&>().cpu_affinity)>> : std::true_type {};
+
+    template <typename T>
+    struct RemoveCvRef {
+      using type = std::remove_cv_t<std::remove_reference_t<T>>;
     };
 
     template <typename T>
-    concept RuntimeOptions = requires(const T& value) {
-      { value.logging };
-    };
+    using RemoveCvRefT = typename RemoveCvRef<T>::type;
 
   } // namespace detail
 
@@ -72,6 +89,29 @@ namespace signlang::runtime {
     return std::filesystem::path{argv[0]}.filename().string();
   }
 
+  template <typename Options>
+  inline void apply_cpu_affinity_if_requested(const Options& options) {
+    if constexpr (detail::HasCpuAffinityOptions<Options>::value) {
+      if (!options.cpu_affinity.requested) {
+        return;
+      }
+
+      if (!options.cpu_affinity.cpu_core.has_value()) {
+        spdlog::warn("Ignoring invalid --cpu-core value; using system default CPU scheduling");
+        return;
+      }
+
+      const auto cpu_core = *options.cpu_affinity.cpu_core;
+      const auto error = bind_current_thread_to_cpu(cpu_core);
+      if (error.has_value()) {
+        spdlog::warn("Failed to bind to CPU core {} ({}); using system default CPU scheduling", cpu_core, *error);
+        return;
+      }
+
+      spdlog::info("Bound process to CPU core {}", cpu_core);
+    }
+  }
+
   template <typename ParseOptions, typename RunModule>
   auto run_module(int argc, char** argv, ParseOptions&& parse_options, RunModule&& run_module) -> int {
     const auto module_name = module_name_from_argv(argc, argv);
@@ -84,12 +124,13 @@ namespace signlang::runtime {
 
       std::visit(
           [&](const auto& result) {
-            using Result = std::remove_cvref_t<decltype(result)>;
-            if constexpr (detail::UsageResult<Result>) {
+            using Result = detail::RemoveCvRefT<decltype(result)>;
+            if constexpr (detail::IsUsageResult<Result>::value) {
               std::cout << result.text << '\n';
             } else {
-              static_assert(detail::RuntimeOptions<Result>, "Runtime options must expose a logging field");
+              static_assert(detail::IsRuntimeOptions<Result>::value, "Runtime options must expose a logging field");
               signlang::logging::initialize(result.logging, signlang::logging::kDefaultRetainFiles, module_name);
+              apply_cpu_affinity_if_requested(result);
               install_shutdown_signal_handlers();
               exit_code = std::forward<RunModule>(run_module)(result);
             }

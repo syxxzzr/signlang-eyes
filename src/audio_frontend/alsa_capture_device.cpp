@@ -72,8 +72,7 @@ namespace signlang::audio_frontend {
   AlsaCaptureDevice::AlsaCaptureDevice(std::string device_name, AudioFormatRequest format_request,
                                        std::uint32_t publish_period_ms) :
       device_name_{std::move(device_name)}, format_request_{format_request},
-      format_{.sample_rate_hz = kDefaultSampleRateHz, .channel_count = kDefaultChannelCount},
-      publish_period_ms_{publish_period_ms} {
+      format_{kDefaultSampleRateHz, kDefaultChannelCount}, publish_period_ms_{publish_period_ms} {
     snd_pcm_t* pcm_handle = nullptr;
     const auto open_result = snd_pcm_open(&pcm_handle, device_name_.c_str(), SND_PCM_STREAM_CAPTURE, 0);
     if (open_result < 0) {

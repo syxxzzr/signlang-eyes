@@ -25,6 +25,7 @@ All module executables also accept `--log-file <path>` and `--log-rotate-size <b
 | `--output-height` | (matches capture) | Published output height in pixels |
 | `--fps` | `30` | Requested camera frame rate |
 | `--mirror-output` | `false` | Horizontally mirror the published RGB output frame |
+| `--cpu-core` | *(system default)* | Best-effort bind to one CPU core; invalid values or binding failures log a warning and keep system default scheduling |
 | `--help` / `-h` | — | Print usage |
 
 > **Note**: `--capture-width` and `--capture-height` must be specified together (or omitted together). Same rule applies to `--output-width` and `--output-height`.
