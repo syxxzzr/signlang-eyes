@@ -16,6 +16,7 @@ namespace signlang::position_service {
     constexpr std::uint16_t kDefaultMqttPort = 1883;
     constexpr auto kDefaultMqttClientId = "signlang_eyes_position_service";
     constexpr auto kDefaultMqttTopic = "signlang/position";
+    constexpr auto kDefaultAlertEventService = "position_alert";
     constexpr auto kDefaultAlertMqttTopic = "signlang/alert";
     constexpr std::uint16_t kDefaultKeepAliveSeconds = 30;
 
@@ -52,7 +53,7 @@ namespace signlang::position_service {
         "mqtt-topic", "MQTT topic for position JSON payloads",
         cxxopts::value<std::string>()->default_value(kDefaultMqttTopic))(
         "alert-event-service", "iceoryx2 event service name that triggers MQTT alert payloads",
-        cxxopts::value<std::string>()->default_value(""))(
+        cxxopts::value<std::string>()->default_value(kDefaultAlertEventService))(
         "alert-mqtt-topic", "MQTT topic for alert JSON payloads",
         cxxopts::value<std::string>()->default_value(kDefaultAlertMqttTopic))(
         "mqtt-username", "MQTT username", cxxopts::value<std::string>()->default_value(""))(

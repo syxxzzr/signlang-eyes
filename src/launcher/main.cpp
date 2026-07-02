@@ -40,6 +40,8 @@ namespace signlang::launcher::ipc {
   constexpr auto kStateControl = "app_state_control";
   constexpr auto kAudioLocalizationBlackboard = "audio_source_localization";
   constexpr auto kLlmClient = "llm_client";
+  constexpr auto kPeripheralDisplay = "peripheral_display";
+  constexpr auto kPositionAlert = "position_alert";
 
 } // namespace signlang::launcher::ipc
 
@@ -56,11 +58,13 @@ namespace {
   constexpr auto kExeSignlangDet = "bin/signlang_det";
   constexpr auto kExePositionService = "bin/position_service";
   constexpr auto kExeLlmClient = "bin/llm_client";
+  constexpr auto kExePeripheralService = "bin/peripheral_service";
 
   constexpr std::array kIpcKeys = {
       "input_service",         "input-service",         "output_service",           "output-service",
       "state_event_service",   "state-event-service",   "state_blackboard_service", "state-blackboard-service",
       "state_control_service", "state-control-service", "localization_blackboard",  "localization-blackboard",
+      "alert_event_service",   "alert-event-service",   "display_service",         "display-service",
       "service",
   };
 
@@ -80,6 +84,7 @@ namespace {
     constexpr std::array kSections = {
         "state_machine", "audio_frontend", "video_frontend",   "speech_asr",   "env_sound_det",
         "handpose_det", "signlang_manager", "signlang_det", "speech_tts", "position_service", "llm_client",
+        "peripheral_service",
     };
 
     for (const auto* section_name : kSections) {
@@ -619,6 +624,7 @@ static auto build_signlang_manager_args(const toml::table& cfg) -> std::vector<s
 }
 
 static auto build_position_service_args(const toml::table& cfg) -> std::vector<std::string> {
+  using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {kExePositionService};
 
   if (const auto* tbl = cfg["position_service"].as_table()) {
@@ -635,6 +641,43 @@ static auto build_position_service_args(const toml::table& cfg) -> std::vector<s
     add_opt_int(args, "--mqtt-keep-alive", opt_int(*tbl, "mqtt_keep_alive"));
     add_opt_int(args, "--mqtt-qos", opt_int(*tbl, "mqtt_qos"));
     add_opt_bool_assignment(args, "--mqtt-retain", opt_bool(*tbl, "mqtt_retain"));
+  }
+
+  return args;
+}
+
+static auto build_peripheral_service_args(const toml::table& cfg) -> std::vector<std::string> {
+  using namespace signlang::launcher::ipc;
+  std::vector<std::string> args = {
+      kExePeripheralService,
+      "--display-service",
+      kPeripheralDisplay,
+      "--state-event-service",
+      kStateEvent,
+      "--state-blackboard-service",
+      kStateBlackboard,
+      "--state-control-service",
+      kStateControl,
+      "--alert-event-service",
+      kPositionAlert,
+  };
+
+  if (const auto* tbl = cfg["peripheral_service"].as_table()) {
+    add_opt_str(args, "--device", opt_string(*tbl, "device"));
+    add_opt_int(args, "--baud-rate", opt_int(*tbl, "baud_rate"));
+    add_opt_int(args, "--data-bits", opt_int(*tbl, "data_bits"));
+    add_opt_int(args, "--stop-bits", opt_int(*tbl, "stop_bits"));
+    add_opt_str(args, "--parity", opt_string(*tbl, "parity"));
+    add_opt_str(args, "--flow-control", opt_string(*tbl, "flow_control"));
+    add_opt_str(args, "--font-file", opt_string(*tbl, "font_file"));
+    add_opt_int(args, "--display-width", opt_int(*tbl, "display_width"));
+    add_opt_int(args, "--display-height", opt_int(*tbl, "display_height"));
+    add_opt_int(args, "--font-size", opt_int(*tbl, "font_size"));
+    add_opt_int(args, "--char-spacing", opt_int(*tbl, "char_spacing"));
+    add_opt_int(args, "--line-gap", opt_int(*tbl, "line_gap"));
+    add_opt_int(args, "--scroll-step-px", opt_int(*tbl, "scroll_step_px"));
+    add_opt_int(args, "--scroll-interval-ms", opt_int(*tbl, "scroll_interval_ms"));
+    add_opt_int(args, "--refresh-interval-ms", opt_int(*tbl, "refresh_interval_ms"));
   }
 
   return args;
@@ -662,7 +705,9 @@ static auto build_modules(const toml::table& config) -> std::vector<ModuleEntry>
       {"speech_tts", build_speech_tts_args(config)},             {"env_sound_det", build_env_sound_det_args(config)},
       {"handpose_det", build_handpose_det_args(config)},
       {"signlang_manager", build_signlang_manager_args(config)}, {"signlang_det", build_signlang_det_args(config)},
-      {"position_service", build_position_service_args(config)}, {"llm_client", build_llm_client_args(config)},
+      {"position_service", build_position_service_args(config)},
+      {"peripheral_service", build_peripheral_service_args(config)},
+      {"llm_client", build_llm_client_args(config)},
   };
 }
 
