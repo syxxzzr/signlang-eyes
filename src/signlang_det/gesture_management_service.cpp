@@ -197,9 +197,7 @@ namespace signlang::signlang_det {
   GestureManagementService::GestureManagementService(const ProgramOptions& options, SignlangModel& model,
                                                      std::mutex& model_mutex) :
       options_{options}, model_{model}, model_mutex_{model_mutex},
-      database_{options.prototypes_path, model.embedding_dim()} {
-    database_.ensure_valid_empty_or_existing();
-  }
+      database_{options.prototypes_path, model.embedding_dim()} {}
 
   auto GestureManagementService::handle_request(const GestureManagementRequest& request) -> GestureManagementResponse {
     try {

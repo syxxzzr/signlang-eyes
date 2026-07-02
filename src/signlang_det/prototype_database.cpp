@@ -241,7 +241,8 @@ namespace signlang::signlang_det {
     }
 
     auto error = std::error_code{};
-    if (fs::exists(db_path, error) && !error) {
+    const auto database_exists = fs::exists(db_path, error) && !error;
+    if (database_exists) {
       const auto backup_path = backup_path_for(db_path);
       fs::copy_file(db_path, backup_path, fs::copy_options::none, error);
       if (error) {
@@ -250,6 +251,9 @@ namespace signlang::signlang_det {
       }
       spdlog::warn("Prototype database schema is invalid; backed up '{}' to '{}' before recreating it",
                    db_path.string(), backup_path.string());
+    } else {
+      spdlog::warn("Prototype database file does not exist; creating an empty gesture library at '{}'",
+                   db_path.string());
     }
 
     error.clear();

@@ -1,5 +1,6 @@
 #include "signlang_model.hpp"
 
+#include "prototype_database.hpp"
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
@@ -32,6 +33,12 @@ namespace signlang::signlang_det {
       std::uint32_t output_count_;
       rknn_output* outputs_;
     };
+
+    auto load_prototypes_or_empty(const std::string& prototypes_path, std::uint32_t embedding_dim) -> PrototypeStore {
+      auto database = PrototypeDatabase{prototypes_path, embedding_dim};
+      database.ensure_valid_empty_or_existing();
+      return PrototypeStore::load(prototypes_path);
+    }
 
   } // namespace
 
@@ -310,7 +317,7 @@ namespace signlang::signlang_det {
   SignlangModel::SignlangModel(const std::string& model_path, const std::string& prototypes_path,
                                rknn_core_mask npu_core, float motion_weight, float dtw_window_ratio) :
       encoder_{std::make_unique<BilstmEncoder>(model_path, npu_core, motion_weight)},
-      prototypes_{PrototypeStore::load(prototypes_path)}, matcher_{dtw_window_ratio} {
+      prototypes_{load_prototypes_or_empty(prototypes_path, encoder_->embedding_dim())}, matcher_{dtw_window_ratio} {
     if (prototypes_.embedding_dim() != encoder_->embedding_dim()) {
       throw std::runtime_error("Prototype embedding dimension mismatch: encoder outputs " +
                                std::to_string(encoder_->embedding_dim()) + ", prototypes contain " +
@@ -336,7 +343,7 @@ namespace signlang::signlang_det {
   }
 
   void SignlangModel::reload_prototypes(const std::string& prototypes_path) {
-    auto next_store = PrototypeStore::load(prototypes_path);
+    auto next_store = load_prototypes_or_empty(prototypes_path, encoder_->embedding_dim());
     if (next_store.embedding_dim() != encoder_->embedding_dim()) {
       throw std::runtime_error("Reloaded prototype embedding dimension mismatch: encoder outputs " +
                                std::to_string(encoder_->embedding_dim()) + ", prototypes contain " +
