@@ -193,7 +193,8 @@ endforeach()
 
 install_optional_files_runtime(conf
     ${CMAKE_CURRENT_SOURCE_DIR}/conf/conf.toml
-    ${CMAKE_CURRENT_SOURCE_DIR}/conf/system_prompt.txt)
+    ${CMAKE_CURRENT_SOURCE_DIR}/conf/system_prompt.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/conf/unifont-17.0.05.hex)
 
 # Install shared sign language assets used by signlang_det and signlang_manager
 install_optional_files_runtime(models/bilstm

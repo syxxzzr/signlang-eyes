@@ -83,3 +83,6 @@ models/
 
 # SQLite
 *.sqlite
+
+# font hex
+*.hex
