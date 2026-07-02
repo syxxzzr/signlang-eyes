@@ -1,0 +1,137 @@
+#ifndef SIGNLANG_EYES_DATAFLOW_DISPATCHER_ICEORYX_GATEWAY_HPP
+#define SIGNLANG_EYES_DATAFLOW_DISPATCHER_ICEORYX_GATEWAY_HPP
+
+#include "signlang_det/signlang_result.hpp"
+#include "speech_tts/speech_tts_protocol.hpp"
+#include "state_machine/app_state.hpp"
+
+#include "iox2/iceoryx2.hpp"
+
+#include <cstdint>
+#include <stdexcept>
+#include <string>
+#include <utility>
+
+namespace signlang::dataflow_dispatcher {
+
+  class IpcStateSubscriber {
+  public:
+    IpcStateSubscriber(const std::string& event_service_name, const std::string& blackboard_service_name);
+
+    IpcStateSubscriber(const IpcStateSubscriber&) = delete;
+    auto operator=(const IpcStateSubscriber&) -> IpcStateSubscriber& = delete;
+    IpcStateSubscriber(IpcStateSubscriber&&) = delete;
+    auto operator=(IpcStateSubscriber&&) -> IpcStateSubscriber& = delete;
+
+    [[nodiscard]] auto current_state() const -> signlang::state_machine::AppState;
+    [[nodiscard]] auto poll_state_change() -> bool;
+    [[nodiscard]] auto wait_for_state_change(std::uint64_t timeout_ms) -> bool;
+
+  private:
+    using BlackboardService =
+        iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey>;
+    using StateReader = iox2::Reader<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey>;
+    using StateEntry = iox2::EntryHandle<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey,
+                                         signlang::state_machine::AppState>;
+    using EventService = iox2::PortFactoryEvent<iox2::ServiceType::Ipc>;
+    using EventListener = iox2::Listener<iox2::ServiceType::Ipc>;
+
+    static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
+    static auto open_blackboard_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                        const std::string& service_name) -> BlackboardService;
+    static auto create_reader(const BlackboardService& service) -> StateReader;
+    static auto create_state_entry(StateReader& reader) -> StateEntry;
+    static auto open_event_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+        -> EventService;
+    static auto create_listener(const EventService& service) -> EventListener;
+
+    iox2::Node<iox2::ServiceType::Ipc> node_;
+    BlackboardService blackboard_service_;
+    StateReader reader_;
+    StateEntry state_entry_;
+    EventService event_service_;
+    EventListener listener_;
+  };
+
+  class IpcSignlangResultSubscriber {
+  public:
+    IpcSignlangResultSubscriber(const std::string& service_name, std::uint64_t subscriber_buffer_size);
+
+    IpcSignlangResultSubscriber(const IpcSignlangResultSubscriber&) = delete;
+    auto operator=(const IpcSignlangResultSubscriber&) -> IpcSignlangResultSubscriber& = delete;
+    IpcSignlangResultSubscriber(IpcSignlangResultSubscriber&&) = delete;
+    auto operator=(IpcSignlangResultSubscriber&&) -> IpcSignlangResultSubscriber& = delete;
+
+    [[nodiscard]] auto wait_for_work(std::uint64_t timeout_ms) -> bool;
+
+    template <typename Handler>
+    auto receive_latest(Handler&& handler) -> bool;
+
+  private:
+    static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
+    static auto create_subscriber(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name,
+                                  std::uint64_t buffer_size)
+        -> iox2::Subscriber<iox2::ServiceType::Ipc, signlang::signlang_det::SignlangResult, void>;
+
+    iox2::Node<iox2::ServiceType::Ipc> node_;
+    iox2::Subscriber<iox2::ServiceType::Ipc, signlang::signlang_det::SignlangResult, void> subscriber_;
+  };
+
+  class IpcSpeechTtsClient {
+  public:
+    explicit IpcSpeechTtsClient(const std::string& service_name);
+
+    IpcSpeechTtsClient(const IpcSpeechTtsClient&) = delete;
+    auto operator=(const IpcSpeechTtsClient&) -> IpcSpeechTtsClient& = delete;
+    IpcSpeechTtsClient(IpcSpeechTtsClient&&) = delete;
+    auto operator=(IpcSpeechTtsClient&&) -> IpcSpeechTtsClient& = delete;
+
+    [[nodiscard]] auto send_text(const std::string& text) -> signlang::speech_tts::SpeechTtsResponse;
+
+  private:
+    using TtsService = iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc,
+                                                        signlang::speech_tts::SpeechTtsRequest, void,
+                                                        signlang::speech_tts::SpeechTtsResponse, void>;
+    using TtsClient = iox2::Client<iox2::ServiceType::Ipc, signlang::speech_tts::SpeechTtsRequest, void,
+                                  signlang::speech_tts::SpeechTtsResponse, void>;
+
+    static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
+    static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+        -> TtsService;
+    static auto create_client(const TtsService& service) -> TtsClient;
+
+    iox2::Node<iox2::ServiceType::Ipc> node_;
+    TtsService service_;
+    TtsClient client_;
+    std::uint32_t next_request_id_{0};
+  };
+
+  template <typename Handler>
+  auto IpcSignlangResultSubscriber::receive_latest(Handler&& handler) -> bool {
+    auto latest_sample = subscriber_.receive();
+    if (!latest_sample.has_value()) {
+      throw std::runtime_error("Failed to receive signlang result sample through iceoryx2 in dataflow dispatcher");
+    }
+
+    if (!latest_sample.value().has_value()) {
+      return false;
+    }
+
+    while (true) {
+      auto next_sample = subscriber_.receive();
+      if (!next_sample.has_value()) {
+        throw std::runtime_error("Failed to receive signlang result sample through iceoryx2 in dataflow dispatcher");
+      }
+      if (!next_sample.value().has_value()) {
+        break;
+      }
+      latest_sample = std::move(next_sample);
+    }
+
+    handler(latest_sample.value().value().payload());
+    return true;
+  }
+
+} // namespace signlang::dataflow_dispatcher
+
+#endif // SIGNLANG_EYES_DATAFLOW_DISPATCHER_ICEORYX_GATEWAY_HPP

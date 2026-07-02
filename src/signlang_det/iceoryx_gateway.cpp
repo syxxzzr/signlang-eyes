@@ -56,8 +56,11 @@ namespace signlang::signlang_det {
 
   auto IpcSignlangPublisher::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
                                             const std::string& service_name) -> ResultService {
+    constexpr auto kMaxSignlangResultSubscribers = std::uint64_t{4};
+
     auto service_result = node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
                               .publish_subscribe<SignlangResult>()
+                              .max_subscribers(kMaxSignlangResultSubscribers)
                               .open_or_create();
 
     if (!service_result.has_value()) {

@@ -54,6 +54,9 @@ npu_core = "auto"                  # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 # rknn_priority = "medium"         # high, medium, low
 # cpu_core = 2                     # Optional CPU core binding; invalid or rejected values warn and fall back to system default scheduling
 
+[dataflow_dispatcher]
+# subscriber_buffer = 2            # signlang_det result subscriber queue size
+
 [env_sound_det]
 npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
 # window_ms = 3000                 # Detection window length in milliseconds
