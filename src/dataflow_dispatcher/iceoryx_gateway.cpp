@@ -9,6 +9,7 @@
 namespace signlang::dataflow_dispatcher {
   namespace {
     constexpr std::uint64_t kMaxSignlangResultSubscribers = 4;
+    constexpr std::uint64_t kMaxSpeechAsrResultSubscribers = 4;
     constexpr std::uint64_t kMaxStateEventListeners = 8;
     constexpr std::uint64_t kMaxStateEventNotifiers = 4;
     constexpr std::uint64_t kMaxStateEventNodes = 16;
@@ -145,6 +146,46 @@ namespace signlang::dataflow_dispatcher {
     auto subscriber = service.value().subscriber_builder().buffer_size(buffer_size).create();
     if (!subscriber.has_value()) {
       throw std::runtime_error("Failed to create dataflow dispatcher signlang result subscriber");
+    }
+    return std::move(subscriber.value());
+  }
+
+  IpcSpeechAsrResultSubscriber::IpcSpeechAsrResultSubscriber(const std::string& service_name,
+                                                             std::uint64_t subscriber_buffer_size) :
+      node_{create_node()},
+      subscriber_{create_subscriber(node_, service_name, subscriber_buffer_size)} {}
+
+  auto IpcSpeechAsrResultSubscriber::wait_for_work(std::uint64_t timeout_ms) -> bool {
+    return node_.wait(iox2::bb::Duration::from_millis(timeout_ms)).has_value();
+  }
+
+  auto IpcSpeechAsrResultSubscriber::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
+    iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
+
+    auto node =
+        iox2::NodeBuilder().signal_handling_mode(iox2::SignalHandlingMode::Disabled).create<iox2::ServiceType::Ipc>();
+    if (!node.has_value()) {
+      throw std::runtime_error("Failed to create iceoryx2 node for dataflow dispatcher ASR subscriber");
+    }
+    return std::move(node.value());
+  }
+
+  auto IpcSpeechAsrResultSubscriber::create_subscriber(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                                       const std::string& service_name, std::uint64_t buffer_size)
+      -> iox2::Subscriber<iox2::ServiceType::Ipc, signlang::speech_asr::SpeechAsrResult, void> {
+    auto service = node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
+                       .publish_subscribe<signlang::speech_asr::SpeechAsrResult>()
+                       .max_subscribers(kMaxSpeechAsrResultSubscribers)
+                       .subscriber_max_buffer_size(buffer_size)
+                       .subscriber_max_borrowed_samples(buffer_size)
+                       .open_or_create();
+    if (!service.has_value()) {
+      throw std::runtime_error("Failed to open ASR result service in dataflow dispatcher: " + service_name);
+    }
+
+    auto subscriber = service.value().subscriber_builder().buffer_size(buffer_size).create();
+    if (!subscriber.has_value()) {
+      throw std::runtime_error("Failed to create dataflow dispatcher ASR result subscriber");
     }
     return std::move(subscriber.value());
   }

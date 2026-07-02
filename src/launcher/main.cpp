@@ -536,10 +536,11 @@ static auto build_speech_tts_args(const toml::table& cfg) -> std::vector<std::st
 static auto build_dataflow_dispatcher_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
-      kExeDataflowDispatcher, "--state-event-service",    kStateEvent,      "--state-blackboard-service",
-      kStateBlackboard,      "--signlang-result-service", kSignlangOutput,  "--speech-tts-service",
-      kSpeechTts,            "--llm-client-service",      kLlmClient,       "--peripheral-display-service",
-      kPeripheralDisplay,
+      kExeDataflowDispatcher,      "--state-event-service",      kStateEvent,
+      "--state-blackboard-service", kStateBlackboard,             "--signlang-result-service",
+      kSignlangOutput,             "--speech-asr-result-service", kSpeechAsrOutput,
+      "--speech-tts-service",      kSpeechTts,                   "--llm-client-service",
+      kLlmClient,                  "--peripheral-display-service", kPeripheralDisplay,
   };
 
   if (const auto* tbl = cfg["dataflow_dispatcher"].as_table()) {

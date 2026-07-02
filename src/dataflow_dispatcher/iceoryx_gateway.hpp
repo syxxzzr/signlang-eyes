@@ -4,6 +4,7 @@
 #include "llm_client/llm_protocol.hpp"
 #include "peripheral_service/peripheral_protocol.hpp"
 #include "signlang_det/signlang_result.hpp"
+#include "speech_asr/speech_asr_result.hpp"
 #include "speech_tts/speech_tts_protocol.hpp"
 #include "state_machine/app_state.hpp"
 
@@ -77,6 +78,30 @@ namespace signlang::dataflow_dispatcher {
 
     iox2::Node<iox2::ServiceType::Ipc> node_;
     iox2::Subscriber<iox2::ServiceType::Ipc, signlang::signlang_det::SignlangResult, void> subscriber_;
+  };
+
+  class IpcSpeechAsrResultSubscriber {
+  public:
+    IpcSpeechAsrResultSubscriber(const std::string& service_name, std::uint64_t subscriber_buffer_size);
+
+    IpcSpeechAsrResultSubscriber(const IpcSpeechAsrResultSubscriber&) = delete;
+    auto operator=(const IpcSpeechAsrResultSubscriber&) -> IpcSpeechAsrResultSubscriber& = delete;
+    IpcSpeechAsrResultSubscriber(IpcSpeechAsrResultSubscriber&&) = delete;
+    auto operator=(IpcSpeechAsrResultSubscriber&&) -> IpcSpeechAsrResultSubscriber& = delete;
+
+    [[nodiscard]] auto wait_for_work(std::uint64_t timeout_ms) -> bool;
+
+    template <typename Handler>
+    auto receive_latest(Handler&& handler) -> bool;
+
+  private:
+    static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
+    static auto create_subscriber(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name,
+                                  std::uint64_t buffer_size)
+        -> iox2::Subscriber<iox2::ServiceType::Ipc, signlang::speech_asr::SpeechAsrResult, void>;
+
+    iox2::Node<iox2::ServiceType::Ipc> node_;
+    iox2::Subscriber<iox2::ServiceType::Ipc, signlang::speech_asr::SpeechAsrResult, void> subscriber_;
   };
 
   class IpcSpeechTtsClient {
@@ -188,6 +213,32 @@ namespace signlang::dataflow_dispatcher {
       auto next_sample = subscriber_.receive();
       if (!next_sample.has_value()) {
         throw std::runtime_error("Failed to receive signlang result sample through iceoryx2 in dataflow dispatcher");
+      }
+      if (!next_sample.value().has_value()) {
+        break;
+      }
+      latest_sample = std::move(next_sample);
+    }
+
+    handler(latest_sample.value().value().payload());
+    return true;
+  }
+
+  template <typename Handler>
+  auto IpcSpeechAsrResultSubscriber::receive_latest(Handler&& handler) -> bool {
+    auto latest_sample = subscriber_.receive();
+    if (!latest_sample.has_value()) {
+      throw std::runtime_error("Failed to receive ASR result sample through iceoryx2 in dataflow dispatcher");
+    }
+
+    if (!latest_sample.value().has_value()) {
+      return false;
+    }
+
+    while (true) {
+      auto next_sample = subscriber_.receive();
+      if (!next_sample.has_value()) {
+        throw std::runtime_error("Failed to receive ASR result sample through iceoryx2 in dataflow dispatcher");
       }
       if (!next_sample.value().has_value()) {
         break;

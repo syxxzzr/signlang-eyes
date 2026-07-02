@@ -20,6 +20,8 @@ namespace signlang::dataflow_dispatcher {
                           cxxopts::value<std::string>())(
         "state-blackboard-service", "iceoryx2 app state blackboard service name", cxxopts::value<std::string>())(
         "signlang-result-service", "signlang_det result publish-subscribe service name",
+        cxxopts::value<std::string>())(
+        "speech-asr-result-service", "speech_asr result publish-subscribe service name",
         cxxopts::value<std::string>())("speech-tts-service", "speech_tts request-response service name",
                                        cxxopts::value<std::string>())(
         "llm-client-service", "llm_client request-response service name", cxxopts::value<std::string>())(
@@ -39,12 +41,14 @@ namespace signlang::dataflow_dispatcher {
 
     if (parsed_options.count("state-event-service") == 0 ||
         parsed_options.count("state-blackboard-service") == 0 ||
-        parsed_options.count("signlang-result-service") == 0 || parsed_options.count("speech-tts-service") == 0 ||
+        parsed_options.count("signlang-result-service") == 0 ||
+        parsed_options.count("speech-asr-result-service") == 0 ||
+        parsed_options.count("speech-tts-service") == 0 ||
         parsed_options.count("llm-client-service") == 0 ||
         parsed_options.count("peripheral-display-service") == 0) {
       throw std::runtime_error("--state-event-service, --state-blackboard-service, --signlang-result-service, "
-                               "--speech-tts-service, --llm-client-service, and --peripheral-display-service are "
-                               "required.\n\n" +
+                               "--speech-asr-result-service, --speech-tts-service, --llm-client-service, and "
+                               "--peripheral-display-service are required.\n\n" +
                                options.help());
     }
 
@@ -61,6 +65,7 @@ namespace signlang::dataflow_dispatcher {
         parsed_options["state-event-service"].as<std::string>(),
         parsed_options["state-blackboard-service"].as<std::string>(),
         parsed_options["signlang-result-service"].as<std::string>(),
+        parsed_options["speech-asr-result-service"].as<std::string>(),
         parsed_options["speech-tts-service"].as<std::string>(),
         parsed_options["llm-client-service"].as<std::string>(),
         parsed_options["peripheral-display-service"].as<std::string>(),

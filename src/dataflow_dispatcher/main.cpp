@@ -79,6 +79,8 @@ namespace {
                                 const signlang::dataflow_dispatcher::ProgramOptions& options,
                                 std::optional<signlang::dataflow_dispatcher::IpcSignlangResultSubscriber>&
                                     signlang_subscriber,
+                                std::optional<signlang::dataflow_dispatcher::IpcSpeechAsrResultSubscriber>&
+                                    asr_subscriber,
                                 signlang::dataflow_dispatcher::RequiredUpstream& active_upstream) {
     const auto required_upstream = signlang::dataflow_dispatcher::required_upstream_for_state(state);
     if (required_upstream == active_upstream) {
@@ -86,12 +88,21 @@ namespace {
     }
 
     signlang_subscriber.reset();
+    asr_subscriber.reset();
     active_upstream = signlang::dataflow_dispatcher::RequiredUpstream::None;
 
     if (required_upstream == signlang::dataflow_dispatcher::RequiredUpstream::SignlangResult) {
       signlang_subscriber.emplace(options.signlang_result_service_name, options.subscriber_buffer_size);
       active_upstream = required_upstream;
       spdlog::info("Dataflow dispatcher subscribed to signlang_det results for state {}",
+                   signlang::state_machine::app_state_name(state));
+      return;
+    }
+
+    if (required_upstream == signlang::dataflow_dispatcher::RequiredUpstream::SpeechAsrResult) {
+      asr_subscriber.emplace(options.speech_asr_result_service_name, options.subscriber_buffer_size);
+      active_upstream = required_upstream;
+      spdlog::info("Dataflow dispatcher subscribed to speech_asr results for state {}",
                    signlang::state_machine::app_state_name(state));
       return;
     }
@@ -127,6 +138,15 @@ namespace {
     }
   }
 
+  void display_asr_transcript(signlang::dataflow_dispatcher::IpcDisplayClient& display_client, const std::string& text) {
+    const auto response = display_client.set_content_line(text);
+    if (response.status != signlang::peripheral_service::DisplayStatus::Ok) {
+      spdlog::warn("peripheral_service rejected ASR display content: {}", response.message.data());
+    } else {
+      spdlog::info("Forwarded ASR transcript to peripheral_service display");
+    }
+  }
+
   void flush_signlang_ai_prompt(SignlangAiAccumulator& accumulator,
                                 signlang::dataflow_dispatcher::IpcLlmClient& llm_client,
                                 signlang::dataflow_dispatcher::IpcDisplayClient& display_client) {
@@ -155,18 +175,21 @@ namespace {
 auto main(int argc, char** argv) -> int {
   using signlang::dataflow_dispatcher::IpcDisplayClient;
   using signlang::dataflow_dispatcher::IpcLlmClient;
+  using signlang::dataflow_dispatcher::IpcSpeechAsrResultSubscriber;
   using signlang::dataflow_dispatcher::IpcSpeechTtsClient;
   using signlang::dataflow_dispatcher::IpcStateSubscriber;
   using signlang::dataflow_dispatcher::IpcSignlangResultSubscriber;
   using signlang::dataflow_dispatcher::RequiredUpstream;
   using signlang::dataflow_dispatcher::parse_program_options;
   using signlang::dataflow_dispatcher::tts_text_from_signlang_result;
+  using signlang::dataflow_dispatcher::tts_text_from_speech_asr_result;
 
   return signlang::runtime::run_module(argc, argv, parse_program_options, [](const auto& options) {
     spdlog::info("Starting dataflow dispatcher");
     spdlog::info("State event service: {}", options.state_event_service_name);
     spdlog::info("State blackboard service: {}", options.state_blackboard_service_name);
     spdlog::info("signlang_det result service: {}", options.signlang_result_service_name);
+    spdlog::info("speech_asr result service: {}", options.speech_asr_result_service_name);
     spdlog::info("speech_tts service: {}", options.speech_tts_service_name);
     spdlog::info("llm_client service: {}", options.llm_client_service_name);
     spdlog::info("peripheral display service: {}", options.peripheral_display_service_name);
@@ -177,13 +200,14 @@ auto main(int argc, char** argv) -> int {
     auto llm_client = IpcLlmClient{options.llm_client_service_name};
     auto display_client = IpcDisplayClient{options.peripheral_display_service_name};
     auto signlang_subscriber = std::optional<IpcSignlangResultSubscriber>{};
+    auto asr_subscriber = std::optional<IpcSpeechAsrResultSubscriber>{};
     auto signlang_ai_accumulator = SignlangAiAccumulator{};
     auto active_upstream = RequiredUpstream::None;
     auto current_state = state_subscriber.current_state();
 
     set_display_title(display_client, current_state);
     clear_display_content(display_client);
-    apply_upstream_for_state(current_state, options, signlang_subscriber, active_upstream);
+    apply_upstream_for_state(current_state, options, signlang_subscriber, asr_subscriber, active_upstream);
 
     while (!signlang::runtime::shutdown_requested()) {
       if (state_subscriber.poll_state_change()) {
@@ -191,17 +215,33 @@ auto main(int argc, char** argv) -> int {
         signlang_ai_accumulator.clear();
         set_display_title(display_client, current_state);
         clear_display_content(display_client);
-        apply_upstream_for_state(current_state, options, signlang_subscriber, active_upstream);
+        apply_upstream_for_state(current_state, options, signlang_subscriber, asr_subscriber, active_upstream);
       }
 
-      if (!signlang_subscriber.has_value()) {
+      if (!signlang_subscriber.has_value() && !asr_subscriber.has_value()) {
         if (state_subscriber.wait_for_state_change(kIdleStateWaitMs)) {
           current_state = state_subscriber.current_state();
           signlang_ai_accumulator.clear();
           set_display_title(display_client, current_state);
           clear_display_content(display_client);
-          apply_upstream_for_state(current_state, options, signlang_subscriber, active_upstream);
+          apply_upstream_for_state(current_state, options, signlang_subscriber, asr_subscriber, active_upstream);
         }
+        continue;
+      }
+
+      if (asr_subscriber.has_value()) {
+        if (!asr_subscriber->wait_for_work(kActiveWaitMs)) {
+          continue;
+        }
+
+        asr_subscriber->receive_latest([&](const auto& result) {
+          const auto text = tts_text_from_speech_asr_result(result);
+          if (!text.has_value()) {
+            return;
+          }
+
+          display_asr_transcript(display_client, text.value());
+        });
         continue;
       }
 
@@ -244,6 +284,7 @@ auto main(int argc, char** argv) -> int {
     }
 
     signlang_subscriber.reset();
+    asr_subscriber.reset();
     return 0;
   });
 }

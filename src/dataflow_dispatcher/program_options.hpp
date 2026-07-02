@@ -13,6 +13,7 @@ namespace signlang::dataflow_dispatcher {
     std::string state_event_service_name;
     std::string state_blackboard_service_name;
     std::string signlang_result_service_name;
+    std::string speech_asr_result_service_name;
     std::string speech_tts_service_name;
     std::string llm_client_service_name;
     std::string peripheral_display_service_name;
