@@ -15,7 +15,7 @@ The **speech_tts** module receives text over an iceoryx2 request-response servic
 | `--service` / `-s` | *(required)* | iceoryx2 request-response service name |
 | `--device` / `-d` | `default` | ALSA playback device |
 | `--encoder-model` | `models/piper/zh_CN-huayan-x_low.encoder.onnx` | Piper encoder ONNX model path |
-| `--decoder-model` | `models/piper/zh_CN-huayan-x_low.decoder.int8.rknn` | Piper decoder RKNN model path |
+| `--decoder-model` | `models/piper/zh_CN-huayan-x_low.decoder.rknn` | Piper decoder RKNN model path |
 | `--config` | `models/piper/zh_CN-huayan-x_low.json` | Piper voice config path |
 | `--pinyin-dict` | build-time cpp-pinyin dictionary path | cpp-pinyin dictionary directory |
 | `--npu-core` | `auto` | RKNN decoder NPU core mask |

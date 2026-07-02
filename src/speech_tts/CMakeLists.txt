@@ -84,7 +84,7 @@ add_optional_post_build_asset_runtime(signlang_eyes_speech_tts
 add_optional_post_build_asset_runtime(signlang_eyes_speech_tts
         "${SPEECH_TTS_DECODER_MODEL_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_INSTALL_MODEL_DIR}"
-        zh_CN-huayan-x_low.decoder.int8.rknn)
+        zh_CN-huayan-x_low.decoder.rknn)
 add_optional_post_build_asset_runtime(signlang_eyes_speech_tts
         "${SPEECH_TTS_CONFIG_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_INSTALL_MODEL_DIR}"
