@@ -28,18 +28,14 @@ target_link_libraries(signlang_eyes_handpose_det PRIVATE
 
 install(TARGETS signlang_eyes_handpose_det DESTINATION bin)
 
-if(EXISTS "${HANDPOSE_DET_PALM_MODEL_FILE}" AND EXISTS "${HANDPOSE_DET_LANDMARK_MODEL_FILE}")
-        add_custom_command(TARGET signlang_eyes_handpose_det POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_FILE_DIR:signlang_eyes_handpose_det>/${HANDPOSE_DET_INSTALL_MODEL_DIR}"
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${HANDPOSE_DET_PALM_MODEL_FILE}"
-                "$<TARGET_FILE_DIR:signlang_eyes_handpose_det>/${HANDPOSE_DET_INSTALL_MODEL_DIR}/hand_detector.rknn"
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${HANDPOSE_DET_LANDMARK_MODEL_FILE}"
-                "$<TARGET_FILE_DIR:signlang_eyes_handpose_det>/${HANDPOSE_DET_INSTALL_MODEL_DIR}/hand_landmarks_detector.rknn")
-        install(FILES "${HANDPOSE_DET_PALM_MODEL_FILE}" "${HANDPOSE_DET_LANDMARK_MODEL_FILE}"
-                DESTINATION ${HANDPOSE_DET_INSTALL_MODEL_DIR})
-else()
-        message(WARNING "MediaPipe handpose model files do not exist in ${HANDPOSE_DET_MODEL_DIR}")
-endif()
+add_optional_post_build_asset_runtime(signlang_eyes_handpose_det
+        "${HANDPOSE_DET_PALM_MODEL_FILE}"
+        "$<TARGET_FILE_DIR:signlang_eyes_handpose_det>/${HANDPOSE_DET_INSTALL_MODEL_DIR}"
+        hand_detector.rknn)
+add_optional_post_build_asset_runtime(signlang_eyes_handpose_det
+        "${HANDPOSE_DET_LANDMARK_MODEL_FILE}"
+        "$<TARGET_FILE_DIR:signlang_eyes_handpose_det>/${HANDPOSE_DET_INSTALL_MODEL_DIR}"
+        hand_landmarks_detector.rknn)
+install_optional_files_runtime(${HANDPOSE_DET_INSTALL_MODEL_DIR}
+        "${HANDPOSE_DET_PALM_MODEL_FILE}"
+        "${HANDPOSE_DET_LANDMARK_MODEL_FILE}")

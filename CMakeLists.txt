@@ -39,6 +39,28 @@ set(SIGNLANG_BILSTM_MODEL_FILE ${SIGNLANG_MODEL_ROOT}/bilstm/biltsm.rknn CACHE F
 set(SIGNLANG_PROTOTYPES_FILE ${CMAKE_CURRENT_SOURCE_DIR}/conf/prototypes.sqlite CACHE FILEPATH
     "Shared sign language prototype SQLite database")
 
+function(add_optional_post_build_asset_runtime TARGET_NAME SOURCE_FILE DESTINATION_DIR DESTINATION_NAME)
+    if(EXISTS "${SOURCE_FILE}")
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${DESTINATION_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SOURCE_FILE}"
+            "${DESTINATION_DIR}/${DESTINATION_NAME}")
+    else()
+        message(WARNING "Optional runtime asset not found; skipping build copy: ${SOURCE_FILE}")
+    endif()
+endfunction()
+
+function(install_optional_files_runtime DESTINATION_DIR)
+    foreach(OPTIONAL_FILE ${ARGN})
+        if(EXISTS "${OPTIONAL_FILE}")
+            install(FILES "${OPTIONAL_FILE}" DESTINATION "${DESTINATION_DIR}")
+        else()
+            message(WARNING "Optional runtime asset not found; skipping install: ${OPTIONAL_FILE}")
+        endif()
+    endforeach()
+endfunction()
+
 # Add src directory to include path for cross-module headers
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
@@ -169,17 +191,13 @@ foreach(SIGNLANG_RUNTIME_PACKAGE
     signlang_install_conan_shared_libs("${SIGNLANG_RUNTIME_PACKAGE}_PACKAGE_FOLDER_${SIGNLANG_INSTALL_CONFIG}")
 endforeach()
 
-# Install default launcher configuration
-install(FILES
+install_optional_files_runtime(conf
     ${CMAKE_CURRENT_SOURCE_DIR}/conf/conf.toml
-    ${CMAKE_CURRENT_SOURCE_DIR}/conf/system_prompt.txt
-    DESTINATION conf)
+    ${CMAKE_CURRENT_SOURCE_DIR}/conf/system_prompt.txt)
 
 # Install shared sign language assets used by signlang_det and signlang_manager
-install(FILES
-    ${SIGNLANG_BILSTM_MODEL_FILE}
-    DESTINATION models/bilstm)
+install_optional_files_runtime(models/bilstm
+    ${SIGNLANG_BILSTM_MODEL_FILE})
 
-install(FILES
-    ${SIGNLANG_PROTOTYPES_FILE}
-    DESTINATION conf)
+install_optional_files_runtime(conf
+    ${SIGNLANG_PROTOTYPES_FILE})

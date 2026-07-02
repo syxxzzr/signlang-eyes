@@ -12,15 +12,6 @@ set(SPEECH_TTS_CONFIG_FILE
         CACHE FILEPATH "Piper voice JSON config")
 set(SPEECH_TTS_INSTALL_MODEL_DIR models/piper)
 
-foreach(REQUIRED_TTS_ASSET
-        ${SPEECH_TTS_ENCODER_MODEL_FILE}
-        ${SPEECH_TTS_DECODER_MODEL_FILE}
-        ${SPEECH_TTS_CONFIG_FILE})
-    if(NOT EXISTS ${REQUIRED_TTS_ASSET})
-        message(FATAL_ERROR "Missing required speech TTS asset: ${REQUIRED_TTS_ASSET}")
-    endif()
-endforeach()
-
 string(TOUPPER "${CMAKE_BUILD_TYPE}" _SPEECH_TTS_CMAKE_BUILD_TYPE)
 set(_SPEECH_TTS_CPP_PINYIN_PACKAGE_FOLDER_VAR "cpp-pinyin_PACKAGE_FOLDER_${_SPEECH_TTS_CMAKE_BUILD_TYPE}")
 if(DEFINED ${_SPEECH_TTS_CPP_PINYIN_PACKAGE_FOLDER_VAR})
@@ -86,23 +77,22 @@ target_link_libraries(signlang_eyes_speech_tts PRIVATE
         Threads::Threads
         m)
 
-add_custom_command(TARGET signlang_eyes_speech_tts POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory
+add_optional_post_build_asset_runtime(signlang_eyes_speech_tts
+        "${SPEECH_TTS_ENCODER_MODEL_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_INSTALL_MODEL_DIR}"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${SPEECH_TTS_ENCODER_MODEL_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_INSTALL_MODEL_DIR}/zh_CN-huayan-x_low.encoder.onnx"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${SPEECH_TTS_DECODER_MODEL_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_INSTALL_MODEL_DIR}/zh_CN-huayan-x_low.decoder.int8.rknn"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${SPEECH_TTS_CONFIG_FILE}
-        "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_INSTALL_MODEL_DIR}/zh_CN-huayan-x_low.json")
+        zh_CN-huayan-x_low.encoder.onnx)
+add_optional_post_build_asset_runtime(signlang_eyes_speech_tts
+        "${SPEECH_TTS_DECODER_MODEL_FILE}"
+        "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_INSTALL_MODEL_DIR}"
+        zh_CN-huayan-x_low.decoder.int8.rknn)
+add_optional_post_build_asset_runtime(signlang_eyes_speech_tts
+        "${SPEECH_TTS_CONFIG_FILE}"
+        "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_INSTALL_MODEL_DIR}"
+        zh_CN-huayan-x_low.json)
 
 install(TARGETS signlang_eyes_speech_tts DESTINATION bin)
-install(FILES
+install_optional_files_runtime(${SPEECH_TTS_INSTALL_MODEL_DIR}
         ${SPEECH_TTS_ENCODER_MODEL_FILE}
         ${SPEECH_TTS_DECODER_MODEL_FILE}
-        ${SPEECH_TTS_CONFIG_FILE}
-        DESTINATION ${SPEECH_TTS_INSTALL_MODEL_DIR})
+        ${SPEECH_TTS_CONFIG_FILE})
 install(DIRECTORY "${SPEECH_TTS_CPP_PINYIN_DICT_DIR}/" DESTINATION share/cpp-pinyin/dict)
