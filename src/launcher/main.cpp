@@ -52,6 +52,7 @@ namespace {
   constexpr auto kExeVideoFrontend = "bin/video_frontend";
   constexpr auto kExeSpeechAsr = "bin/speech_asr";
   constexpr auto kExeSpeechTts = "bin/speech_tts";
+  constexpr auto kExeDataflowDispatcher = "bin/dataflow_dispatcher";
   constexpr auto kExeEnvSoundDet = "bin/env_sound_det";
   constexpr auto kExeHandposeDet = "bin/handpose_det";
   constexpr auto kExeSignlangManager = "bin/signlang_manager";
@@ -83,8 +84,8 @@ namespace {
   void warn_ipc_keys_in_config(const toml::table& config) {
     constexpr std::array kSections = {
         "state_machine", "audio_frontend", "video_frontend",   "speech_asr",   "env_sound_det",
-        "handpose_det", "signlang_manager", "signlang_det", "speech_tts", "position_service", "llm_client",
-        "peripheral_service",
+        "handpose_det", "signlang_manager", "signlang_det", "speech_tts", "dataflow_dispatcher", "position_service",
+        "llm_client", "peripheral_service"
     };
 
     for (const auto* section_name : kSections) {
@@ -532,6 +533,21 @@ static auto build_speech_tts_args(const toml::table& cfg) -> std::vector<std::st
   return args;
 }
 
+static auto build_dataflow_dispatcher_args(const toml::table& cfg) -> std::vector<std::string> {
+  using namespace signlang::launcher::ipc;
+  std::vector<std::string> args = {
+      kExeDataflowDispatcher, "--state-event-service",    kStateEvent,      "--state-blackboard-service",
+      kStateBlackboard,      "--signlang-result-service", kSignlangOutput,  "--speech-tts-service",
+      kSpeechTts,
+  };
+
+  if (const auto* tbl = cfg["dataflow_dispatcher"].as_table()) {
+    add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
+  }
+
+  return args;
+}
+
 static auto build_handpose_det_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
   std::vector<std::string> args = {
@@ -702,7 +718,9 @@ static auto build_modules(const toml::table& config) -> std::vector<ModuleEntry>
   return {
       {"state_machine", build_state_machine_args(config)},       {"audio_frontend", build_audio_frontend_args(config)},
       {"video_frontend", build_video_frontend_args(config)},     {"speech_asr", build_speech_asr_args(config)},
-      {"speech_tts", build_speech_tts_args(config)},             {"env_sound_det", build_env_sound_det_args(config)},
+      {"speech_tts", build_speech_tts_args(config)},
+      {"dataflow_dispatcher", build_dataflow_dispatcher_args(config)},
+      {"env_sound_det", build_env_sound_det_args(config)},
       {"handpose_det", build_handpose_det_args(config)},
       {"signlang_manager", build_signlang_manager_args(config)}, {"signlang_det", build_signlang_det_args(config)},
       {"position_service", build_position_service_args(config)},

@@ -65,8 +65,13 @@ namespace signlang::signlang_manager {
   auto IpcSignlangResultSubscriber::create_subscriber(const iox2::Node<iox2::ServiceType::Ipc>& node,
                                                       const std::string& service_name, std::uint64_t buffer_size)
       -> iox2::Subscriber<iox2::ServiceType::Ipc, signlang_det::SignlangResult, void> {
+    constexpr auto kMaxSignlangResultSubscribers = std::uint64_t{4};
+
     auto service = node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
                        .publish_subscribe<signlang_det::SignlangResult>()
+                       .max_subscribers(kMaxSignlangResultSubscribers)
+                       .subscriber_max_buffer_size(buffer_size)
+                       .subscriber_max_borrowed_samples(buffer_size)
                        .open_or_create();
     if (!service.has_value()) {
       throw std::runtime_error("Failed to open signlang result service in signlang manager: " + service_name);
