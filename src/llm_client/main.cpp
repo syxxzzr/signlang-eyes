@@ -135,6 +135,7 @@ namespace signlang::llm_client {
 
     private:
       void run() {
+        spdlog::info("LLM worker {} started", worker_id_);
         while (!stop_requested_.load(std::memory_order_acquire) || !queue_.empty()) {
           auto work_item = queue_.pop();
           if (!work_item.has_value()) {
@@ -144,12 +145,18 @@ namespace signlang::llm_client {
 
           handle_work_item(std::move(work_item.value()));
         }
+        spdlog::info("LLM worker {} stopped", worker_id_);
       }
 
       void handle_work_item(LlmWorkItem work_item) {
         try {
+          spdlog::info("LLM worker {} processing request {} prompt_len={}", worker_id_,
+                       work_item.request.request_id, work_item.prompt.size());
           const auto completion = client_.complete(work_item.prompt);
           const auto response = response_from_completion(work_item.request, completion);
+          spdlog::info("LLM worker {} completed request {} status={} http_status={} text_len={}", worker_id_,
+                       work_item.request.request_id, static_cast<std::uint32_t>(response.status),
+                       response.http_status, signlang::common::fixed_string_to_string(response.text).size());
           if (!send_response(work_item.active_request, response)) {
             spdlog::warn("LLM worker {} failed to send response for request {}", worker_id_,
                          work_item.request.request_id);
@@ -230,6 +237,7 @@ auto main(int argc, char** argv) -> int {
       server.process_pending_requests([&](IpcLlmServer::ActiveLlmRequest active_request) {
         const auto request = active_request.payload();
         const auto prompt = signlang::common::fixed_string_to_string(request.prompt);
+        spdlog::info("Received LLM request {} prompt_len={}", request.request_id, prompt.size());
         if (prompt.empty()) {
           const auto response = signlang::llm_client::make_response(request, LlmResponseStatus::BadRequest, 0, {},
                                                                     "LLM prompt must not be empty");
@@ -241,6 +249,7 @@ auto main(int argc, char** argv) -> int {
 
         auto work_item = signlang::llm_client::LlmWorkItem{std::move(active_request), request, prompt};
         if (!worker_pool.submit(work_item)) {
+          spdlog::warn("LLM worker queue full for request {}", request.request_id);
           const auto response = signlang::llm_client::make_response(
               request, LlmResponseStatus::NetworkError, 0, {}, "LLM worker queue is full");
           if (!signlang::llm_client::send_response(work_item.active_request, response)) {
@@ -250,6 +259,7 @@ auto main(int argc, char** argv) -> int {
       });
     }
 
+    spdlog::info("LLM client stopped");
     return 0;
   });
 }

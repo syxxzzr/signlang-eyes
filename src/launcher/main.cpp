@@ -172,6 +172,7 @@ namespace {
       return -1;
     }
 
+    spdlog::debug("exec succeeded for {}", args[0]);
     return pid;
   }
 
@@ -340,6 +341,7 @@ namespace {
 
     const auto log_dir = fs::path{"log"};
     fs::create_directories(log_dir);
+    spdlog::info("scanning log directory '{}' with retain_files={}", log_dir.string(), retain_files);
 
     struct LogFile {
       fs::path path;
@@ -730,6 +732,7 @@ static auto build_modules(const toml::table& config) -> std::vector<ModuleEntry>
 
 static auto run_modules_once(const std::vector<ModuleEntry>& modules) -> bool {
   g_children.clear();
+  spdlog::info("launching {} modules", modules.size());
 
   for (const auto& mod : modules) {
     auto args_text = std::string{};
@@ -785,6 +788,7 @@ static auto run_modules_once(const std::vector<ModuleEntry>& modules) -> bool {
     }
 
     if (errno == ECHILD) {
+      spdlog::warn("launcher monitor found no remaining child processes");
       break;
     }
 
@@ -794,6 +798,7 @@ static auto run_modules_once(const std::vector<ModuleEntry>& modules) -> bool {
   }
 
   terminate_all_children();
+  spdlog::info("launcher module run stopped normally");
   return true;
 }
 
@@ -836,6 +841,7 @@ auto main(int argc, char** argv) -> int {
     cleanup_old_log_files(logging_config.retain_files);
 
     spdlog::info("loaded config: {}", config_path.string());
+    spdlog::info("launcher restart_attempts={}", launcher_config.restart_attempts);
 
     // Warn about any IPC service keys in the TOML
     warn_ipc_keys_in_config(config);
@@ -848,6 +854,7 @@ auto main(int argc, char** argv) -> int {
     for (auto& mod : modules) {
       append_logging_args(mod.args, start_timestamp, mod.name, logging_config.rotate_size);
     }
+    spdlog::info("prepared {} modules with log timestamp {}", modules.size(), start_timestamp);
 
     auto completed_restarts = std::int64_t{0};
     while (!signlang::runtime::shutdown_requested()) {

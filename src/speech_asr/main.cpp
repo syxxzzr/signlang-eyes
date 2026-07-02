@@ -94,6 +94,9 @@ auto main(int argc, char** argv) -> int {
 
         while (!should_stop.load()) {
           if (!downstream_active.load()) {
+            if (audio_subscriber.has_value()) {
+              spdlog::info("Speech ASR downstream inactive; detaching audio subscriber and clearing buffered audio");
+            }
             audio_subscriber.reset();
             audio_buffer.clear();
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -101,6 +104,7 @@ auto main(int argc, char** argv) -> int {
           }
 
           if (!audio_subscriber.has_value()) {
+            spdlog::info("Speech ASR attaching audio subscriber to {}", options.audio_service_name);
             audio_subscriber.emplace(options.audio_service_name, options.subscriber_buffer_size);
           }
 
@@ -122,15 +126,24 @@ auto main(int argc, char** argv) -> int {
         IpcResultPublisher result_publisher{options.result_service_name};
         std::optional<std::uint64_t> next_window_start_sample;
         std::uint64_t result_sequence_number = 0;
+        auto downstream_was_active = false;
 
         while (!should_stop.load()) {
           const auto has_downstream = result_publisher.has_subscribers();
           downstream_active.store(has_downstream);
           if (!has_downstream) {
+            if (downstream_was_active) {
+              spdlog::info("Speech ASR result subscriber disconnected; pausing inference");
+              downstream_was_active = false;
+            }
             audio_buffer.clear();
             next_window_start_sample = std::nullopt;
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             continue;
+          }
+          if (!downstream_was_active) {
+            spdlog::info("Speech ASR result subscriber connected; resuming inference");
+            downstream_was_active = true;
           }
 
           AudioWindow audio_window;
@@ -166,6 +179,8 @@ auto main(int argc, char** argv) -> int {
           copy_inference_result(inference_result, result);
 
           result_publisher.publish(result);
+          spdlog::info("Published ASR result seq={} transcript_len={} inference_ms={:.2f}", result.sequence_number,
+                       inference_result.transcript.size(), inference_result.inference_time_ms);
           next_window_start_sample = audio_window.start_sample_index + hop_sample_count;
         }
       } catch (...) {
@@ -187,6 +202,7 @@ auto main(int argc, char** argv) -> int {
       std::rethrow_exception(worker_error);
     }
 
+    spdlog::info("Speech ASR stopped");
     return 0;
   });
 }

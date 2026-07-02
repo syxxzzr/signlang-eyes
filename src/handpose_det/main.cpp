@@ -28,11 +28,20 @@ auto main(int argc, char** argv) -> int {
 
     std::uint64_t sequence_number = 0;
     std::array<HandPoseDetection, 2> detection_buffer{};
+    auto downstream_active = false;
     while (!signlang::runtime::shutdown_requested()) {
       if (!transport.has_subscribers()) {
+        if (downstream_active) {
+          spdlog::info("Hand pose downstream subscriber disconnected; detaching video upstream");
+          downstream_active = false;
+        }
         transport.detach_upstream();
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         continue;
+      }
+      if (!downstream_active) {
+        spdlog::info("Hand pose downstream subscriber connected; attaching video upstream");
+        downstream_active = true;
       }
 
       transport.ensure_upstream_attached();
@@ -43,14 +52,20 @@ auto main(int argc, char** argv) -> int {
       transport.receive_latest([&](const signlang::handpose_det::VideoSampleView& sample) {
         auto detections = iox2::bb::MutableSlice<HandPoseDetection>{detection_buffer.data(), hand_slots};
         const auto result = model.run(*sample.metadata, sample.payload, sample.payload_size, detections);
-        transport.publish(*sample.metadata, sequence_number++,
+        const auto current_sequence_number = sequence_number++;
+        transport.publish(*sample.metadata, current_sequence_number,
                           signlang::handpose_det::HandPosePublishInfo{
                               result.detection_count, result.image_width, result.image_height, result.model_width,
                               result.model_height},
                           detection_buffer.data());
+        if (result.detection_count > 0 || current_sequence_number % 300 == 0) {
+          spdlog::info("Published hand pose frame seq={} source_seq={} detections={}", current_sequence_number,
+                       sample.metadata->sequence_number, result.detection_count);
+        }
       });
     }
 
+    spdlog::info("Hand pose detector stopped after publishing {} frames", sequence_number);
     return 0;
   });
 }

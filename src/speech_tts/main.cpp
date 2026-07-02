@@ -32,8 +32,13 @@ namespace signlang::speech_tts {
           const auto should_cancel = [&] {
             return service.should_cancel(task->generation) || runtime::shutdown_requested();
           };
+          auto cancellation_logged = false;
           synthesizer.synthesize(task->text, should_cancel, [&](const PiperAudioChunkView& chunk) {
             if (should_cancel()) {
+              if (!cancellation_logged) {
+                spdlog::info("Speech TTS cancelling generation {}", task->generation);
+                cancellation_logged = true;
+              }
               if (playback) {
                 playback->cancel();
               }
@@ -46,16 +51,22 @@ namespace signlang::speech_tts {
 
             if (!playback || playback->sample_rate_hz() != chunk.sample_rate_hz ||
                 playback->device_name() != options.audio_device_name) {
+              spdlog::info("Opening ALSA playback device {} at {}Hz", options.audio_device_name,
+                           chunk.sample_rate_hz);
               playback = std::make_unique<AlsaPlaybackDevice>(options.audio_device_name, chunk.sample_rate_hz);
             }
 
+            spdlog::info("Playing speech TTS chunk generation={} samples={} sample_rate={}", task->generation,
+                         chunk.sample_count, chunk.sample_rate_hz);
             playback->play(chunk.samples, chunk.sample_count, should_cancel);
             return !should_cancel();
           });
+          spdlog::info("Finished speech TTS generation {}", task->generation);
         } catch (const std::exception& error) {
           spdlog::error("Speech TTS playback failed: {}", error.what());
         }
       }
+      spdlog::info("Speech TTS playback loop stopped");
     }
 
   } // namespace
@@ -86,6 +97,8 @@ auto main(int argc, char** argv) -> int {
 
       server.process_pending_requests([&](const signlang::speech_tts::SpeechTtsRequest& request) {
         const auto response = service.accept(request);
+        spdlog::info("Speech TTS request {} accepted status={} generation={}", request.request_id,
+                     static_cast<std::uint32_t>(response.status), response.generation);
         if (response.status != signlang::speech_tts::SpeechTtsStatus::Ok) {
           spdlog::warn("Rejected speech TTS request {}: {}", request.request_id, response.message.data());
         }
@@ -97,6 +110,7 @@ auto main(int argc, char** argv) -> int {
     if (worker.joinable()) {
       worker.join();
     }
+    spdlog::info("Speech TTS stopped");
     return 0;
   });
 }

@@ -65,10 +65,19 @@ auto main(int argc, char** argv) -> int {
     }
 
     std::uint64_t sequence_number = 0;
+    auto downstream_active = false;
     while (!signlang::runtime::shutdown_requested()) {
       if (!publisher.has_subscribers()) {
+        if (downstream_active) {
+          spdlog::info("Audio frontend downstream subscriber disconnected; pausing capture");
+          downstream_active = false;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         continue;
+      }
+      if (!downstream_active) {
+        spdlog::info("Audio frontend downstream subscriber connected; resuming capture");
+        downstream_active = true;
       }
 
       const auto& input_samples = capture_device.capture_samples();
@@ -79,8 +88,12 @@ auto main(int argc, char** argv) -> int {
         sound_source_blackboard->publish(localization);
       }
       publisher.publish(input_samples, audio_processor, current_sequence_number);
+      if (current_sequence_number % 500 == 0) {
+        spdlog::info("Published audio frame sequence {}", current_sequence_number);
+      }
     }
 
+    spdlog::info("Audio frontend stopped after publishing {} frames", sequence_number);
     return 0;
   });
 }

@@ -71,9 +71,14 @@ namespace {
 
     auto subscriber = std::optional<IpcHandposeSubscriber>{};
     auto extractor = FeatureExtractor{options.min_keypoint_confidence};
+    auto subscriber_was_attached = false;
 
     while (!should_stop) {
       if (!downstream_active.load()) {
+        if (subscriber.has_value()) {
+          spdlog::info("Sign language detector downstream inactive; detaching handpose subscriber");
+          subscriber_was_attached = false;
+        }
         subscriber.reset();
         ring_buffer.clear();
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -81,16 +86,26 @@ namespace {
       }
 
       if (!subscriber.has_value()) {
+        spdlog::info("Sign language detector attaching handpose subscriber to {}", options.input_service_name);
         subscriber.emplace(options.input_service_name, options.subscriber_buffer_size);
+        subscriber_was_attached = true;
       }
 
       if (subscriber->wait_for_work() && !should_stop && downstream_active.load()) {
+        auto extracted_count = std::uint32_t{0};
         subscriber->receive_latest([&](const auto& metadata, const auto* detections, auto count) {
           if (auto feature = extractor.extract(metadata, detections, count)) {
             ring_buffer.push(*feature);
+            ++extracted_count;
           }
         });
+        if (extracted_count > 0) {
+          spdlog::debug("Queued {} sign language feature vector(s) from handpose IPC", extracted_count);
+        }
       }
+    }
+    if (subscriber_was_attached) {
+      spdlog::info("Sign language detector handpose subscriber stopped");
     }
   }
 
@@ -109,11 +124,15 @@ namespace {
     auto prototype_control_server = std::optional<IpcPrototypeControlServer>{};
     if (options.prototype_control_service_name.has_value()) {
       prototype_control_server.emplace(options.prototype_control_service_name.value());
+      spdlog::info("Sign language prototype control server enabled: {}",
+                   options.prototype_control_service_name.value());
     }
     auto control_response = [&](const auto& request) {
       auto response = PrototypeControlResponse{};
       response.status = PrototypeControlStatus::Ok;
       response.request_id = request.request_id;
+      spdlog::info("Processing sign language prototype control request id={} command={}",
+                   request.request_id, static_cast<std::uint32_t>(request.command));
 
       try {
         const std::lock_guard lock{model_mutex};
@@ -135,6 +154,9 @@ namespace {
         signlang::common::copy_fixed_string(error.what(), response.message);
       }
 
+      spdlog::info("Sign language prototype control response id={} status={} gestures={} samples={}",
+                   response.request_id, static_cast<std::uint32_t>(response.status), response.loaded_gesture_count,
+                   response.loaded_sample_count);
       return response;
     };
     const auto hop_frames = std::max<std::uint32_t>(
@@ -144,6 +166,9 @@ namespace {
     auto last_published_gesture_time = std::chrono::steady_clock::time_point{};
     auto last_hit_gesture_id = std::optional<std::uint32_t>{};
     auto consecutive_hit_count = std::uint32_t{0};
+    auto downstream_was_active = false;
+    auto published_result_count = std::uint64_t{0};
+    auto processed_window_count = std::uint64_t{0};
     const auto duplicate_suppression_window = std::chrono::milliseconds{options.duplicate_suppression_ms};
 
     while (!should_stop) {
@@ -153,6 +178,10 @@ namespace {
 
       const auto has_downstream = publisher.has_subscribers();
       if (!has_downstream) {
+        if (downstream_was_active) {
+          spdlog::info("Sign language result subscriber disconnected; clearing feature buffer");
+          downstream_was_active = false;
+        }
         ring_buffer.clear();
         downstream_active.store(false);
         next_window_end_seq = hop_frames;
@@ -161,6 +190,10 @@ namespace {
         consecutive_hit_count = 0;
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         continue;
+      }
+      if (!downstream_was_active) {
+        spdlog::info("Sign language result subscriber connected; resuming inference");
+        downstream_was_active = true;
       }
       downstream_active.store(true);
 
@@ -226,8 +259,16 @@ namespace {
 
         if (should_publish) {
           publisher.publish(result);
+          ++published_result_count;
+          spdlog::info("Published sign language result count={} recognized={} gesture={} confidence={:.2f}",
+                       published_result_count, result.recognized, result.gesture_name.data(), result.confidence);
         }
 
+        ++processed_window_count;
+        if (processed_window_count % 200 == 0) {
+          spdlog::info("Processed sign language windows={} published_results={}", processed_window_count,
+                       published_result_count);
+        }
         next_window_end_seq = window_end_seq + hop_frames;
       } catch (const std::exception& e) {
         spdlog::error("Inference error: {}", e.what());
@@ -247,6 +288,8 @@ namespace {
 
     auto service = GestureManagementService{options, model, model_mutex};
     auto server = IpcGestureManagementServer{options.gesture_management_service_name.value()};
+    spdlog::info("Sign language gesture management server enabled: {}",
+                 options.gesture_management_service_name.value());
 
     while (!should_stop) {
       server.process_pending_requests([&](const auto& request) { return service.handle_request(request); });
@@ -334,6 +377,7 @@ auto main(int argc, char** argv) -> int {
       std::rethrow_exception(worker_error);
     }
 
+    spdlog::info("Sign language detector stopped");
     return 0;
   });
 }
