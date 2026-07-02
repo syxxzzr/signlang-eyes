@@ -4,14 +4,10 @@
 #include "peripheral_protocol.hpp"
 
 #include "iox2/iceoryx2.hpp"
-#include "state_machine/app_state.hpp"
 #include "state_machine/state_control.hpp"
 
-#include <atomic>
-#include <functional>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <utility>
 
 namespace signlang::peripheral_service {
@@ -43,32 +39,6 @@ namespace signlang::peripheral_service {
     iox2::Node<iox2::ServiceType::Ipc> node_;
     DisplayService service_;
     DisplayServer server_;
-  };
-
-  class IpcStateWatcher {
-  public:
-    using Callback = std::function<void(signlang::state_machine::AppState state)>;
-
-    IpcStateWatcher(std::string event_service_name, std::string blackboard_service_name, Callback callback);
-    ~IpcStateWatcher();
-
-    IpcStateWatcher(const IpcStateWatcher&) = delete;
-    auto operator=(const IpcStateWatcher&) -> IpcStateWatcher& = delete;
-    IpcStateWatcher(IpcStateWatcher&&) = delete;
-    auto operator=(IpcStateWatcher&&) -> IpcStateWatcher& = delete;
-
-    void start();
-    void stop();
-
-  private:
-    void run();
-
-    std::string event_service_name_;
-    std::string blackboard_service_name_;
-    Callback callback_;
-    std::atomic_bool running_{false};
-    std::atomic_bool stop_requested_{false};
-    std::thread thread_;
   };
 
   class IpcStateControlClient {

@@ -1,15 +1,9 @@
 #include "iceoryx_gateway.hpp"
 
 #include "common/ipc_utils.hpp"
-#include "iox2/bb/duration.hpp"
-#include "iox2/bb/static_function.hpp"
-#include "iox2/event_id.hpp"
 #include "spdlog/spdlog.h"
 
-#include <chrono>
-#include <exception>
 #include <stdexcept>
-#include <thread>
 #include <utility>
 
 namespace signlang::peripheral_service {
@@ -53,100 +47,6 @@ namespace signlang::peripheral_service {
       throw std::runtime_error("Failed to create peripheral display request-response server");
     }
     return std::move(server.value());
-  }
-
-  IpcStateWatcher::IpcStateWatcher(std::string event_service_name, std::string blackboard_service_name,
-                                   Callback callback) :
-      event_service_name_{std::move(event_service_name)},
-      blackboard_service_name_{std::move(blackboard_service_name)}, callback_{std::move(callback)} {}
-
-  IpcStateWatcher::~IpcStateWatcher() { stop(); }
-
-  void IpcStateWatcher::start() {
-    if (running_.exchange(true)) {
-      return;
-    }
-    stop_requested_.store(false, std::memory_order_release);
-    thread_ = std::thread{&IpcStateWatcher::run, this};
-  }
-
-  void IpcStateWatcher::stop() {
-    stop_requested_.store(true, std::memory_order_release);
-    if (thread_.joinable()) {
-      thread_.join();
-    }
-    running_.store(false, std::memory_order_release);
-  }
-
-  void IpcStateWatcher::run() {
-    try {
-      iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
-      auto node =
-          iox2::NodeBuilder().signal_handling_mode(iox2::SignalHandlingMode::Disabled).create<iox2::ServiceType::Ipc>();
-      if (!node.has_value()) {
-        throw std::runtime_error("Failed to create iceoryx2 node for peripheral state watcher");
-      }
-
-      auto blackboard = node.value()
-                            .service_builder(signlang::common::ipc::service_name_from_string(blackboard_service_name_))
-                            .blackboard_opener<signlang::state_machine::AppStateKey>()
-                            .open();
-      while (!blackboard.has_value() && !stop_requested_.load(std::memory_order_acquire)) {
-        spdlog::warn("app state blackboard service '{}' is not available; retrying", blackboard_service_name_);
-        std::this_thread::sleep_for(std::chrono::milliseconds{200});
-        blackboard = node.value()
-                         .service_builder(signlang::common::ipc::service_name_from_string(blackboard_service_name_))
-                         .blackboard_opener<signlang::state_machine::AppStateKey>()
-                         .open();
-      }
-      if (!blackboard.has_value()) {
-        running_.store(false, std::memory_order_release);
-        return;
-      }
-
-      auto reader = blackboard.value().reader_builder().create();
-      if (!reader.has_value()) {
-        throw std::runtime_error("Failed to create app state blackboard reader");
-      }
-
-      auto entry = reader.value().entry<signlang::state_machine::AppState>(signlang::state_machine::default_app_state_key());
-      if (!entry.has_value()) {
-        throw std::runtime_error("Failed to create app state blackboard entry reader");
-      }
-
-      auto event_service = node.value()
-                               .service_builder(signlang::common::ipc::service_name_from_string(event_service_name_))
-                               .event()
-                               .open_or_create();
-      if (!event_service.has_value()) {
-        throw std::runtime_error("Failed to open or create app state event service: " + event_service_name_);
-      }
-
-      auto listener = event_service.value().listener_builder().create();
-      if (!listener.has_value()) {
-        throw std::runtime_error("Failed to create app state event listener for peripheral service");
-      }
-
-      if (callback_) {
-        callback_(*entry.value().get());
-      }
-
-      spdlog::info("peripheral state watcher listening on '{}'", event_service_name_);
-      while (!stop_requested_.load(std::memory_order_acquire)) {
-        iox2::bb::StaticFunction<void(iox2::EventId)> callback{[&](iox2::EventId /* event_id */) {
-          if (callback_) {
-            callback_(*entry.value().get());
-          }
-        }};
-        const auto result = listener.value().timed_wait_all(callback, iox2::bb::Duration::from_millis(200));
-        if (!result.has_value()) {
-          spdlog::warn("peripheral state watcher wait failed");
-        }
-      }
-    } catch (const std::exception& error) {
-      spdlog::error("peripheral state watcher stopped: {}", error.what());
-    }
-    running_.store(false, std::memory_order_release);
   }
 
   IpcStateControlClient::IpcStateControlClient(const std::string& service_name) :

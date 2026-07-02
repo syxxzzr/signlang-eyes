@@ -146,7 +146,9 @@ namespace signlang::dataflow_dispatcher {
     IpcDisplayClient(IpcDisplayClient&&) = delete;
     auto operator=(IpcDisplayClient&&) -> IpcDisplayClient& = delete;
 
-    [[nodiscard]] auto set_second_line(const std::string& text) -> signlang::peripheral_service::DisplayResponse;
+    [[nodiscard]] auto set_title_line(const std::string& text) -> signlang::peripheral_service::DisplayResponse;
+    [[nodiscard]] auto set_content_line(const std::string& text) -> signlang::peripheral_service::DisplayResponse;
+    [[nodiscard]] auto clear_content_line() -> signlang::peripheral_service::DisplayResponse;
 
   private:
     using DisplayService =
@@ -161,6 +163,9 @@ namespace signlang::dataflow_dispatcher {
     static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
         -> DisplayService;
     static auto create_client(const DisplayService& service) -> DisplayClient;
+    [[nodiscard]] auto send_display_request(signlang::peripheral_service::DisplayCommand command,
+                                            const std::string& text)
+        -> signlang::peripheral_service::DisplayResponse;
 
     iox2::Node<iox2::ServiceType::Ipc> node_;
     DisplayService service_;

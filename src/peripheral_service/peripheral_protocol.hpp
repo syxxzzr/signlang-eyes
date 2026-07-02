@@ -11,8 +11,9 @@ namespace signlang::peripheral_service {
   constexpr auto kDisplayMessageLength = std::uint32_t{128};
 
   enum class DisplayCommand : std::uint32_t {
-    SetSecondLine = 0,
-    ClearSecondLine = 1,
+    SetTitleLine = 0,
+    SetContentLine = 1,
+    ClearContentLine = 2,
   };
 
   enum class DisplayStatus : std::uint32_t {

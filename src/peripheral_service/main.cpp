@@ -19,22 +19,6 @@
 namespace signlang::peripheral_service {
   namespace {
 
-    [[nodiscard]] auto state_chinese_name(signlang::state_machine::AppState state) -> const char* {
-      switch (state) {
-      case signlang::state_machine::AppState::Normal:
-        return "普通";
-      case signlang::state_machine::AppState::Asr:
-        return "语音识别";
-      case signlang::state_machine::AppState::SignLanguageChat:
-        return "手语聊天";
-      case signlang::state_machine::AppState::SignLanguageAi:
-        return "手语AI";
-      case signlang::state_machine::AppState::DangerousSound:
-        return "危险声音";
-      }
-      return "未知";
-    }
-
     [[nodiscard]] auto ok_response(std::uint32_t request_id, const std::string& message) -> DisplayResponse {
       auto response = DisplayResponse{request_id, DisplayStatus::Ok, {}};
       signlang::common::copy_fixed_string(message, response.message);
@@ -78,17 +62,17 @@ namespace signlang::peripheral_service {
         running_ = false;
       }
 
-      void set_first_line(std::string text) { push(Command{CommandType::SetFirstLine, std::move(text)}); }
+      void set_title_line(std::string text) { push(Command{CommandType::SetTitleLine, std::move(text)}); }
 
-      void set_second_line(std::string text) { push(Command{CommandType::SetSecondLine, std::move(text)}); }
+      void set_content_line(std::string text) { push(Command{CommandType::SetContentLine, std::move(text)}); }
 
-      void clear_second_line() { push(Command{CommandType::ClearSecondLine, {}}); }
+      void clear_content_line() { push(Command{CommandType::ClearContentLine, {}}); }
 
     private:
       enum class CommandType {
-        SetFirstLine,
-        SetSecondLine,
-        ClearSecondLine,
+        SetTitleLine,
+        SetContentLine,
+        ClearContentLine,
       };
 
       struct Command {
@@ -121,13 +105,13 @@ namespace signlang::peripheral_service {
 
           for (auto& command : commands) {
             switch (command.type) {
-            case CommandType::SetFirstLine:
+            case CommandType::SetTitleLine:
               display_.set_first_line(std::move(command.text));
               break;
-            case CommandType::SetSecondLine:
+            case CommandType::SetContentLine:
               display_.set_second_line(std::move(command.text));
               break;
-            case CommandType::ClearSecondLine:
+            case CommandType::ClearContentLine:
               display_.clear_second_line();
               break;
             }
@@ -167,16 +151,11 @@ namespace signlang::peripheral_service {
                   handle_button_event(event);
                 }},
         display_worker_{font_, options_.display, serial_},
-        display_server_{options_.display_service_name},
-        state_watcher_{options_.state_event_service_name, options_.state_blackboard_service_name,
-                       [this](signlang::state_machine::AppState state) {
-                         handle_state_change(state);
-                       }} {}
+        display_server_{options_.display_service_name} {}
 
     void run() {
       serial_.start();
       display_worker_.start();
-      state_watcher_.start();
       spdlog::info("peripheral serial device: {} @ {}", options_.serial.device, options_.serial.baud_rate);
       spdlog::info("peripheral display service: {}", options_.display_service_name);
 
@@ -187,7 +166,6 @@ namespace signlang::peripheral_service {
         });
       }
 
-      state_watcher_.stop();
       display_worker_.stop();
       serial_.async_send(make_motor_frame(false));
       serial_.stop();
@@ -196,11 +174,14 @@ namespace signlang::peripheral_service {
   private:
     auto handle_display_request(const DisplayRequest& request) -> DisplayResponse {
       switch (request.command) {
-      case DisplayCommand::SetSecondLine:
-        display_worker_.set_second_line(signlang::common::fixed_string_to_string(request.text));
+      case DisplayCommand::SetTitleLine:
+        display_worker_.set_title_line(signlang::common::fixed_string_to_string(request.text));
         return ok_response(request.request_id, "updated");
-      case DisplayCommand::ClearSecondLine:
-        display_worker_.clear_second_line();
+      case DisplayCommand::SetContentLine:
+        display_worker_.set_content_line(signlang::common::fixed_string_to_string(request.text));
+        return ok_response(request.request_id, "updated");
+      case DisplayCommand::ClearContentLine:
+        display_worker_.clear_content_line();
         return ok_response(request.request_id, "cleared");
       }
       return bad_request_response(request.request_id, "invalid display command");
@@ -221,13 +202,6 @@ namespace signlang::peripheral_service {
       }
     }
 
-    void handle_state_change(signlang::state_machine::AppState state) {
-      spdlog::info("peripheral observed state: {}", state_chinese_name(state));
-      display_worker_.set_first_line(state_chinese_name(state));
-      display_worker_.clear_second_line();
-      serial_.async_send(make_motor_frame(state == signlang::state_machine::AppState::DangerousSound));
-    }
-
     ProgramOptions options_;
     HexFont font_;
     IpcStateControlClient state_control_client_;
@@ -235,7 +209,6 @@ namespace signlang::peripheral_service {
     SerialTransport serial_;
     DisplayWorker display_worker_;
     IpcDisplayServer display_server_;
-    IpcStateWatcher state_watcher_;
   };
 
 } // namespace signlang::peripheral_service

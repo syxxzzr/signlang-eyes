@@ -297,10 +297,24 @@ namespace signlang::dataflow_dispatcher {
   IpcDisplayClient::IpcDisplayClient(const std::string& service_name) :
       node_{create_node()}, service_{create_service(node_, service_name)}, client_{create_client(service_)} {}
 
-  auto IpcDisplayClient::set_second_line(const std::string& text) -> signlang::peripheral_service::DisplayResponse {
+  auto IpcDisplayClient::set_title_line(const std::string& text) -> signlang::peripheral_service::DisplayResponse {
+    return send_display_request(signlang::peripheral_service::DisplayCommand::SetTitleLine, text);
+  }
+
+  auto IpcDisplayClient::set_content_line(const std::string& text) -> signlang::peripheral_service::DisplayResponse {
+    return send_display_request(signlang::peripheral_service::DisplayCommand::SetContentLine, text);
+  }
+
+  auto IpcDisplayClient::clear_content_line() -> signlang::peripheral_service::DisplayResponse {
+    return send_display_request(signlang::peripheral_service::DisplayCommand::ClearContentLine, {});
+  }
+
+  auto IpcDisplayClient::send_display_request(signlang::peripheral_service::DisplayCommand command,
+                                              const std::string& text)
+      -> signlang::peripheral_service::DisplayResponse {
     auto request = signlang::peripheral_service::DisplayRequest{};
     request.request_id = next_request_id_++;
-    request.command = signlang::peripheral_service::DisplayCommand::SetSecondLine;
+    request.command = command;
     signlang::common::copy_fixed_string(text, request.text);
 
     auto send_result = client_.send_copy(request);

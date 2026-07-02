@@ -15,8 +15,6 @@ namespace signlang::peripheral_service {
     constexpr std::uint32_t kDefaultBaudRate = 115200;
     constexpr auto kDefaultFontFile = "conf/unifont-17.0.05.hex";
     constexpr auto kDefaultDisplayService = "peripheral_display";
-    constexpr auto kDefaultStateEventService = "app_state_event";
-    constexpr auto kDefaultStateBlackboardService = "app_state_blackboard";
     constexpr auto kDefaultStateControlService = "app_state_control";
     constexpr auto kDefaultAlertEventService = "position_alert";
 
@@ -60,12 +58,8 @@ namespace signlang::peripheral_service {
         cxxopts::value<std::uint32_t>()->default_value("80"))(
         "refresh-interval-ms", "OLED refresh worker interval in milliseconds",
         cxxopts::value<std::uint32_t>()->default_value("50"))(
-        "display-service", "iceoryx2 request-response service for second-line display text",
+        "display-service", "iceoryx2 request-response service for display text",
         cxxopts::value<std::string>()->default_value(kDefaultDisplayService))(
-        "state-event-service", "iceoryx2 app state event service",
-        cxxopts::value<std::string>()->default_value(kDefaultStateEventService))(
-        "state-blackboard-service", "iceoryx2 app state blackboard service",
-        cxxopts::value<std::string>()->default_value(kDefaultStateBlackboardService))(
         "state-control-service", "iceoryx2 app state control request-response service",
         cxxopts::value<std::string>()->default_value(kDefaultStateControlService))(
         "alert-event-service", "iceoryx2 alert event service consumed by position_service",
@@ -120,8 +114,6 @@ namespace signlang::peripheral_service {
                                                     display,
                                                     std::move(font_file),
                                                     parsed_options["display-service"].as<std::string>(),
-                                                    parsed_options["state-event-service"].as<std::string>(),
-                                                    parsed_options["state-blackboard-service"].as<std::string>(),
                                                     parsed_options["state-control-service"].as<std::string>(),
                                                     parsed_options["alert-event-service"].as<std::string>(),
                                                     signlang::logging::parse_cli_options(parsed_options)}};

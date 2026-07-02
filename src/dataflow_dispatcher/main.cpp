@@ -16,6 +16,22 @@ namespace {
   constexpr std::uint64_t kActiveWaitMs = 5;
   constexpr std::uint64_t kIdleStateWaitMs = 50;
 
+  [[nodiscard]] auto state_chinese_title(signlang::state_machine::AppState state) -> const char* {
+    switch (state) {
+    case signlang::state_machine::AppState::Normal:
+      return "普通";
+    case signlang::state_machine::AppState::Asr:
+      return "语音识别";
+    case signlang::state_machine::AppState::SignLanguageChat:
+      return "手语聊天";
+    case signlang::state_machine::AppState::SignLanguageAi:
+      return "手语AI";
+    case signlang::state_machine::AppState::DangerousSound:
+      return "危险声音";
+    }
+    return "未知";
+  }
+
   class SignlangAiAccumulator {
   public:
     using Clock = std::chrono::steady_clock;
@@ -84,11 +100,28 @@ namespace {
                  signlang::state_machine::app_state_name(state));
   }
 
-  void display_llm_response(signlang::dataflow_dispatcher::IpcDisplayClient& display_client,
-                            const std::string& text) {
-    const auto response = display_client.set_second_line(text);
+  void set_display_title(signlang::dataflow_dispatcher::IpcDisplayClient& display_client,
+                         signlang::state_machine::AppState state) {
+    const auto response = display_client.set_title_line(state_chinese_title(state));
     if (response.status != signlang::peripheral_service::DisplayStatus::Ok) {
-      spdlog::warn("peripheral_service rejected LLM display text: {}", response.message.data());
+      spdlog::warn("peripheral_service rejected display title '{}': {}", state_chinese_title(state),
+                   response.message.data());
+    } else {
+      spdlog::info("Updated peripheral_service display title: {}", state_chinese_title(state));
+    }
+  }
+
+  void clear_display_content(signlang::dataflow_dispatcher::IpcDisplayClient& display_client) {
+    const auto response = display_client.clear_content_line();
+    if (response.status != signlang::peripheral_service::DisplayStatus::Ok) {
+      spdlog::warn("peripheral_service rejected display content clear: {}", response.message.data());
+    }
+  }
+
+  void display_llm_response(signlang::dataflow_dispatcher::IpcDisplayClient& display_client, const std::string& text) {
+    const auto response = display_client.set_content_line(text);
+    if (response.status != signlang::peripheral_service::DisplayStatus::Ok) {
+      spdlog::warn("peripheral_service rejected LLM display content: {}", response.message.data());
     } else {
       spdlog::info("Forwarded LLM response to peripheral_service display");
     }
@@ -148,12 +181,16 @@ auto main(int argc, char** argv) -> int {
     auto active_upstream = RequiredUpstream::None;
     auto current_state = state_subscriber.current_state();
 
+    set_display_title(display_client, current_state);
+    clear_display_content(display_client);
     apply_upstream_for_state(current_state, options, signlang_subscriber, active_upstream);
 
     while (!signlang::runtime::shutdown_requested()) {
       if (state_subscriber.poll_state_change()) {
         current_state = state_subscriber.current_state();
         signlang_ai_accumulator.clear();
+        set_display_title(display_client, current_state);
+        clear_display_content(display_client);
         apply_upstream_for_state(current_state, options, signlang_subscriber, active_upstream);
       }
 
@@ -161,6 +198,8 @@ auto main(int argc, char** argv) -> int {
         if (state_subscriber.wait_for_state_change(kIdleStateWaitMs)) {
           current_state = state_subscriber.current_state();
           signlang_ai_accumulator.clear();
+          set_display_title(display_client, current_state);
+          clear_display_content(display_client);
           apply_upstream_for_state(current_state, options, signlang_subscriber, active_upstream);
         }
         continue;
