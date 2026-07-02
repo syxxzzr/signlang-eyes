@@ -4,6 +4,7 @@
 #include "serial_protocol.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace signlang::peripheral_service {
@@ -26,6 +27,8 @@ namespace signlang::peripheral_service {
     void clear();
     void clear_rect(Rect rect);
     [[nodiscard]] auto to_block(Rect rect) const -> OledBlock;
+    [[nodiscard]] auto diff_rect(const OledFramebuffer& other) const -> std::optional<Rect>;
+    [[nodiscard]] auto page_aligned(Rect rect) const -> Rect;
 
   private:
     [[nodiscard]] auto index(std::uint8_t x, std::uint8_t y) const -> std::size_t;
