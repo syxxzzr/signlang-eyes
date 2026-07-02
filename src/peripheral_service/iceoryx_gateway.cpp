@@ -6,8 +6,10 @@
 #include "iox2/event_id.hpp"
 #include "spdlog/spdlog.h"
 
+#include <chrono>
 #include <exception>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 namespace signlang::peripheral_service {
@@ -89,8 +91,17 @@ namespace signlang::peripheral_service {
                             .service_builder(signlang::common::ipc::service_name_from_string(blackboard_service_name_))
                             .blackboard_opener<signlang::state_machine::AppStateKey>()
                             .open();
+      while (!blackboard.has_value() && !stop_requested_.load(std::memory_order_acquire)) {
+        spdlog::warn("app state blackboard service '{}' is not available; retrying", blackboard_service_name_);
+        std::this_thread::sleep_for(std::chrono::milliseconds{200});
+        blackboard = node.value()
+                         .service_builder(signlang::common::ipc::service_name_from_string(blackboard_service_name_))
+                         .blackboard_opener<signlang::state_machine::AppStateKey>()
+                         .open();
+      }
       if (!blackboard.has_value()) {
-        throw std::runtime_error("Failed to open app state blackboard service: " + blackboard_service_name_);
+        running_.store(false, std::memory_order_release);
+        return;
       }
 
       auto reader = blackboard.value().reader_builder().create();

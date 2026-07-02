@@ -127,13 +127,30 @@ baud_rate = 115200                 # GNSS serial baud rate
 # mqtt_port = 1883                 # MQTT broker TCP port
 # mqtt_client_id = "signlang_eyes_position_service"
 # mqtt_topic = "signlang/position" # MQTT topic for position JSON payloads
-# alert_event_service = "app_state_event"
+# alert_event_service = "position_alert"
 # alert_mqtt_topic = "signlang/alert"
 # mqtt_username = ""
 # mqtt_password = ""
 # mqtt_keep_alive = 30             # MQTT keep-alive in seconds
 # mqtt_qos = 0                     # MQTT publish QoS: 0, 1, 2
 # mqtt_retain = false              # Publish retained MQTT messages
+
+[peripheral_service]
+device = "/dev/ttyS3"              # Peripheral MCU serial device path
+baud_rate = 115200                 # Peripheral MCU serial baud rate
+# data_bits = 8                    # Serial data bits
+# stop_bits = 1                    # Serial stop bits: 1 or 2
+# parity = "none"                  # none, odd, even
+# flow_control = "none"            # none, software, hardware
+# font_file = "conf/unifont-17.0.05.hex"
+# display_width = 128              # OLED width in pixels
+# display_height = 32              # OLED height in pixels
+# font_size = 16                   # Rendered glyph height in pixels
+# char_spacing = 1                 # Pixel spacing between glyphs
+# line_gap = 0                     # Pixel gap between the two text lines
+# scroll_step_px = 1               # Horizontal scroll pixels per tick
+# scroll_interval_ms = 80          # Horizontal scroll tick interval
+# refresh_interval_ms = 50         # Display worker refresh interval
 
 [llm_client]
 # base_url = "https://api.openai.com/v1" # OpenAI-compatible API base URL

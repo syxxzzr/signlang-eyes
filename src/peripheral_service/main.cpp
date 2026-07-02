@@ -222,7 +222,7 @@ namespace signlang::peripheral_service {
     }
 
     void handle_state_change(signlang::state_machine::AppState state) {
-      spdlog::info("peripheral observed state: {}", signlang::state_machine::app_state_name(state));
+      spdlog::info("peripheral observed state: {}", state_chinese_name(state));
       display_worker_.set_first_line(state_chinese_name(state));
       display_worker_.clear_second_line();
       serial_.async_send(make_motor_frame(state == signlang::state_machine::AppState::DangerousSound));

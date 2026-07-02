@@ -23,7 +23,7 @@ namespace signlang::peripheral_service {
     std::string state_blackboard_service_name;
     std::string state_control_service_name;
     std::string alert_event_service_name;
-    signlang::logging::LoggingOptions logging;
+    signlang::logging::Options logging;
   };
 
   using ProgramOptionsParseResult = std::variant<ProgramOptions, ProgramUsage>;
