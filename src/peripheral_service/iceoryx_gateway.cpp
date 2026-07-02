@@ -52,6 +52,7 @@ namespace signlang::peripheral_service {
         signlang::state_machine::AppState::Normal,
         0};
     (void)client_.send_copy(request);
+    spdlog::info("sent peripheral state-control NextBase request");
   }
 
   auto IpcStateControlClient::has_server() const -> bool { return signlang::common::ipc::has_servers(service_); }
@@ -92,7 +93,9 @@ namespace signlang::peripheral_service {
     const auto result = notifier_.notify_with_custom_event_id(iox2::EventId{next_event_id_++});
     if (!result.has_value()) {
       spdlog::warn("failed to notify position alert event");
+      return;
     }
+    spdlog::info("notified position alert event");
   }
 
   auto IpcAlertNotifier::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {

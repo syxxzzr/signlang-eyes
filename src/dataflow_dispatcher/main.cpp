@@ -16,6 +16,18 @@ namespace {
   constexpr std::uint64_t kActiveWaitMs = 5;
   constexpr std::uint64_t kIdleStateWaitMs = 50;
 
+  [[nodiscard]] auto upstream_name(signlang::dataflow_dispatcher::RequiredUpstream upstream) -> const char* {
+    switch (upstream) {
+    case signlang::dataflow_dispatcher::RequiredUpstream::None:
+      return "none";
+    case signlang::dataflow_dispatcher::RequiredUpstream::SignlangResult:
+      return "signlang_result";
+    case signlang::dataflow_dispatcher::RequiredUpstream::SpeechAsrResult:
+      return "speech_asr_result";
+    }
+    return "unknown";
+  }
+
   [[nodiscard]] auto state_chinese_title(signlang::state_machine::AppState state) -> const char* {
     switch (state) {
     case signlang::state_machine::AppState::Normal:
@@ -87,6 +99,9 @@ namespace {
       return;
     }
 
+    spdlog::info("Dataflow upstream switch for state {}: {} -> {}",
+                 signlang::state_machine::app_state_name(state), upstream_name(active_upstream),
+                 upstream_name(required_upstream));
     signlang_subscriber.reset();
     asr_subscriber.reset();
     active_upstream = signlang::dataflow_dispatcher::RequiredUpstream::None;
@@ -212,6 +227,8 @@ auto main(int argc, char** argv) -> int {
     while (!signlang::runtime::shutdown_requested()) {
       if (state_subscriber.poll_state_change()) {
         current_state = state_subscriber.current_state();
+        spdlog::info("Dataflow dispatcher observed app state change: {}",
+                     signlang::state_machine::app_state_name(current_state));
         signlang_ai_accumulator.clear();
         set_display_title(display_client, current_state);
         clear_display_content(display_client);
@@ -221,6 +238,8 @@ auto main(int argc, char** argv) -> int {
       if (!signlang_subscriber.has_value() && !asr_subscriber.has_value()) {
         if (state_subscriber.wait_for_state_change(kIdleStateWaitMs)) {
           current_state = state_subscriber.current_state();
+          spdlog::info("Dataflow dispatcher woke on app state change: {}",
+                       signlang::state_machine::app_state_name(current_state));
           signlang_ai_accumulator.clear();
           set_display_title(display_client, current_state);
           clear_display_content(display_client);
@@ -237,9 +256,12 @@ auto main(int argc, char** argv) -> int {
         asr_subscriber->receive_latest([&](const auto& result) {
           const auto text = tts_text_from_speech_asr_result(result);
           if (!text.has_value()) {
+            spdlog::info("Received ASR result {} with empty transcript", result.sequence_number);
             return;
           }
 
+          spdlog::info("Received ASR result {} transcript ({} chars), forwarding to display only",
+                       result.sequence_number, text->size());
           display_asr_transcript(display_client, text.value());
         });
         continue;
@@ -258,9 +280,12 @@ auto main(int argc, char** argv) -> int {
       signlang_subscriber->receive_latest([&](const auto& result) {
         const auto text = tts_text_from_signlang_result(result);
         if (!text.has_value()) {
+          spdlog::info("Received signlang result {} without displayable text", result.sequence_number);
           return;
         }
 
+        spdlog::info("Received signlang result {} text '{}' while state is {}", result.sequence_number, text.value(),
+                     signlang::state_machine::app_state_name(current_state));
         switch (current_state) {
         case signlang::state_machine::AppState::SignLanguageChat: {
           const auto response = tts_client.send_text(text.value());

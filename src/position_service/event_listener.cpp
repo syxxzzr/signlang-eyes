@@ -70,7 +70,8 @@ namespace signlang::position_service {
       while (!stop_requested_.load(std::memory_order_acquire)) {
         iox2::bb::StaticFunction<void(iox2::EventId)> callback{[this](iox2::EventId event_id) {
           if (callback_) {
-              callback_(AlertEvent{static_cast<std::uint64_t>(event_id.as_value()), 1});
+            spdlog::info("Alert event listener received event id {}", event_id.as_value());
+            callback_(AlertEvent{static_cast<std::uint64_t>(event_id.as_value()), 1});
           }
         }};
 
@@ -79,6 +80,7 @@ namespace signlang::position_service {
           spdlog::warn("Alert event listener wait failed");
         }
       }
+      spdlog::info("Alert event listener stopped on service '{}'", service_name_);
     } catch (const std::exception& error) {
       spdlog::error("Alert event listener stopped: {}", error.what());
     }

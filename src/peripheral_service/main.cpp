@@ -48,6 +48,7 @@ namespace signlang::peripheral_service {
         stop_requested_ = false;
         running_ = true;
         thread_ = std::thread{&DisplayWorker::run, this};
+        spdlog::info("peripheral display worker started");
       }
 
       void stop() {
@@ -60,6 +61,7 @@ namespace signlang::peripheral_service {
           thread_.join();
         }
         running_ = false;
+        spdlog::info("peripheral display worker stopped");
       }
 
       void set_title_line(std::string text) { push(Command{CommandType::SetTitleLine, std::move(text)}); }
@@ -89,6 +91,7 @@ namespace signlang::peripheral_service {
       }
 
       void run() {
+        spdlog::info("peripheral display worker sending full refresh");
         serial_.async_send_many(display_.full_refresh());
 
         auto next_tick = ScrollingDisplay::Clock::now();
@@ -106,12 +109,15 @@ namespace signlang::peripheral_service {
           for (auto& command : commands) {
             switch (command.type) {
             case CommandType::SetTitleLine:
+              spdlog::info("peripheral display worker applying title line ({} chars)", command.text.size());
               display_.set_first_line(std::move(command.text));
               break;
             case CommandType::SetContentLine:
+              spdlog::info("peripheral display worker applying content line ({} chars)", command.text.size());
               display_.set_second_line(std::move(command.text));
               break;
             case CommandType::ClearContentLine:
+              spdlog::info("peripheral display worker clearing content line");
               display_.clear_second_line();
               break;
             }
@@ -154,10 +160,13 @@ namespace signlang::peripheral_service {
         display_server_{options_.display_service_name} {}
 
     void run() {
+      spdlog::info("Starting peripheral service");
       serial_.start();
       display_worker_.start();
       spdlog::info("peripheral serial device: {} @ {}", options_.serial.device, options_.serial.baud_rate);
       spdlog::info("peripheral display service: {}", options_.display_service_name);
+      spdlog::info("peripheral state control service: {}", options_.state_control_service_name);
+      spdlog::info("peripheral alert event service: {}", options_.alert_event_service_name);
 
       while (!signlang::runtime::shutdown_requested()) {
         (void)display_server_.wait_for_work(100);
@@ -169,10 +178,13 @@ namespace signlang::peripheral_service {
       display_worker_.stop();
       serial_.async_send(make_motor_frame(false));
       serial_.stop();
+      spdlog::info("Peripheral service stopped");
     }
 
   private:
     auto handle_display_request(const DisplayRequest& request) -> DisplayResponse {
+      spdlog::info("peripheral display IPC request {} command {}", request.request_id,
+                   static_cast<std::uint32_t>(request.command));
       switch (request.command) {
       case DisplayCommand::SetTitleLine:
         display_worker_.set_title_line(signlang::common::fixed_string_to_string(request.text));
@@ -190,13 +202,16 @@ namespace signlang::peripheral_service {
     void handle_button_event(ButtonEvent event) {
       switch (event) {
       case ButtonEvent::SingleClick:
+        spdlog::info("peripheral button single-click received");
         if (!state_control_client_.has_server()) {
           spdlog::warn("state control server is not available for button single-click");
           return;
         }
         state_control_client_.request_next_base_state();
+        spdlog::info("requested next base app state through IPC");
         break;
       case ButtonEvent::DoubleClick:
+        spdlog::info("peripheral button double-click received; notifying alert event");
         alert_notifier_.notify_alert();
         break;
       }

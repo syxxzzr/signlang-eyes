@@ -69,6 +69,7 @@ namespace signlang::position_service {
                           [this](const AlertEvent& event) { publish_alert(event); }} {}
 
     void start() {
+      spdlog::info("Starting position service");
       serial_.open(options_.serial_device);
       serial_.set_option(asio::serial_port_base::baud_rate{options_.baud_rate});
       serial_.set_option(asio::serial_port_base::character_size{8});
@@ -92,7 +93,10 @@ namespace signlang::position_service {
     }
 
     void stop() {
-      stop_requested_.store(true, std::memory_order_release);
+      if (stop_requested_.exchange(true, std::memory_order_acq_rel)) {
+        return;
+      }
+      spdlog::info("Stopping position service");
       boost::system::error_code ignored;
       serial_.cancel(ignored);
       serial_.close(ignored);
@@ -124,6 +128,7 @@ namespace signlang::position_service {
       std::getline(input_stream, line);
 
       if (auto fix = parser_.parse_line(line)) {
+        spdlog::info("parsed position fix lat={}, lon={}", fix->latitude_deg, fix->longitude_deg);
         publish(*fix);
       }
 
@@ -138,13 +143,17 @@ namespace signlang::position_service {
     void publish(const PositionFix& fix) {
       if (!payload_queue_.push(MqttPayload{options_.mqtt_topic, payload_from_fix(fix)})) {
         spdlog::warn("position payload queue is full; dropping newest fix");
+        return;
       }
+      spdlog::info("queued position MQTT payload for topic {}", options_.mqtt_topic);
     }
 
     void publish_alert(const AlertEvent& event) {
       if (!payload_queue_.push(MqttPayload{options_.alert_mqtt_topic, payload_from_alert_event(event)})) {
         spdlog::warn("position payload queue is full; dropping alert event");
+        return;
       }
+      spdlog::info("queued alert MQTT payload from event {} for topic {}", event.id, options_.alert_mqtt_topic);
     }
 
     void schedule_mqtt_drain() {
@@ -159,11 +168,13 @@ namespace signlang::position_service {
 
     void drain_mqtt_queue() {
       if (stop_requested_.load(std::memory_order_acquire)) {
+        spdlog::info("draining remaining MQTT payloads before shutdown");
         while (auto payload = payload_queue_.pop()) {
           publish_payload(std::make_shared<MqttPayload>(std::move(*payload)));
         }
         mqtt_client_.cancel();
         mqtt_done_.store(true, std::memory_order_release);
+        spdlog::info("position service MQTT client cancelled after drain");
         return;
       }
 
