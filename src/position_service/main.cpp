@@ -45,21 +45,12 @@ namespace signlang::position_service {
       if (fix.track_deg.has_value()) {
         payload["track_deg"] = *fix.track_deg;
       }
-      if (fix.satellites.has_value()) {
-        payload["satellites"] = *fix.satellites;
-      }
-      if (fix.hdop.has_value()) {
-        payload["hdop"] = *fix.hdop;
-      }
-      payload["source"] = fix.source_sentence;
       return json::serialize(payload);
     }
 
-    auto payload_from_alert_event(const AlertEvent& event) -> std::string {
+    auto payload_from_alert_event(const AlertEvent& /* event */) -> std::string {
       json::object payload;
       payload["type"] = "alert";
-      payload["event_id"] = event.id;
-      payload["count"] = event.count;
       return json::serialize(payload);
     }
 
