@@ -10,7 +10,7 @@ namespace signlang::speech_tts {
   namespace {
 
     constexpr auto kDefaultEncoderModelPath = "models/piper/zh_CN-huayan-x_low.encoder.onnx";
-    constexpr auto kDefaultDecoderModelPath = "models/piper/zh_CN-huayan-x_low.decoder.int8.rknn";
+    constexpr auto kDefaultDecoderModelPath = "models/piper/zh_CN-huayan-x_low.decoder.rknn";
     constexpr auto kDefaultConfigPath = "models/piper/zh_CN-huayan-x_low.json";
     constexpr auto kDefaultPinyinDictionaryPath = SIGNLANG_CPP_PINYIN_DICT_DIR;
 
