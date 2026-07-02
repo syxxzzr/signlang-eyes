@@ -78,11 +78,26 @@ namespace signlang::speech_tts {
     }
   }
 
-  void PiperSynthesizer::synthesize(const std::string& text,
+  void PiperSynthesizer::synthesize(const std::string& text, const std::function<bool()>& should_cancel,
                                     const std::function<bool(const PiperAudioChunkView&)>& on_chunk) {
+    if (should_cancel()) {
+      return;
+    }
+
     const auto phoneme_ids = phonemizer_.phonemize_to_ids(text);
+    if (should_cancel()) {
+      return;
+    }
+
     auto [z, y_mask] = run_encoder(phoneme_ids);
+    if (should_cancel()) {
+      return;
+    }
+
     auto audio = run_decoder(z, y_mask);
+    if (should_cancel()) {
+      return;
+    }
 
     const auto chunk = PiperAudioChunkView{audio.data(), audio.size(), phonemizer_.config().sample_rate_hz, true};
     (void)on_chunk(chunk);

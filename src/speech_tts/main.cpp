@@ -29,8 +29,11 @@ namespace signlang::speech_tts {
 
         spdlog::info("Speaking request generation {}: {}", task->generation, task->text);
         try {
-          synthesizer.synthesize(task->text, [&](const PiperAudioChunkView& chunk) {
-            if (service.should_cancel(task->generation) || runtime::shutdown_requested()) {
+          const auto should_cancel = [&] {
+            return service.should_cancel(task->generation) || runtime::shutdown_requested();
+          };
+          synthesizer.synthesize(task->text, should_cancel, [&](const PiperAudioChunkView& chunk) {
+            if (should_cancel()) {
               if (playback) {
                 playback->cancel();
               }
@@ -46,9 +49,8 @@ namespace signlang::speech_tts {
               playback = std::make_unique<AlsaPlaybackDevice>(options.audio_device_name, chunk.sample_rate_hz);
             }
 
-            playback->play(chunk.samples, chunk.sample_count,
-                           [&] { return service.should_cancel(task->generation) || runtime::shutdown_requested(); });
-            return !service.should_cancel(task->generation) && !runtime::shutdown_requested();
+            playback->play(chunk.samples, chunk.sample_count, should_cancel);
+            return !should_cancel();
           });
         } catch (const std::exception& error) {
           spdlog::error("Speech TTS playback failed: {}", error.what());

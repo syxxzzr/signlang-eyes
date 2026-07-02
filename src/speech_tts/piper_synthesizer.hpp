@@ -33,7 +33,8 @@ namespace signlang::speech_tts {
     PiperSynthesizer(PiperSynthesizer&&) = delete;
     auto operator=(PiperSynthesizer&&) -> PiperSynthesizer& = delete;
 
-    void synthesize(const std::string& text, const std::function<bool(const PiperAudioChunkView&)>& on_chunk);
+    void synthesize(const std::string& text, const std::function<bool()>& should_cancel,
+                    const std::function<bool(const PiperAudioChunkView&)>& on_chunk);
 
   private:
     void initialize_decoder(const ProgramOptions& options);
