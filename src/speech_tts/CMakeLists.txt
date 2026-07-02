@@ -5,7 +5,7 @@ set(SPEECH_TTS_ENCODER_MODEL_FILE
         ${SPEECH_TTS_MODEL_DIR}/zh_CN-huayan-x_low.encoder.onnx
         CACHE FILEPATH "Piper encoder ONNX model")
 set(SPEECH_TTS_DECODER_MODEL_FILE
-        ${SPEECH_TTS_MODEL_DIR}/zh_CN-huayan-x_low.decoder.int8.rknn
+        ${SPEECH_TTS_MODEL_DIR}/zh_CN-huayan-x_low.decoder.rknn
         CACHE FILEPATH "Piper decoder RKNN model")
 set(SPEECH_TTS_CONFIG_FILE
         ${SPEECH_TTS_MODEL_DIR}/zh_CN-huayan-x_low.json
