@@ -12,6 +12,9 @@ namespace signlang::dataflow_dispatcher {
     constexpr std::uint64_t kMaxStateEventListeners = 8;
     constexpr std::uint64_t kMaxStateEventNotifiers = 4;
     constexpr std::uint64_t kMaxStateEventNodes = 16;
+    constexpr auto kMaxWaitAttempts = 100;
+    constexpr auto kLlmMaxWaitAttempts = 7000;
+    constexpr auto kResponseWaitMs = 10;
   }
 
   IpcStateSubscriber::IpcStateSubscriber(const std::string& event_service_name,
@@ -164,7 +167,6 @@ namespace signlang::dataflow_dispatcher {
       throw std::runtime_error("No speech TTS server received dataflow dispatcher request");
     }
 
-    constexpr auto kMaxWaitAttempts = 100;
     for (auto attempt = 0; attempt < kMaxWaitAttempts; ++attempt) {
       auto receive_result = pending_response.receive();
       if (!receive_result.has_value()) {
@@ -179,7 +181,7 @@ namespace signlang::dataflow_dispatcher {
         return response;
       }
 
-      (void)node_.wait(iox2::bb::Duration::from_millis(10));
+      (void)node_.wait(iox2::bb::Duration::from_millis(kResponseWaitMs));
     }
 
     throw std::runtime_error("Timed out waiting for speech TTS response in dataflow dispatcher");
@@ -216,6 +218,152 @@ namespace signlang::dataflow_dispatcher {
     auto client = service.client_builder().create();
     if (!client.has_value()) {
       throw std::runtime_error("Failed to create speech TTS client in dataflow dispatcher");
+    }
+    return std::move(client.value());
+  }
+
+  IpcLlmClient::IpcLlmClient(const std::string& service_name) :
+      node_{create_node()}, service_{create_service(node_, service_name)}, client_{create_client(service_)} {}
+
+  auto IpcLlmClient::send_prompt(const std::string& prompt) -> signlang::llm_client::LlmResponse {
+    auto request = signlang::llm_client::LlmRequest{};
+    request.request_id = next_request_id_++;
+    signlang::common::copy_fixed_string(prompt, request.prompt);
+
+    auto send_result = client_.send_copy(request);
+    if (!send_result.has_value()) {
+      throw std::runtime_error("Failed to send LLM request from dataflow dispatcher");
+    }
+
+    auto pending_response = std::move(send_result.value());
+    if (pending_response.number_of_server_connections() == 0) {
+      throw std::runtime_error("No LLM server received dataflow dispatcher request");
+    }
+
+    for (auto attempt = 0; attempt < kLlmMaxWaitAttempts; ++attempt) {
+      auto receive_result = pending_response.receive();
+      if (!receive_result.has_value()) {
+        throw std::runtime_error("Failed to receive LLM response in dataflow dispatcher");
+      }
+
+      if (receive_result.value().has_value()) {
+        const auto& response = receive_result.value().value().payload();
+        if (response.request_id != request.request_id) {
+          throw std::runtime_error("Received mismatched LLM response in dataflow dispatcher");
+        }
+        return response;
+      }
+
+      (void)node_.wait(iox2::bb::Duration::from_millis(kResponseWaitMs));
+    }
+
+    throw std::runtime_error("Timed out waiting for LLM response in dataflow dispatcher");
+  }
+
+  auto IpcLlmClient::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
+    iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
+
+    auto node =
+        iox2::NodeBuilder().signal_handling_mode(iox2::SignalHandlingMode::Disabled).create<iox2::ServiceType::Ipc>();
+    if (!node.has_value()) {
+      throw std::runtime_error("Failed to create iceoryx2 node for dataflow dispatcher LLM client");
+    }
+    return std::move(node.value());
+  }
+
+  auto IpcLlmClient::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                    const std::string& service_name) -> LlmService {
+    auto service = node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
+                       .request_response<signlang::llm_client::LlmRequest, signlang::llm_client::LlmResponse>()
+                       .max_servers(1)
+                       .max_clients(8)
+                       .max_active_requests_per_client(1)
+                       .max_response_buffer_size(1)
+                       .open_or_create();
+    if (!service.has_value()) {
+      throw std::runtime_error("Failed to open LLM service in dataflow dispatcher: " + service_name);
+    }
+    return std::move(service.value());
+  }
+
+  auto IpcLlmClient::create_client(const LlmService& service) -> LlmClient {
+    auto client = service.client_builder().create();
+    if (!client.has_value()) {
+      throw std::runtime_error("Failed to create LLM client in dataflow dispatcher");
+    }
+    return std::move(client.value());
+  }
+
+  IpcDisplayClient::IpcDisplayClient(const std::string& service_name) :
+      node_{create_node()}, service_{create_service(node_, service_name)}, client_{create_client(service_)} {}
+
+  auto IpcDisplayClient::set_second_line(const std::string& text) -> signlang::peripheral_service::DisplayResponse {
+    auto request = signlang::peripheral_service::DisplayRequest{};
+    request.request_id = next_request_id_++;
+    request.command = signlang::peripheral_service::DisplayCommand::SetSecondLine;
+    signlang::common::copy_fixed_string(text, request.text);
+
+    auto send_result = client_.send_copy(request);
+    if (!send_result.has_value()) {
+      throw std::runtime_error("Failed to send peripheral display request from dataflow dispatcher");
+    }
+
+    auto pending_response = std::move(send_result.value());
+    if (pending_response.number_of_server_connections() == 0) {
+      throw std::runtime_error("No peripheral display server received dataflow dispatcher request");
+    }
+
+    for (auto attempt = 0; attempt < kMaxWaitAttempts; ++attempt) {
+      auto receive_result = pending_response.receive();
+      if (!receive_result.has_value()) {
+        throw std::runtime_error("Failed to receive peripheral display response in dataflow dispatcher");
+      }
+
+      if (receive_result.value().has_value()) {
+        const auto& response = receive_result.value().value().payload();
+        if (response.request_id != request.request_id) {
+          throw std::runtime_error("Received mismatched peripheral display response in dataflow dispatcher");
+        }
+        return response;
+      }
+
+      (void)node_.wait(iox2::bb::Duration::from_millis(kResponseWaitMs));
+    }
+
+    throw std::runtime_error("Timed out waiting for peripheral display response in dataflow dispatcher");
+  }
+
+  auto IpcDisplayClient::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
+    iox2::set_log_level_from_env_or(iox2::LogLevel::Warn);
+
+    auto node =
+        iox2::NodeBuilder().signal_handling_mode(iox2::SignalHandlingMode::Disabled).create<iox2::ServiceType::Ipc>();
+    if (!node.has_value()) {
+      throw std::runtime_error("Failed to create iceoryx2 node for dataflow dispatcher peripheral display client");
+    }
+    return std::move(node.value());
+  }
+
+  auto IpcDisplayClient::create_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                        const std::string& service_name) -> DisplayService {
+    auto service = node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
+                       .request_response<signlang::peripheral_service::DisplayRequest,
+                                         signlang::peripheral_service::DisplayResponse>()
+                       .max_servers(1)
+                       .max_clients(8)
+                       .max_active_requests_per_client(1)
+                       .max_response_buffer_size(1)
+                       .open_or_create();
+    if (!service.has_value()) {
+      throw std::runtime_error("Failed to open peripheral display service in dataflow dispatcher: " + service_name);
+    }
+    return std::move(service.value());
+  }
+
+  auto IpcDisplayClient::create_client(const DisplayService& service) -> DisplayClient {
+    auto client = service.client_builder().create();
+    if (!client.has_value()) {
+      throw std::runtime_error("Failed to create peripheral display client in dataflow dispatcher");
     }
     return std::move(client.value());
   }

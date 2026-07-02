@@ -9,6 +9,7 @@
 namespace signlang::dataflow_dispatcher {
   namespace {
     constexpr std::uint64_t kDefaultSubscriberBufferSize = 2;
+    constexpr std::uint64_t kDefaultSignlangAiWindowMs = 5000;
   }
 
   auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult {
@@ -21,8 +22,13 @@ namespace signlang::dataflow_dispatcher {
         "signlang-result-service", "signlang_det result publish-subscribe service name",
         cxxopts::value<std::string>())("speech-tts-service", "speech_tts request-response service name",
                                        cxxopts::value<std::string>())(
+        "llm-client-service", "llm_client request-response service name", cxxopts::value<std::string>())(
+        "peripheral-display-service", "peripheral_service display request-response service name",
+        cxxopts::value<std::string>())(
         "subscriber-buffer", "iceoryx2 subscriber queue size",
         cxxopts::value<std::uint64_t>()->default_value(std::to_string(kDefaultSubscriberBufferSize)))(
+        "signlang-ai-window-ms", "SignLanguageAi idle timeout after the latest signlang_det result in milliseconds",
+        cxxopts::value<std::uint64_t>()->default_value(std::to_string(kDefaultSignlangAiWindowMs)))(
         "h,help", "Print usage");
     signlang::logging::add_cli_options(options);
 
@@ -33,9 +39,12 @@ namespace signlang::dataflow_dispatcher {
 
     if (parsed_options.count("state-event-service") == 0 ||
         parsed_options.count("state-blackboard-service") == 0 ||
-        parsed_options.count("signlang-result-service") == 0 || parsed_options.count("speech-tts-service") == 0) {
+        parsed_options.count("signlang-result-service") == 0 || parsed_options.count("speech-tts-service") == 0 ||
+        parsed_options.count("llm-client-service") == 0 ||
+        parsed_options.count("peripheral-display-service") == 0) {
       throw std::runtime_error("--state-event-service, --state-blackboard-service, --signlang-result-service, "
-                               "and --speech-tts-service are required.\n\n" +
+                               "--speech-tts-service, --llm-client-service, and --peripheral-display-service are "
+                               "required.\n\n" +
                                options.help());
     }
 
@@ -43,13 +52,20 @@ namespace signlang::dataflow_dispatcher {
     if (subscriber_buffer_size == 0) {
       throw std::runtime_error("--subscriber-buffer must be greater than 0");
     }
+    const auto signlang_ai_window_ms = parsed_options["signlang-ai-window-ms"].as<std::uint64_t>();
+    if (signlang_ai_window_ms == 0) {
+      throw std::runtime_error("--signlang-ai-window-ms must be greater than 0");
+    }
 
     return ProgramOptionsParseResult{ProgramOptions{
         parsed_options["state-event-service"].as<std::string>(),
         parsed_options["state-blackboard-service"].as<std::string>(),
         parsed_options["signlang-result-service"].as<std::string>(),
         parsed_options["speech-tts-service"].as<std::string>(),
+        parsed_options["llm-client-service"].as<std::string>(),
+        parsed_options["peripheral-display-service"].as<std::string>(),
         subscriber_buffer_size,
+        signlang_ai_window_ms,
         signlang::logging::parse_cli_options(parsed_options),
     }};
   }

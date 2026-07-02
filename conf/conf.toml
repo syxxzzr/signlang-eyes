@@ -56,6 +56,7 @@ npu_core = "auto"                  # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 
 [dataflow_dispatcher]
 # subscriber_buffer = 2            # signlang_det result subscriber queue size
+# signlang_ai_window_ms = 5000     # Send SignLanguageAi prompt after no new signlang_det result for this long
 
 [env_sound_det]
 npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto

@@ -538,11 +538,13 @@ static auto build_dataflow_dispatcher_args(const toml::table& cfg) -> std::vecto
   std::vector<std::string> args = {
       kExeDataflowDispatcher, "--state-event-service",    kStateEvent,      "--state-blackboard-service",
       kStateBlackboard,      "--signlang-result-service", kSignlangOutput,  "--speech-tts-service",
-      kSpeechTts,
+      kSpeechTts,            "--llm-client-service",      kLlmClient,       "--peripheral-display-service",
+      kPeripheralDisplay,
   };
 
   if (const auto* tbl = cfg["dataflow_dispatcher"].as_table()) {
     add_opt_int(args, "--subscriber-buffer", opt_int(*tbl, "subscriber_buffer"));
+    add_opt_int(args, "--signlang-ai-window-ms", opt_int(*tbl, "signlang_ai_window_ms"));
   }
 
   return args;

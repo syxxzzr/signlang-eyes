@@ -1,6 +1,8 @@
 #ifndef SIGNLANG_EYES_DATAFLOW_DISPATCHER_ICEORYX_GATEWAY_HPP
 #define SIGNLANG_EYES_DATAFLOW_DISPATCHER_ICEORYX_GATEWAY_HPP
 
+#include "llm_client/llm_protocol.hpp"
+#include "peripheral_service/peripheral_protocol.hpp"
 #include "signlang_det/signlang_result.hpp"
 #include "speech_tts/speech_tts_protocol.hpp"
 #include "state_machine/app_state.hpp"
@@ -103,6 +105,66 @@ namespace signlang::dataflow_dispatcher {
     iox2::Node<iox2::ServiceType::Ipc> node_;
     TtsService service_;
     TtsClient client_;
+    std::uint32_t next_request_id_{0};
+  };
+
+  class IpcLlmClient {
+  public:
+    explicit IpcLlmClient(const std::string& service_name);
+
+    IpcLlmClient(const IpcLlmClient&) = delete;
+    auto operator=(const IpcLlmClient&) -> IpcLlmClient& = delete;
+    IpcLlmClient(IpcLlmClient&&) = delete;
+    auto operator=(IpcLlmClient&&) -> IpcLlmClient& = delete;
+
+    [[nodiscard]] auto send_prompt(const std::string& prompt) -> signlang::llm_client::LlmResponse;
+
+  private:
+    using LlmService = iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc,
+                                                        signlang::llm_client::LlmRequest, void,
+                                                        signlang::llm_client::LlmResponse, void>;
+    using LlmClient = iox2::Client<iox2::ServiceType::Ipc, signlang::llm_client::LlmRequest, void,
+                                  signlang::llm_client::LlmResponse, void>;
+
+    static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
+    static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+        -> LlmService;
+    static auto create_client(const LlmService& service) -> LlmClient;
+
+    iox2::Node<iox2::ServiceType::Ipc> node_;
+    LlmService service_;
+    LlmClient client_;
+    std::uint32_t next_request_id_{0};
+  };
+
+  class IpcDisplayClient {
+  public:
+    explicit IpcDisplayClient(const std::string& service_name);
+
+    IpcDisplayClient(const IpcDisplayClient&) = delete;
+    auto operator=(const IpcDisplayClient&) -> IpcDisplayClient& = delete;
+    IpcDisplayClient(IpcDisplayClient&&) = delete;
+    auto operator=(IpcDisplayClient&&) -> IpcDisplayClient& = delete;
+
+    [[nodiscard]] auto set_second_line(const std::string& text) -> signlang::peripheral_service::DisplayResponse;
+
+  private:
+    using DisplayService =
+        iox2::PortFactoryRequestResponse<iox2::ServiceType::Ipc,
+                                         signlang::peripheral_service::DisplayRequest, void,
+                                         signlang::peripheral_service::DisplayResponse, void>;
+    using DisplayClient =
+        iox2::Client<iox2::ServiceType::Ipc, signlang::peripheral_service::DisplayRequest, void,
+                     signlang::peripheral_service::DisplayResponse, void>;
+
+    static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
+    static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+        -> DisplayService;
+    static auto create_client(const DisplayService& service) -> DisplayClient;
+
+    iox2::Node<iox2::ServiceType::Ipc> node_;
+    DisplayService service_;
+    DisplayClient client_;
     std::uint32_t next_request_id_{0};
   };
 

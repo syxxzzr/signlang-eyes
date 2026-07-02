@@ -6,11 +6,11 @@ namespace signlang::dataflow_dispatcher {
 
   auto required_upstream_for_state(signlang::state_machine::AppState state) -> RequiredUpstream {
     switch (state) {
-    case signlang::state_machine::AppState::Asr:
-      return RequiredUpstream::SignlangResult;
-    case signlang::state_machine::AppState::Normal:
     case signlang::state_machine::AppState::SignLanguageChat:
     case signlang::state_machine::AppState::SignLanguageAi:
+      return RequiredUpstream::SignlangResult;
+    case signlang::state_machine::AppState::Normal:
+    case signlang::state_machine::AppState::Asr:
     case signlang::state_machine::AppState::DangerousSound:
       return RequiredUpstream::None;
     }
