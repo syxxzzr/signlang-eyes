@@ -116,6 +116,29 @@ namespace {
 
   std::vector<ChildInfo> g_children;
 
+  auto write_all(int fd, const void* data, std::size_t size) -> bool {
+    const auto* next = static_cast<const std::uint8_t*>(data);
+    auto remaining = size;
+
+    while (remaining > 0) {
+      const auto written = write(fd, next, remaining);
+      if (written < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        return false;
+      }
+      if (written == 0) {
+        return false;
+      }
+
+      next += written;
+      remaining -= static_cast<std::size_t>(written);
+    }
+
+    return true;
+  }
+
   void terminate_all_children() {
     for (const auto& child : g_children) {
       spdlog::info("terminating {} (pid {})", child.name, child.pid);
@@ -156,7 +179,9 @@ namespace {
       execvp(argv[0], argv.data());
 
       auto exec_err = errno;
-      static_cast<void>(write(pipefd[1], &exec_err, sizeof(exec_err)));
+      if (!write_all(pipefd[1], &exec_err, sizeof(exec_err))) {
+        _exit(EXIT_FAILURE);
+      }
       _exit(EXIT_FAILURE);
     }
 

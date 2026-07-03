@@ -76,7 +76,9 @@ namespace signlang::signlang_manager {
     auto out = std::vector<std::uint8_t>{};
     out.reserve(static_cast<std::size_t>(kPacketHeaderSize) + packet.payload.size());
 
-    out.insert(out.end(), kMagic.begin(), kMagic.end());
+    for (const auto byte : kMagic) {
+      append_u8(out, byte);
+    }
     append_u8(out, kProtocolVersion);
     append_u8(out, static_cast<std::uint8_t>(packet.type));
     append_u16(out, packet.command_id);
