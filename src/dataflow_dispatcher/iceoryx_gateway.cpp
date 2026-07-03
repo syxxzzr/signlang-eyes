@@ -282,6 +282,10 @@ namespace signlang::dataflow_dispatcher {
   auto IpcDisplayClient::send_display_request(signlang::peripheral_service::DisplayCommand command,
                                               const std::string& text)
       -> signlang::peripheral_service::DisplayResponse {
+    if (!wait_for_server()) {
+      throw std::runtime_error("No peripheral display server became available for dataflow dispatcher request");
+    }
+
     auto request = signlang::peripheral_service::DisplayRequest{};
     request.request_id = next_request_id_++;
     request.command = command;
@@ -324,6 +328,16 @@ namespace signlang::dataflow_dispatcher {
       throw std::runtime_error("Failed to create peripheral display client in dataflow dispatcher");
     }
     return std::move(client.value());
+  }
+
+  auto IpcDisplayClient::wait_for_server() -> bool {
+    for (auto attempt = 0; attempt < kMaxWaitAttempts; ++attempt) {
+      if (signlang::common::ipc::has_servers(service_)) {
+        return true;
+      }
+      (void)node_.wait(iox2::bb::Duration::from_millis(kResponseWaitMs));
+    }
+    return signlang::common::ipc::has_servers(service_);
   }
 
 } // namespace signlang::dataflow_dispatcher

@@ -745,12 +745,12 @@ static auto build_modules(const toml::table& config) -> std::vector<ModuleEntry>
       {"state_machine", build_state_machine_args(config)},       {"audio_frontend", build_audio_frontend_args(config)},
       {"video_frontend", build_video_frontend_args(config)},     {"speech_asr", build_speech_asr_args(config)},
       {"speech_tts", build_speech_tts_args(config)},
-      {"dataflow_dispatcher", build_dataflow_dispatcher_args(config)},
       {"env_sound_det", build_env_sound_det_args(config)},
       {"handpose_det", build_handpose_det_args(config)},
       {"signlang_manager", build_signlang_manager_args(config)}, {"signlang_det", build_signlang_det_args(config)},
       {"position_service", build_position_service_args(config)},
       {"peripheral_service", build_peripheral_service_args(config)},
+      {"dataflow_dispatcher", build_dataflow_dispatcher_args(config)},
       {"llm_client", build_llm_client_args(config)},
   };
 }
