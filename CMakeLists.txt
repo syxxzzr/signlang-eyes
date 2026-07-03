@@ -101,6 +101,16 @@ function(signlang_get_conan_package_folder PACKAGE_NAME OUT_VAR)
     set(${OUT_VAR} "${${PACKAGE_FOLDER_VARIABLE}}" PARENT_SCOPE)
 endfunction()
 
+function(signlang_get_conan_config_var VARIABLE_PREFIX VARIABLE_NAME OUT_VAR)
+    set(CONFIG_VARIABLE "${VARIABLE_PREFIX}_${VARIABLE_NAME}_${SIGNLANG_CONAN_CONFIG_UPPER}")
+    if(NOT DEFINED ${CONFIG_VARIABLE})
+        message(FATAL_ERROR
+            "Conan configuration variable is not defined: ${CONFIG_VARIABLE}\n"
+            "Run conan install with CMakeDeps for configuration ${SIGNLANG_CONAN_CONFIG}.")
+    endif()
+    set(${OUT_VAR} "${${CONFIG_VARIABLE}}" PARENT_SCOPE)
+endfunction()
+
 # Add src directory to include path for cross-module headers
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
@@ -123,7 +133,13 @@ add_library(boost_json_runtime INTERFACE)
 target_link_libraries(boost_json_runtime INTERFACE Boost::json Boost::container)
 
 add_library(iceoryx2_runtime INTERFACE)
-target_link_libraries(iceoryx2_runtime INTERFACE iceoryx2-cxx::shared-lib-cxx)
+signlang_get_conan_config_var(iceoryx2 INCLUDE_DIRS ICEORYX2_INCLUDE_DIRS)
+signlang_get_conan_config_var(iceoryx2 LIB_DIRS ICEORYX2_LIB_DIRS)
+signlang_get_conan_config_var(iceoryx2 LINKER_FLAGS ICEORYX2_LINKER_FLAGS)
+target_include_directories(iceoryx2_runtime INTERFACE ${ICEORYX2_INCLUDE_DIRS})
+target_link_directories(iceoryx2_runtime INTERFACE ${ICEORYX2_LIB_DIRS})
+target_link_options(iceoryx2_runtime INTERFACE ${ICEORYX2_LINKER_FLAGS})
+target_link_libraries(iceoryx2_runtime INTERFACE iceoryx2_cxx iceoryx2_ffi_c dl rt m pthread)
 
 add_library(onnxruntime_runtime INTERFACE)
 target_link_libraries(onnxruntime_runtime INTERFACE onnxruntime::onnxruntime)
