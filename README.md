@@ -66,7 +66,7 @@ Default state is `Normal`. ASR and sign language modules remain disabled in this
 ### Dependencies
 
 - CMake 3.20+
-- GCC 12.3+ with C++17 support
+- GCC 11+ with C++17 support
 - Target platform: aarch64/arm64 (RK3588 or compatible)
 - iceoryx2 (zero-copy IPC framework)
 - RKNN Runtime 2.0+ (Rockchip NPU inference)
@@ -74,7 +74,7 @@ Default state is `Normal`. ASR and sign language modules remain disabled in this
 - V4L2 (Video4Linux2, camera capture)
 - spdlog 1.17+ (logging with rotation)
 - FFTW3f (FFT for audio spectrogram and cross-correlation)
-- libjpeg-turbo (MJPEG decode)
+- libjpeg-turbo (MJPEG decode, provided by Conan and linked statically)
 - librga 2.0+ (Rockchip RGA hardware acceleration)
 - SQLiteCpp (sign language prototype database)
 - Boost JSON/Container and minmea (LLM JSON handling and GNSS parsing)
@@ -83,11 +83,17 @@ Default state is `Normal`. ASR and sign language modules remain disabled in this
 
 ### Cross-compilation
 
-Requires a cross-compilation toolchain targeting aarch64. Example using Buildroot toolchain:
+Requires a system cross-compilation toolchain targeting aarch64, such as `aarch64-linux-gnu-gcc` and
+`aarch64-linux-gnu-g++` on `PATH`. The Conan profile defaults to `/home/sysroot`; override it with
+`SIGNLANG_AARCH64_SYSROOT` when needed.
 
 ```bash
+SIGNLANG_AARCH64_SYSROOT=/home/sysroot \
+conan install . -pr:h conan/profiles/linux-aarch64-gcc -pr:b default \
+      -of build-aarch64 --build=missing
+
 cmake -S . -B build-aarch64 \
-      -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/aarch64-buildroot.cmake \
+      -DCMAKE_TOOLCHAIN_FILE=build-aarch64/conan_toolchain.cmake \
       -DCMAKE_BUILD_TYPE=Release
 cmake --build build-aarch64 -j$(nproc)
 cmake --install build-aarch64 --prefix install

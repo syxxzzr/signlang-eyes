@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.20)
 
 project(signlang_eyes LANGUAGES CXX C)
 
-if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12.3)
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS 11)
     message(FATAL_ERROR
-        "This project requires GCC 12.3 or newer.\n"
+        "This project requires GCC 11 or newer.\n"
         "Current C++ compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 endif()
 
@@ -74,6 +74,7 @@ find_package(SQLiteCpp REQUIRED CONFIG)
 find_package(spdlog REQUIRED CONFIG)
 find_package(FFTW3 REQUIRED CONFIG)
 find_package(iceoryx2-cxx REQUIRED CONFIG)
+find_package(libjpeg-turbo REQUIRED CONFIG)
 find_package(onnxruntime REQUIRED CONFIG)
 find_package(rknn-runtime REQUIRED CONFIG)
 find_package(librga REQUIRED CONFIG)
@@ -101,20 +102,25 @@ find_package(Threads REQUIRED)
 find_package(ALSA REQUIRED)
 
 # GLib/GIO for BlueZ D-Bus BLE GATT server
+set(SIGNLANG_GLIB_CONFIG_INCLUDE_PATH_SUFFIXES
+    lib/glib-2.0/include
+    glib-2.0/include)
+if(CMAKE_LIBRARY_ARCHITECTURE)
+    list(PREPEND SIGNLANG_GLIB_CONFIG_INCLUDE_PATH_SUFFIXES
+        lib/${CMAKE_LIBRARY_ARCHITECTURE}/glib-2.0/include)
+endif()
 find_path(SIGNLANG_GLIB_INCLUDE_DIR
     NAMES glib.h
     PATH_SUFFIXES glib-2.0)
 find_path(SIGNLANG_GLIB_CONFIG_INCLUDE_DIR
     NAMES glibconfig.h
-    PATH_SUFFIXES lib/glib-2.0/include glib-2.0/include)
+    PATH_SUFFIXES ${SIGNLANG_GLIB_CONFIG_INCLUDE_PATH_SUFFIXES})
 find_path(SIGNLANG_GIO_INCLUDE_DIR
     NAMES gio/gio.h
     PATH_SUFFIXES glib-2.0)
 find_library(SIGNLANG_GIO_LIBRARY NAMES gio-2.0)
 find_library(SIGNLANG_GOBJECT_LIBRARY NAMES gobject-2.0)
 find_library(SIGNLANG_GLIB_LIBRARY NAMES glib-2.0)
-find_path(SIGNLANG_TURBOJPEG_INCLUDE_DIR NAMES turbojpeg.h)
-find_library(SIGNLANG_TURBOJPEG_LIBRARY NAMES turbojpeg)
 
 if(SIGNLANG_GLIB_INCLUDE_DIR AND SIGNLANG_GLIB_CONFIG_INCLUDE_DIR AND SIGNLANG_GIO_INCLUDE_DIR
         AND SIGNLANG_GIO_LIBRARY AND SIGNLANG_GOBJECT_LIBRARY AND SIGNLANG_GLIB_LIBRARY)
@@ -132,13 +138,8 @@ else()
     message(WARNING "GLib/GIO development files were not found; signlang_manager will be skipped")
 endif()
 
-if(SIGNLANG_TURBOJPEG_INCLUDE_DIR AND SIGNLANG_TURBOJPEG_LIBRARY)
-    add_library(turbojpeg_runtime INTERFACE)
-    target_include_directories(turbojpeg_runtime INTERFACE ${SIGNLANG_TURBOJPEG_INCLUDE_DIR})
-    target_link_libraries(turbojpeg_runtime INTERFACE ${SIGNLANG_TURBOJPEG_LIBRARY})
-else()
-    message(FATAL_ERROR "libjpeg-turbo headers/libraries were not found in the target sysroot")
-endif()
+add_library(turbojpeg_runtime INTERFACE)
+target_link_libraries(turbojpeg_runtime INTERFACE libjpeg-turbo::turbojpeg-static)
 
 # Modules
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/common)

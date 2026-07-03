@@ -23,20 +23,24 @@ else()
 endif()
 unset(_SPEECH_TTS_CPP_PINYIN_PACKAGE_FOLDER_VAR)
 unset(_SPEECH_TTS_CMAKE_BUILD_TYPE)
-set(_SPEECH_TTS_CPP_PINYIN_DEFAULT_DICT_DIR "${SPEECH_TTS_CPP_PINYIN_PREFIX}/share/cpp-pinyin/dict")
-if(NOT DEFINED SPEECH_TTS_CPP_PINYIN_DICT_DIR OR SPEECH_TTS_CPP_PINYIN_DICT_DIR MATCHES "^\\$<")
-    set(SPEECH_TTS_CPP_PINYIN_DICT_DIR
-            "${_SPEECH_TTS_CPP_PINYIN_DEFAULT_DICT_DIR}"
-            CACHE PATH "cpp-pinyin dictionary directory" FORCE)
+set(_SPEECH_TTS_CPP_PINYIN_PACKAGE_DICT_DIR "${SPEECH_TTS_CPP_PINYIN_PREFIX}/share/cpp-pinyin/dict")
+if(NOT DEFINED SPEECH_TTS_CPP_PINYIN_SOURCE_DICT_DIR OR SPEECH_TTS_CPP_PINYIN_SOURCE_DICT_DIR MATCHES "^\\$<")
+    set(SPEECH_TTS_CPP_PINYIN_SOURCE_DICT_DIR
+            "${_SPEECH_TTS_CPP_PINYIN_PACKAGE_DICT_DIR}"
+            CACHE PATH "Source cpp-pinyin dictionary directory copied into the runtime tree" FORCE)
 else()
-    set(SPEECH_TTS_CPP_PINYIN_DICT_DIR
-            "${SPEECH_TTS_CPP_PINYIN_DICT_DIR}"
-            CACHE PATH "cpp-pinyin dictionary directory")
+    set(SPEECH_TTS_CPP_PINYIN_SOURCE_DICT_DIR
+            "${SPEECH_TTS_CPP_PINYIN_SOURCE_DICT_DIR}"
+            CACHE PATH "Source cpp-pinyin dictionary directory copied into the runtime tree")
 endif()
-unset(_SPEECH_TTS_CPP_PINYIN_DEFAULT_DICT_DIR)
+unset(_SPEECH_TTS_CPP_PINYIN_PACKAGE_DICT_DIR)
 
-if(NOT EXISTS "${SPEECH_TTS_CPP_PINYIN_DICT_DIR}/mandarin")
-    message(FATAL_ERROR "Missing cpp-pinyin mandarin dictionary: ${SPEECH_TTS_CPP_PINYIN_DICT_DIR}/mandarin")
+set(SPEECH_TTS_CPP_PINYIN_RUNTIME_DICT_DIR
+        share/cpp-pinyin/dict
+        CACHE STRING "Runtime cpp-pinyin dictionary directory relative to the installation root")
+
+if(NOT EXISTS "${SPEECH_TTS_CPP_PINYIN_SOURCE_DICT_DIR}/mandarin")
+    message(FATAL_ERROR "Missing cpp-pinyin mandarin dictionary: ${SPEECH_TTS_CPP_PINYIN_SOURCE_DICT_DIR}/mandarin")
 endif()
 
 add_library(signlang_speech_tts_core STATIC
@@ -62,7 +66,7 @@ set_target_properties(signlang_eyes_speech_tts PROPERTIES
 target_include_directories(signlang_eyes_speech_tts PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(signlang_eyes_speech_tts PRIVATE
-        SIGNLANG_CPP_PINYIN_DICT_DIR="${SPEECH_TTS_CPP_PINYIN_DICT_DIR}")
+        SIGNLANG_CPP_PINYIN_DICT_DIR="${SPEECH_TTS_CPP_PINYIN_RUNTIME_DICT_DIR}")
 
 target_link_libraries(signlang_eyes_speech_tts PRIVATE
         signlang_speech_tts_core
@@ -89,10 +93,16 @@ add_optional_post_build_asset_runtime(signlang_eyes_speech_tts
         "${SPEECH_TTS_CONFIG_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_INSTALL_MODEL_DIR}"
         zh_CN-huayan-x_low.json)
+add_custom_command(TARGET signlang_eyes_speech_tts POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_CPP_PINYIN_RUNTIME_DICT_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${SPEECH_TTS_CPP_PINYIN_SOURCE_DICT_DIR}"
+        "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_CPP_PINYIN_RUNTIME_DICT_DIR}")
 
 install(TARGETS signlang_eyes_speech_tts DESTINATION bin)
 install_optional_files_runtime(${SPEECH_TTS_INSTALL_MODEL_DIR}
         ${SPEECH_TTS_ENCODER_MODEL_FILE}
         ${SPEECH_TTS_DECODER_MODEL_FILE}
         ${SPEECH_TTS_CONFIG_FILE})
-install(DIRECTORY "${SPEECH_TTS_CPP_PINYIN_DICT_DIR}/" DESTINATION share/cpp-pinyin/dict)
+install(DIRECTORY "${SPEECH_TTS_CPP_PINYIN_SOURCE_DICT_DIR}/" DESTINATION share/cpp-pinyin/dict)

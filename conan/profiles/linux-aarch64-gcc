@@ -1,21 +1,23 @@
-{% set sdk_root = os.getenv("SIGNLANG_AARCH64_SDK_ROOT", "/opt/aarch64-buildroot-linux-gnu_sdk-buildroot") %}
-{% set target_triple = os.getenv("SIGNLANG_AARCH64_TARGET_TRIPLE", "aarch64-buildroot-linux-gnu") %}
-{% set sdk_bin = sdk_root + "/bin" %}
-{% set sysroot = sdk_root + "/" + target_triple + "/sysroot" %}
+{% set sysroot = os.getenv("SIGNLANG_AARCH64_SYSROOT", "/root/sysroot") %}
+{% set gcc_version = os.getenv("SIGNLANG_AARCH64_GCC_VERSION", "11") %}
 
 [settings]
 os=Linux
 arch=armv8
 compiler=gcc
-compiler.version=12
+compiler.version={{ gcc_version }}
 compiler.libcxx=libstdc++11
 compiler.cppstd=17
 build_type=Release
 
 [conf]
-tools.build:compiler_executables={"c": "{{ sdk_bin }}/{{ target_triple }}-gcc", "cpp": "{{ sdk_bin }}/{{ target_triple }}-g++"}
+tools.build:compiler_executables={"c": "aarch64-linux-gnu-gcc", "cpp": "aarch64-linux-gnu-g++"}
 tools.build:sysroot={{ sysroot }}
-tools.cmake:configure_args=["-DCMAKE_POLICY_VERSION_MINIMUM=3.5"]
 tools.cmake.cmaketoolchain:system_name=Linux
 tools.cmake.cmaketoolchain:system_processor=aarch64
-tools.cmake.cmaketoolchain:extra_variables={"CMAKE_SYSROOT": "{{ sysroot }}", "CMAKE_AR": "{{ sdk_bin }}/{{ target_triple }}-ar", "CMAKE_RANLIB": "{{ sdk_bin }}/{{ target_triple }}-ranlib", "CMAKE_NM": "{{ sdk_bin }}/{{ target_triple }}-nm", "CMAKE_OBJCOPY": "{{ sdk_bin }}/{{ target_triple }}-objcopy", "CMAKE_OBJDUMP": "{{ sdk_bin }}/{{ target_triple }}-objdump", "CMAKE_READELF": "{{ sdk_bin }}/{{ target_triple }}-readelf", "CMAKE_STRIP": "{{ sdk_bin }}/{{ target_triple }}-strip", "CMAKE_FIND_ROOT_PATH": "{{ sysroot }}", "CMAKE_FIND_ROOT_PATH_MODE_PROGRAM": "NEVER", "CMAKE_FIND_ROOT_PATH_MODE_LIBRARY": "ONLY", "CMAKE_FIND_ROOT_PATH_MODE_INCLUDE": "ONLY", "CMAKE_FIND_ROOT_PATH_MODE_PACKAGE": "BOTH"}
+tools.cmake.cmaketoolchain:extra_variables={"CMAKE_SYSTEM_NAME": "Linux", "CMAKE_SYSTEM_PROCESSOR": "aarch64", "CMAKE_AR": "aarch64-linux-gnu-ar", "CMAKE_RANLIB": "aarch64-linux-gnu-ranlib", "CMAKE_NM": "aarch64-linux-gnu-nm", "CMAKE_OBJCOPY": "aarch64-linux-gnu-objcopy", "CMAKE_OBJDUMP": "aarch64-linux-gnu-objdump", "CMAKE_READELF": "aarch64-linux-gnu-readelf", "CMAKE_STRIP": "aarch64-linux-gnu-strip"}
+
+[buildenv]
+CHOST=aarch64-linux-gnu
+CC=aarch64-linux-gnu-gcc
+CXX=aarch64-linux-gnu-g++
