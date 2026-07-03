@@ -23,11 +23,11 @@ target_link_libraries(signlang_eyes_peripheral_service PRIVATE
         Boost::headers
         Threads::Threads)
 
-add_optional_post_build_asset_runtime(signlang_eyes_peripheral_service
+signlang_add_runtime_asset(signlang_eyes_peripheral_service
         "${CMAKE_CURRENT_SOURCE_DIR}/../../conf/unifont-17.0.05.hex"
         "$<TARGET_FILE_DIR:signlang_eyes_peripheral_service>/conf"
         unifont-17.0.05.hex)
 
-install(TARGETS signlang_eyes_peripheral_service DESTINATION bin)
-install_optional_files_runtime(conf
+install(TARGETS signlang_eyes_peripheral_service DESTINATION ${CMAKE_INSTALL_BINDIR})
+signlang_install_runtime_files(conf
         ${CMAKE_CURRENT_SOURCE_DIR}/../../conf/unifont-17.0.05.hex)

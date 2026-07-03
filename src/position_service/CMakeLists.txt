@@ -20,4 +20,4 @@ target_link_libraries(signlang_eyes_position_service PRIVATE
         minmea::minmea
         Threads::Threads)
 
-install(TARGETS signlang_eyes_position_service DESTINATION bin)
+install(TARGETS signlang_eyes_position_service DESTINATION ${CMAKE_INSTALL_BINDIR})

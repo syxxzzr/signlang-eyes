@@ -84,8 +84,9 @@ Default state is `Normal`. ASR and sign language modules remain disabled in this
 ### Cross-compilation
 
 Requires a system cross-compilation toolchain targeting aarch64, such as `aarch64-linux-gnu-gcc` and
-`aarch64-linux-gnu-g++` on `PATH`. The Conan profile defaults to `/home/sysroot`; override it with
-`SIGNLANG_AARCH64_SYSROOT` when needed.
+`aarch64-linux-gnu-g++` on `PATH`. The Conan profile defaults to `/root/sysroot`; override it with
+`SIGNLANG_AARCH64_SYSROOT` when needed. For non-Debian toolchain names, set
+`SIGNLANG_AARCH64_TARGET_TRIPLE` or `SIGNLANG_AARCH64_TOOLCHAIN_PREFIX`.
 
 ```bash
 SIGNLANG_AARCH64_SYSROOT=/home/sysroot \
@@ -98,6 +99,9 @@ cmake -S . -B build-aarch64 \
 cmake --build build-aarch64 -j$(nproc)
 cmake --install build-aarch64 --prefix install
 ```
+
+Runtime model/config assets are optional at configure time by default. Use
+`-DSIGNLANG_RUNTIME_ASSETS_REQUIRED=ON` when creating a release image that must fail if any expected asset is missing.
 
 ### Native build (on aarch64 device)
 

@@ -21,4 +21,4 @@ target_link_libraries(signlang_eyes_audio_frontend PRIVATE
         ALSA::ALSA
         m)
 
-install(TARGETS signlang_eyes_audio_frontend DESTINATION bin)
+install(TARGETS signlang_eyes_audio_frontend DESTINATION ${CMAKE_INSTALL_BINDIR})

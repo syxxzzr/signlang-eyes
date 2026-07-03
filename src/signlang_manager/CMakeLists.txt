@@ -1,7 +1,4 @@
-if(NOT TARGET signlang::gio)
-    message(STATUS "Skipping signlang_eyes_signlang_manager: GLib/GIO target not available")
-    return()
-endif()
+signlang_require_target(signlang::gio "signlang_manager requires GLib/GIO development files")
 
 add_executable(signlang_eyes_signlang_manager
         bluetooth_gatt_server.cpp
@@ -26,4 +23,4 @@ target_link_libraries(signlang_eyes_signlang_manager PRIVATE
         signlang::gio
         Threads::Threads)
 
-install(TARGETS signlang_eyes_signlang_manager DESTINATION bin)
+install(TARGETS signlang_eyes_signlang_manager DESTINATION ${CMAKE_INSTALL_BINDIR})
