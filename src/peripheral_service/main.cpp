@@ -54,6 +54,9 @@ namespace signlang::peripheral_service {
       void stop() {
         {
           std::lock_guard lock{mutex_};
+          if (!running_ && !thread_.joinable()) {
+            return;
+          }
           stop_requested_ = true;
         }
         cv_.notify_all();

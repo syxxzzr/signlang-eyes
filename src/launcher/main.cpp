@@ -116,6 +116,9 @@ namespace {
 
   std::vector<ChildInfo> g_children;
 
+  constexpr auto kChildTerminateGracePeriodMs = 3000;
+  constexpr auto kChildTerminatePollMs = 50;
+
   auto write_all(int fd, const void* data, std::size_t size) -> bool {
     const auto* next = static_cast<const std::uint8_t*>(data);
     auto remaining = size;
@@ -144,9 +147,41 @@ namespace {
       spdlog::info("terminating {} (pid {})", child.name, child.pid);
       kill(child.pid, SIGTERM);
     }
-    for (const auto& child : g_children) {
+
+    auto remaining = g_children;
+    auto elapsed_ms = 0;
+    while (!remaining.empty() && elapsed_ms < kChildTerminateGracePeriodMs) {
+      for (auto it = remaining.begin(); it != remaining.end();) {
+        int status = 0;
+        const auto pid = waitpid(it->pid, &status, WNOHANG);
+        if (pid == it->pid) {
+          it = remaining.erase(it);
+          continue;
+        }
+        if (pid < 0 && errno == ECHILD) {
+          it = remaining.erase(it);
+          continue;
+        }
+        ++it;
+      }
+
+      if (!remaining.empty()) {
+        struct timespec ts{0, kChildTerminatePollMs * 1000000L};
+        nanosleep(&ts, nullptr);
+        elapsed_ms += kChildTerminatePollMs;
+      }
+    }
+
+    for (const auto& child : remaining) {
+      spdlog::warn("{} (pid {}) did not exit after {} ms; sending SIGKILL", child.name, child.pid,
+                   kChildTerminateGracePeriodMs);
+      kill(child.pid, SIGKILL);
+    }
+
+    for (const auto& child : remaining) {
       int status = 0;
-      waitpid(child.pid, &status, 0);
+      while (waitpid(child.pid, &status, 0) < 0 && errno == EINTR) {
+      }
     }
     g_children.clear();
   }
