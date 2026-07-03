@@ -5,10 +5,7 @@ set(ENV_SOUND_DET_MODEL_FILE ${ENV_SOUND_DET_MODEL_DIR}/yamnet_3s.rknn)
 set(ENV_SOUND_DET_CLASS_MAP_FILE ${ENV_SOUND_DET_MODEL_DIR}/yamnet_class_map.txt)
 set(ENV_SOUND_DET_INSTALL_MODEL_DIR models/yamnet)
 
-if(NOT TARGET signlang::rknn_runtime)
-    message(STATUS "Skipping signlang_eyes_env_sound_det: RKNN runtime target not available")
-    return()
-endif()
+signlang_require_target(signlang::rknn_runtime "env_sound_det requires the RKNN runtime package")
 
 add_executable(signlang_eyes_env_sound_det
         iceoryx_gateway.cpp
@@ -30,16 +27,16 @@ target_link_libraries(signlang_eyes_env_sound_det PRIVATE
         signlang::common
         Threads::Threads)
 
-add_optional_post_build_asset_runtime(signlang_eyes_env_sound_det
+signlang_add_runtime_asset(signlang_eyes_env_sound_det
         "${ENV_SOUND_DET_MODEL_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_env_sound_det>/${ENV_SOUND_DET_INSTALL_MODEL_DIR}"
         yamnet_3s.rknn)
-add_optional_post_build_asset_runtime(signlang_eyes_env_sound_det
+signlang_add_runtime_asset(signlang_eyes_env_sound_det
         "${ENV_SOUND_DET_CLASS_MAP_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_env_sound_det>/${ENV_SOUND_DET_INSTALL_MODEL_DIR}"
         yamnet_class_map.txt)
 
-install(TARGETS signlang_eyes_env_sound_det DESTINATION bin)
-install_optional_files_runtime(${ENV_SOUND_DET_INSTALL_MODEL_DIR}
+install(TARGETS signlang_eyes_env_sound_det DESTINATION ${CMAKE_INSTALL_BINDIR})
+signlang_install_runtime_files(${ENV_SOUND_DET_INSTALL_MODEL_DIR}
         ${ENV_SOUND_DET_MODEL_FILE}
         ${ENV_SOUND_DET_CLASS_MAP_FILE})

@@ -19,4 +19,4 @@ target_link_libraries(signlang_eyes_video_frontend PRIVATE
         turbojpeg_runtime
         librga::rga)
 
-install(TARGETS signlang_eyes_video_frontend DESTINATION bin)
+install(TARGETS signlang_eyes_video_frontend DESTINATION ${CMAKE_INSTALL_BINDIR})

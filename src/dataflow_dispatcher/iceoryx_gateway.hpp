@@ -189,6 +189,7 @@ namespace signlang::dataflow_dispatcher {
     static auto create_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
         -> DisplayService;
     static auto create_client(const DisplayService& service) -> DisplayClient;
+    auto wait_for_server() -> bool;
     [[nodiscard]] auto send_display_request(signlang::peripheral_service::DisplayCommand command,
                                             const std::string& text)
         -> signlang::peripheral_service::DisplayResponse;

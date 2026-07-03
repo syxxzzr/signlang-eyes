@@ -26,16 +26,16 @@ target_link_libraries(signlang_eyes_handpose_det PRIVATE
         signlang::rknn_runtime
         librga::rga)
 
-install(TARGETS signlang_eyes_handpose_det DESTINATION bin)
+install(TARGETS signlang_eyes_handpose_det DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-add_optional_post_build_asset_runtime(signlang_eyes_handpose_det
+signlang_add_runtime_asset(signlang_eyes_handpose_det
         "${HANDPOSE_DET_PALM_MODEL_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_handpose_det>/${HANDPOSE_DET_INSTALL_MODEL_DIR}"
         hand_detector.rknn)
-add_optional_post_build_asset_runtime(signlang_eyes_handpose_det
+signlang_add_runtime_asset(signlang_eyes_handpose_det
         "${HANDPOSE_DET_LANDMARK_MODEL_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_handpose_det>/${HANDPOSE_DET_INSTALL_MODEL_DIR}"
         hand_landmarks_detector.rknn)
-install_optional_files_runtime(${HANDPOSE_DET_INSTALL_MODEL_DIR}
+signlang_install_runtime_files(${HANDPOSE_DET_INSTALL_MODEL_DIR}
         "${HANDPOSE_DET_PALM_MODEL_FILE}"
         "${HANDPOSE_DET_LANDMARK_MODEL_FILE}")

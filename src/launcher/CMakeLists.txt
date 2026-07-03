@@ -4,7 +4,7 @@ add_executable(signlang_eyes_launcher
 
 set_target_properties(signlang_eyes_launcher PROPERTIES
         OUTPUT_NAME launcher
-        INSTALL_RPATH "$ORIGIN/lib")
+        INSTALL_RPATH "$ORIGIN/${CMAKE_INSTALL_LIBDIR}")
 
 target_include_directories(signlang_eyes_launcher PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR})

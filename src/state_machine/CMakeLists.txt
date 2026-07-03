@@ -16,4 +16,4 @@ target_link_libraries(signlang_eyes_state_machine PRIVATE
         spdlog::spdlog
         iceoryx2_runtime)
 
-install(TARGETS signlang_eyes_state_machine DESTINATION bin)
+install(TARGETS signlang_eyes_state_machine DESTINATION ${CMAKE_INSTALL_BINDIR})

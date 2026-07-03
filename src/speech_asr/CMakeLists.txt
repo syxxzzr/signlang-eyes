@@ -8,10 +8,7 @@ set(SPEECH_ASR_VOCAB_EN_FILE ${SPEECH_ASR_MODEL_DIR}/vocab_en.txt)
 set(SPEECH_ASR_VOCAB_ZH_FILE ${SPEECH_ASR_MODEL_DIR}/vocab_zh.txt)
 set(SPEECH_ASR_INSTALL_MODEL_DIR models/whisper)
 
-if(NOT TARGET signlang::rknn_runtime)
-    message(STATUS "Skipping signlang_eyes_speech_asr: RKNN runtime target not available")
-    return()
-endif()
+signlang_require_target(signlang::rknn_runtime "speech_asr requires the RKNN runtime package")
 
 if(NOT TARGET FFTW3::fftw3f)
     message(FATAL_ERROR "Missing FFTW target; configure FFTW from the root CMakeLists.txt")
@@ -41,29 +38,29 @@ target_link_libraries(signlang_eyes_speech_asr PRIVATE
         Threads::Threads
         m)
 
-add_optional_post_build_asset_runtime(signlang_eyes_speech_asr
+signlang_add_runtime_asset(signlang_eyes_speech_asr
         "${SPEECH_ASR_ENCODER_MODEL_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_speech_asr>/${SPEECH_ASR_INSTALL_MODEL_DIR}"
         whisper_encoder_base_15s.onnx)
-add_optional_post_build_asset_runtime(signlang_eyes_speech_asr
+signlang_add_runtime_asset(signlang_eyes_speech_asr
         "${SPEECH_ASR_DECODER_MODEL_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_speech_asr>/${SPEECH_ASR_INSTALL_MODEL_DIR}"
         whisper_decoder_base_15s.rknn)
-add_optional_post_build_asset_runtime(signlang_eyes_speech_asr
+signlang_add_runtime_asset(signlang_eyes_speech_asr
         "${SPEECH_ASR_MEL_FILTERS_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_speech_asr>/${SPEECH_ASR_INSTALL_MODEL_DIR}"
         mel_80_filters.txt)
-add_optional_post_build_asset_runtime(signlang_eyes_speech_asr
+signlang_add_runtime_asset(signlang_eyes_speech_asr
         "${SPEECH_ASR_VOCAB_EN_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_speech_asr>/${SPEECH_ASR_INSTALL_MODEL_DIR}"
         vocab_en.txt)
-add_optional_post_build_asset_runtime(signlang_eyes_speech_asr
+signlang_add_runtime_asset(signlang_eyes_speech_asr
         "${SPEECH_ASR_VOCAB_ZH_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_speech_asr>/${SPEECH_ASR_INSTALL_MODEL_DIR}"
         vocab_zh.txt)
 
-install(TARGETS signlang_eyes_speech_asr DESTINATION bin)
-install_optional_files_runtime(${SPEECH_ASR_INSTALL_MODEL_DIR}
+install(TARGETS signlang_eyes_speech_asr DESTINATION ${CMAKE_INSTALL_BINDIR})
+signlang_install_runtime_files(${SPEECH_ASR_INSTALL_MODEL_DIR}
         ${SPEECH_ASR_ENCODER_MODEL_FILE}
         ${SPEECH_ASR_DECODER_MODEL_FILE}
         ${SPEECH_ASR_MEL_FILTERS_FILE}

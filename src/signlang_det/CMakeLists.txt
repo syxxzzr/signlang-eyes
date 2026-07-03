@@ -3,10 +3,7 @@ set(SIGNLANG_DET_PROTOTYPES_FILE ${SIGNLANG_PROTOTYPES_FILE})
 set(SIGNLANG_DET_INSTALL_MODEL_DIR models/bilstm)
 set(SIGNLANG_DET_INSTALL_CONF_DIR conf)
 
-if(NOT TARGET signlang::rknn_runtime)
-    message(STATUS "Skipping signlang_eyes_signlang_det: RKNN runtime target not available")
-    return()
-endif()
+signlang_require_target(signlang::rknn_runtime "signlang_det requires the RKNN runtime package")
 
 add_executable(signlang_eyes_signlang_det
         keypoint_ring_buffer.cpp
@@ -34,13 +31,13 @@ target_link_libraries(signlang_eyes_signlang_det PRIVATE
         Threads::Threads
         m)
 
-add_optional_post_build_asset_runtime(signlang_eyes_signlang_det
+signlang_add_runtime_asset(signlang_eyes_signlang_det
         "${SIGNLANG_DET_MODEL_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_signlang_det>/${SIGNLANG_DET_INSTALL_MODEL_DIR}"
         biltsm.rknn)
-add_optional_post_build_asset_runtime(signlang_eyes_signlang_det
+signlang_add_runtime_asset(signlang_eyes_signlang_det
         "${SIGNLANG_DET_PROTOTYPES_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_signlang_det>/${SIGNLANG_DET_INSTALL_CONF_DIR}"
         prototypes.sqlite)
 
-install(TARGETS signlang_eyes_signlang_det DESTINATION bin)
+install(TARGETS signlang_eyes_signlang_det DESTINATION ${CMAKE_INSTALL_BINDIR})

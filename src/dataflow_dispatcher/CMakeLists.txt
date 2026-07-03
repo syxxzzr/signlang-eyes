@@ -25,4 +25,4 @@ target_link_libraries(signlang_eyes_dataflow_dispatcher PRIVATE
         iceoryx2_runtime
         signlang::common)
 
-install(TARGETS signlang_eyes_dataflow_dispatcher DESTINATION bin)
+install(TARGETS signlang_eyes_dataflow_dispatcher DESTINATION ${CMAKE_INSTALL_BINDIR})
