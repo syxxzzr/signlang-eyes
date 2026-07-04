@@ -1,5 +1,5 @@
-#ifndef SIGNLANG_EYES_POSITION_SERVICE_PAYLOAD_QUEUE_HPP
-#define SIGNLANG_EYES_POSITION_SERVICE_PAYLOAD_QUEUE_HPP
+#ifndef SIGNLANG_EYES_TELEMETRY_SERVICE_PAYLOAD_QUEUE_HPP
+#define SIGNLANG_EYES_TELEMETRY_SERVICE_PAYLOAD_QUEUE_HPP
 
 #include <array>
 #include <atomic>
@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-namespace signlang::position_service {
+namespace signlang::telemetry_service {
 
   struct MqttPayload {
     std::string topic;
@@ -58,6 +58,6 @@ namespace signlang::position_service {
     alignas(64) std::atomic_size_t tail_{0};
   };
 
-} // namespace signlang::position_service
+} // namespace signlang::telemetry_service
 
-#endif // SIGNLANG_EYES_POSITION_SERVICE_PAYLOAD_QUEUE_HPP
+#endif // SIGNLANG_EYES_TELEMETRY_SERVICE_PAYLOAD_QUEUE_HPP

@@ -1,12 +1,12 @@
-#ifndef SIGNLANG_EYES_POSITION_SERVICE_POSITION_PARSER_HPP
-#define SIGNLANG_EYES_POSITION_SERVICE_POSITION_PARSER_HPP
+#ifndef SIGNLANG_EYES_TELEMETRY_SERVICE_POSITION_PARSER_HPP
+#define SIGNLANG_EYES_TELEMETRY_SERVICE_POSITION_PARSER_HPP
 
 #include "position.hpp"
 
 #include <optional>
 #include <string>
 
-namespace signlang::position_service {
+namespace signlang::telemetry_service {
 
   class NmeaPositionParser {
   public:
@@ -18,6 +18,6 @@ namespace signlang::position_service {
     std::optional<double> latest_hdop_;
   };
 
-} // namespace signlang::position_service
+} // namespace signlang::telemetry_service
 
-#endif // SIGNLANG_EYES_POSITION_SERVICE_POSITION_PARSER_HPP
+#endif // SIGNLANG_EYES_TELEMETRY_SERVICE_POSITION_PARSER_HPP

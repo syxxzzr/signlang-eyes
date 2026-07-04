@@ -1,11 +1,11 @@
-#ifndef SIGNLANG_EYES_POSITION_SERVICE_POSITION_HPP
-#define SIGNLANG_EYES_POSITION_SERVICE_POSITION_HPP
+#ifndef SIGNLANG_EYES_TELEMETRY_SERVICE_POSITION_HPP
+#define SIGNLANG_EYES_TELEMETRY_SERVICE_POSITION_HPP
 
 #include <cstdint>
 #include <optional>
 #include <string>
 
-namespace signlang::position_service {
+namespace signlang::telemetry_service {
 
   struct PositionFix {
     double latitude_deg = 0.0;
@@ -18,6 +18,6 @@ namespace signlang::position_service {
     std::string source_sentence;
   };
 
-} // namespace signlang::position_service
+} // namespace signlang::telemetry_service
 
-#endif // SIGNLANG_EYES_POSITION_SERVICE_POSITION_HPP
+#endif // SIGNLANG_EYES_TELEMETRY_SERVICE_POSITION_HPP

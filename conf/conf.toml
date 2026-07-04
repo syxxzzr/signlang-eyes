@@ -124,14 +124,14 @@ npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 # max_upload_bytes = 8388608       # Maximum BLE gesture upload size in bytes
 # enable_streaming_by_default = false
 
-[position_service]
+[telemetry_service]
 device = "/dev/ttyS9"              # GNSS serial device path
 baud_rate = 115200                 # GNSS serial baud rate
 # mqtt_host = "127.0.0.1"          # MQTT broker host
 # mqtt_port = 1883                 # MQTT broker TCP port
-# mqtt_client_id = "signlang_eyes_position_service"
+# mqtt_client_id = "signlang_eyes_telemetry_service"
 # mqtt_topic = "signlang/position" # MQTT topic for position JSON payloads
-# alert_event_service = "position_alert"
+# alert_event_service = "telemetry_alert"
 # alert_mqtt_topic = "signlang/alert"
 # mqtt_username = ""
 # mqtt_password = ""

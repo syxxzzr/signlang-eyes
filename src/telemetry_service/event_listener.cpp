@@ -11,7 +11,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace signlang::position_service {
+namespace signlang::telemetry_service {
 
   EventListener::EventListener(std::string service_name, std::string node_name, Callback callback) :
       service_name_{std::move(service_name)}, node_name_{std::move(node_name)}, callback_{std::move(callback)} {}
@@ -88,4 +88,4 @@ namespace signlang::position_service {
     running_.store(false, std::memory_order_release);
   }
 
-} // namespace signlang::position_service
+} // namespace signlang::telemetry_service

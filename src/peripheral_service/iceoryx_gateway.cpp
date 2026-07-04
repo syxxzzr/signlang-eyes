@@ -92,10 +92,10 @@ namespace signlang::peripheral_service {
   void IpcAlertNotifier::notify_alert() const {
     const auto result = notifier_.notify_with_custom_event_id(iox2::EventId{next_event_id_++});
     if (!result.has_value()) {
-      spdlog::warn("failed to notify position alert event");
+      spdlog::warn("failed to notify telemetry alert event");
       return;
     }
-    spdlog::info("notified position alert event");
+    spdlog::info("notified telemetry alert event");
   }
 
   auto IpcAlertNotifier::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
@@ -108,7 +108,7 @@ namespace signlang::peripheral_service {
     auto service =
         node.service_builder(signlang::common::ipc::service_name_from_string(service_name)).event().open_or_create();
     if (!service.has_value()) {
-      throw std::runtime_error("Failed to open or create position alert event service: " + service_name);
+      throw std::runtime_error("Failed to open or create telemetry alert event service: " + service_name);
     }
     return std::move(service.value());
   }
@@ -117,7 +117,7 @@ namespace signlang::peripheral_service {
       -> iox2::Notifier<iox2::ServiceType::Ipc> {
     auto notifier = service.notifier_builder().create();
     if (!notifier.has_value()) {
-      throw std::runtime_error("Failed to create position alert event notifier");
+      throw std::runtime_error("Failed to create telemetry alert event notifier");
     }
     return std::move(notifier.value());
   }

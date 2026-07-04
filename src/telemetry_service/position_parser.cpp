@@ -8,7 +8,7 @@
 #include <limits>
 #include <string>
 
-namespace signlang::position_service {
+namespace signlang::telemetry_service {
   namespace {
 
     auto coord_to_degrees(const minmea_float& value) -> std::optional<double> {
@@ -111,4 +111,4 @@ namespace signlang::position_service {
     }
   }
 
-} // namespace signlang::position_service
+} // namespace signlang::telemetry_service

@@ -1,5 +1,5 @@
-#ifndef SIGNLANG_EYES_POSITION_SERVICE_EVENT_LISTENER_HPP
-#define SIGNLANG_EYES_POSITION_SERVICE_EVENT_LISTENER_HPP
+#ifndef SIGNLANG_EYES_TELEMETRY_SERVICE_EVENT_LISTENER_HPP
+#define SIGNLANG_EYES_TELEMETRY_SERVICE_EVENT_LISTENER_HPP
 
 #include <atomic>
 #include <cstdint>
@@ -7,7 +7,7 @@
 #include <string>
 #include <thread>
 
-namespace signlang::position_service {
+namespace signlang::telemetry_service {
 
   struct AlertEvent {
     std::uint64_t id;
@@ -40,6 +40,6 @@ namespace signlang::position_service {
     std::thread thread_;
   };
 
-} // namespace signlang::position_service
+} // namespace signlang::telemetry_service
 
-#endif // SIGNLANG_EYES_POSITION_SERVICE_EVENT_LISTENER_HPP
+#endif // SIGNLANG_EYES_TELEMETRY_SERVICE_EVENT_LISTENER_HPP

@@ -41,7 +41,7 @@ namespace signlang::launcher::ipc {
   constexpr auto kAudioLocalizationBlackboard = "audio_source_localization";
   constexpr auto kLlmClient = "llm_client";
   constexpr auto kPeripheralDisplay = "peripheral_display";
-  constexpr auto kPositionAlert = "position_alert";
+  constexpr auto kTelemetryAlert = "telemetry_alert";
 
 } // namespace signlang::launcher::ipc
 
@@ -57,7 +57,7 @@ namespace {
   constexpr auto kExeHandposeDet = "bin/handpose_det";
   constexpr auto kExeSignlangManager = "bin/signlang_manager";
   constexpr auto kExeSignlangDet = "bin/signlang_det";
-  constexpr auto kExePositionService = "bin/position_service";
+  constexpr auto kExeTelemetryService = "bin/telemetry_service";
   constexpr auto kExeLlmClient = "bin/llm_client";
   constexpr auto kExePeripheralService = "bin/peripheral_service";
 
@@ -84,9 +84,8 @@ namespace {
   void warn_ipc_keys_in_config(const toml::table& config) {
     constexpr std::array kSections = {
         "state_machine", "audio_frontend", "video_frontend",   "speech_asr",   "env_sound_det",
-        "handpose_det", "signlang_manager", "signlang_det", "speech_tts", "dataflow_dispatcher", "position_service",
-        "llm_client", "peripheral_service"
-    };
+        "handpose_det", "signlang_manager", "signlang_det", "speech_tts", "dataflow_dispatcher", "telemetry_service",
+        "llm_client",   "peripheral_service"};
 
     for (const auto* section_name : kSections) {
       if (const auto* section = config[section_name].as_table()) {
@@ -704,11 +703,11 @@ static auto build_signlang_manager_args(const toml::table& cfg) -> std::vector<s
   return args;
 }
 
-static auto build_position_service_args(const toml::table& cfg) -> std::vector<std::string> {
+static auto build_telemetry_service_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
-  std::vector<std::string> args = {kExePositionService};
+  std::vector<std::string> args = {kExeTelemetryService};
 
-  if (const auto* tbl = cfg["position_service"].as_table()) {
+  if (const auto* tbl = cfg["telemetry_service"].as_table()) {
     add_opt_str(args, "--device", opt_string(*tbl, "device"));
     add_opt_int(args, "--baud-rate", opt_int(*tbl, "baud_rate"));
     add_opt_str(args, "--mqtt-host", opt_string(*tbl, "mqtt_host"));
@@ -736,7 +735,7 @@ static auto build_peripheral_service_args(const toml::table& cfg) -> std::vector
       "--state-control-service",
       kStateControl,
       "--alert-event-service",
-      kPositionAlert,
+      kTelemetryAlert,
   };
 
   if (const auto* tbl = cfg["peripheral_service"].as_table()) {
@@ -783,7 +782,7 @@ static auto build_modules(const toml::table& config) -> std::vector<ModuleEntry>
       {"env_sound_det", build_env_sound_det_args(config)},
       {"handpose_det", build_handpose_det_args(config)},
       {"signlang_manager", build_signlang_manager_args(config)}, {"signlang_det", build_signlang_det_args(config)},
-      {"position_service", build_position_service_args(config)},
+      {"telemetry_service", build_telemetry_service_args(config)},
       {"peripheral_service", build_peripheral_service_args(config)},
       {"dataflow_dispatcher", build_dataflow_dispatcher_args(config)},
       {"llm_client", build_llm_client_args(config)},

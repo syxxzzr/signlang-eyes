@@ -16,7 +16,7 @@ namespace signlang::peripheral_service {
     constexpr auto kDefaultFontFile = "conf/unifont-17.0.05.hex";
     constexpr auto kDefaultDisplayService = "peripheral_display";
     constexpr auto kDefaultStateControlService = "app_state_control";
-    constexpr auto kDefaultAlertEventService = "position_alert";
+    constexpr auto kDefaultAlertEventService = "telemetry_alert";
 
     [[nodiscard]] auto parse_u8(const cxxopts::ParseResult& parsed_options, const char* name, std::uint32_t min,
                                 std::uint32_t max) -> std::uint8_t {
@@ -62,7 +62,7 @@ namespace signlang::peripheral_service {
         cxxopts::value<std::string>()->default_value(kDefaultDisplayService))(
         "state-control-service", "iceoryx2 app state control request-response service",
         cxxopts::value<std::string>()->default_value(kDefaultStateControlService))(
-        "alert-event-service", "iceoryx2 alert event service consumed by position_service",
+        "alert-event-service", "iceoryx2 alert event service consumed by telemetry_service",
         cxxopts::value<std::string>()->default_value(kDefaultAlertEventService))("h,help", "Print usage");
     signlang::logging::add_cli_options(options);
 
