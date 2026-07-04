@@ -8,6 +8,8 @@ namespace signlang::peripheral_service {
 
     constexpr auto kHead1 = std::uint8_t{0xAA};
     constexpr auto kHead2 = std::uint8_t{0x55};
+    constexpr auto kMaxPhysicalFrameLength = std::size_t{64};
+    constexpr auto kFrameOverheadLength = std::size_t{9};
 
     [[nodiscard]] auto checksum(OledCommand command, std::uint8_t x, std::uint8_t y, std::uint8_t width,
                                 std::uint8_t height, const std::vector<std::uint8_t>& data) -> std::uint8_t {
@@ -84,7 +86,9 @@ namespace signlang::peripheral_service {
     auto remaining_width = static_cast<std::size_t>(block.width);
     auto source_x = std::size_t{0};
     while (remaining_width > 0) {
-      const auto max_width_this_frame = std::max<std::size_t>(1U, kMaxFrameDataLength / page_count);
+      const auto max_data_this_frame = std::min<std::size_t>(kMaxFrameDataLength,
+                                                             kMaxPhysicalFrameLength - kFrameOverheadLength);
+      const auto max_width_this_frame = std::max<std::size_t>(1U, max_data_this_frame / page_count);
       const auto chunk_width = std::min(remaining_width, max_width_this_frame);
 
       auto chunk_data = std::vector<std::uint8_t>{};
