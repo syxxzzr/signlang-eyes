@@ -133,8 +133,11 @@ namespace signlang::telemetry_service {
       std::string line;
       std::getline(input_stream, line);
 
-      if (auto fix = parser_.parse_line(line)) {
-        publish(*fix);
+      auto result = parser_.parse_line(line);
+      if (result.fix.has_value()) {
+        publish(*result.fix);
+      } else {
+        log_position_parse_warning(result.status, line);
       }
 
       if (signlang::runtime::shutdown_requested()) {
@@ -143,6 +146,39 @@ namespace signlang::telemetry_service {
         return;
       }
       read_next_line();
+    }
+
+    void log_position_parse_warning(PositionParseStatus status, const std::string& line) const {
+      if (status == PositionParseStatus::Empty) {
+        return;
+      }
+
+      constexpr auto kMaxLoggedSentenceLength = std::size_t{96};
+      auto sentence = line.substr(0, kMaxLoggedSentenceLength);
+      if (line.size() > kMaxLoggedSentenceLength) {
+        sentence += "...";
+      }
+
+      switch (status) {
+        case PositionParseStatus::InvalidSentence:
+          spdlog::warn("failed to parse GPS serial sentence: invalid NMEA sentence '{}'", sentence);
+          break;
+        case PositionParseStatus::UnsupportedSentence:
+          spdlog::warn("GPS serial sentence has no supported position payload: '{}'", sentence);
+          break;
+        case PositionParseStatus::ParseFailed:
+          spdlog::warn("failed to parse GPS serial sentence payload: '{}'", sentence);
+          break;
+        case PositionParseStatus::NoFix:
+          spdlog::warn("GPS serial sentence parsed without a valid position fix: '{}'", sentence);
+          break;
+        case PositionParseStatus::InvalidCoordinates:
+          spdlog::warn("GPS serial sentence parsed with invalid coordinates: '{}'", sentence);
+          break;
+        case PositionParseStatus::Empty:
+        case PositionParseStatus::ValidFix:
+          break;
+      }
     }
 
     void publish(const PositionFix& fix) {

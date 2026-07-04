@@ -8,9 +8,24 @@
 
 namespace signlang::telemetry_service {
 
+  enum class PositionParseStatus {
+    Empty,
+    InvalidSentence,
+    UnsupportedSentence,
+    ParseFailed,
+    NoFix,
+    InvalidCoordinates,
+    ValidFix,
+  };
+
+  struct PositionParseResult {
+    PositionParseStatus status;
+    std::optional<PositionFix> fix;
+  };
+
   class NmeaPositionParser {
   public:
-    auto parse_line(const std::string& line) -> std::optional<PositionFix>;
+    auto parse_line(const std::string& line) -> PositionParseResult;
 
   private:
     std::optional<double> latest_altitude_m_;
