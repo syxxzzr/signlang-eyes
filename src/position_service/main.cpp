@@ -134,7 +134,6 @@ namespace signlang::position_service {
       std::getline(input_stream, line);
 
       if (auto fix = parser_.parse_line(line)) {
-        spdlog::info("parsed position fix lat={}, lon={}", fix->latitude_deg, fix->longitude_deg);
         publish(*fix);
       }
 
@@ -151,7 +150,12 @@ namespace signlang::position_service {
         spdlog::warn("position payload queue is full; dropping newest fix");
         return;
       }
-      spdlog::info("queued position MQTT payload for topic {}", options_.mqtt_topic);
+
+      ++position_fix_count_;
+      if (position_fix_count_ % 500 == 0) {
+        spdlog::info("Processed position fixes count={} latest_lat={} latest_lon={}", position_fix_count_,
+                     fix.latitude_deg, fix.longitude_deg);
+      }
     }
 
     void publish_alert(const AlertEvent& event) {
@@ -203,7 +207,6 @@ namespace signlang::position_service {
           spdlog::warn("mqtt publish failed: {}", error.message());
           return;
         }
-        spdlog::info("published mqtt payload to {} ({} bytes)", payload->topic, payload->payload.size());
       };
 
       switch (options_.qos) {
@@ -234,6 +237,7 @@ namespace signlang::position_service {
     PositionPayloadQueue payload_queue_;
     ProgramOptions options_;
     EventListener alert_listener_;
+    std::uint64_t position_fix_count_{0};
     std::atomic_bool stop_requested_{false};
     std::atomic_bool mqtt_done_{false};
   };
