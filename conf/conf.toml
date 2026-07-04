@@ -131,7 +131,6 @@ baud_rate = 115200                 # GNSS serial baud rate
 # mqtt_port = 1883                 # MQTT broker TCP port
 # mqtt_client_id = "signlang_eyes_telemetry_service"
 # mqtt_topic = "signlang/position" # MQTT topic for position JSON payloads
-# alert_event_service = "telemetry_alert"
 # alert_mqtt_topic = "signlang/alert"
 # mqtt_username = ""
 # mqtt_password = ""

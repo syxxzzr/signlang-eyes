@@ -62,11 +62,22 @@ namespace {
   constexpr auto kExePeripheralService = "bin/peripheral_service";
 
   constexpr std::array kIpcKeys = {
-      "input_service",         "input-service",         "output_service",           "output-service",
-      "state_event_service",   "state-event-service",   "state_blackboard_service", "state-blackboard-service",
-      "state_control_service", "state-control-service", "localization_blackboard",  "localization-blackboard",
-      "alert_event_service",   "alert-event-service",   "display_service",         "display-service",
+      "input_service",               "input-service",
+      "output_service",              "output-service",
       "service",
+      "state_event_service",         "state-event-service",
+      "state_blackboard_service",    "state-blackboard-service",
+      "state_control_service",       "state-control-service",
+      "localization_blackboard",      "localization-blackboard",
+      "alert_event_service",         "alert-event-service",
+      "display_service",             "display-service",
+      "peripheral_display_service",  "peripheral-display-service",
+      "signlang_result_service",     "signlang-result-service",
+      "speech_asr_result_service",   "speech-asr-result-service",
+      "speech_tts_service",          "speech-tts-service",
+      "llm_client_service",          "llm-client-service",
+      "prototype_control_service",   "prototype-control-service",
+      "gesture_management_service",  "gesture-management-service",
   };
 
   void warn_ipc_keys_in_table(const toml::table& tbl, const std::string& section_name) {
@@ -705,7 +716,7 @@ static auto build_signlang_manager_args(const toml::table& cfg) -> std::vector<s
 
 static auto build_telemetry_service_args(const toml::table& cfg) -> std::vector<std::string> {
   using namespace signlang::launcher::ipc;
-  std::vector<std::string> args = {kExeTelemetryService};
+  std::vector<std::string> args = {kExeTelemetryService, "--alert-event-service", kTelemetryAlert};
 
   if (const auto* tbl = cfg["telemetry_service"].as_table()) {
     add_opt_str(args, "--device", opt_string(*tbl, "device"));
@@ -714,7 +725,6 @@ static auto build_telemetry_service_args(const toml::table& cfg) -> std::vector<
     add_opt_int(args, "--mqtt-port", opt_int(*tbl, "mqtt_port"));
     add_opt_str(args, "--mqtt-client-id", opt_string(*tbl, "mqtt_client_id"));
     add_opt_str(args, "--mqtt-topic", opt_string(*tbl, "mqtt_topic"));
-    add_opt_str(args, "--alert-event-service", opt_string(*tbl, "alert_event_service"));
     add_opt_str(args, "--alert-mqtt-topic", opt_string(*tbl, "alert_mqtt_topic"));
     add_opt_str(args, "--mqtt-username", opt_string(*tbl, "mqtt_username"));
     add_opt_str(args, "--mqtt-password", opt_string(*tbl, "mqtt_password"));
