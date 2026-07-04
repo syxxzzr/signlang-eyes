@@ -20,7 +20,7 @@ signlang_det ───▶ dataflow_dispatcher ─┬─▶ speech_tts
                                        └─▶ peripheral_service display
 
 peripheral_service ─▶ state_machine
-position_service ───▶ peripheral_service
+peripheral_service ─▶ telemetry_service
 ```
 
 ### Core Modules
@@ -36,7 +36,7 @@ position_service ───▶ peripheral_service
 - **state_machine**: Global state coordinator managing module lifecycle via Event + Blackboard + Request-Response IPC
 - **dataflow_dispatcher**: State-aware routing from ASR/sign language results to display, TTS, and LLM services
 - **peripheral_service**: Serial-button input, OLED display rendering, alert notification, and state-control integration
-- **position_service**: GNSS/position alert ingestion and forwarding to peripheral alert events
+- **telemetry_service**: GNSS position and alert telemetry ingestion with MQTT uplink
 - **llm_client**: OpenAI-compatible request-response client for SignLanguageAi prompts
 - **launcher**: Unified process orchestrator loading all modules from TOML configuration with health monitoring
 
@@ -133,7 +133,7 @@ install/
 │   ├── signlang_det
 │   ├── dataflow_dispatcher
 │   ├── peripheral_service
-│   ├── position_service
+│   ├── telemetry_service
 │   └── llm_client
 ├── lib/              # Shared libraries
 │   ├── libiceoryx2_cxx.so
@@ -305,7 +305,7 @@ install/bin/speech_tts \
 install/bin/peripheral_service \
     --display-service peripheral_display \
     --state-control-service app_state_control \
-    --alert-event-service position_alert
+    --alert-event-service telemetry_alert
 
 # LLM request service
 install/bin/llm_client \
@@ -337,7 +337,7 @@ src/
 ├── signlang_manager/ BLE handpose stream and gesture DB manager
 ├── dataflow_dispatcher/ State-aware ASR/sign language result routing
 ├── peripheral_service/ OLED display, serial buttons, and alert output
-├── position_service/  GNSS/position alert listener
+├── telemetry_service/  GNSS/alert telemetry uplink
 ├── llm_client/        OpenAI-compatible LLM request service
 ├── state_machine/    State machine module
 └── launcher/         Launcher module
@@ -359,7 +359,7 @@ Detailed documentation for each module:
 - [launcher](src/launcher/README.md) - Process launch and monitoring
 - [dataflow_dispatcher](src/dataflow_dispatcher) - State-aware result routing
 - [peripheral_service](src/peripheral_service) - OLED display and button peripheral service
-- [position_service](src/position_service) - Position alert listener
+- [telemetry_service](src/telemetry_service) - Telemetry uplink service
 - [llm_client](src/llm_client) - LLM request service
 
 ## IPC Services
@@ -375,7 +375,7 @@ Inter-module communication via iceoryx2 services (hardcoded names):
 - `signlang_gesture_management`: Gesture database management between signlang_manager and signlang_det (request-response)
 - `llm_client`: SignLanguageAi prompt request service (request-response)
 - `peripheral_display`: OLED title/content display updates (request-response)
-- `position_alert`: Position alert event notifications (event notifier)
+- `telemetry_alert`: Alert event notifications consumed by telemetry_service (event notifier)
 - `app_state_event`: State change event notifications (event notifier)
 - `app_state_blackboard`: Current application state storage (blackboard, single-entry)
 - `app_state_control`: State control requests (request-response)
