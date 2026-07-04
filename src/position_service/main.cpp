@@ -66,7 +66,13 @@ namespace signlang::position_service {
           mqtt_drain_timer_{mqtt_io_context},
           options_{std::move(options)},
           alert_listener_{options_.alert_event_service, "position_service_alert_listener",
-                          [this](const AlertEvent& event) { publish_alert(event); }} {}
+                          [this](const AlertEvent& event) {
+                            asio::post(serial_io_context_, [this, event] {
+                              if (!stop_requested_.load(std::memory_order_acquire)) {
+                                publish_alert(event);
+                              }
+                            });
+                          }} {}
 
     void start() {
       spdlog::info("Starting position service");
