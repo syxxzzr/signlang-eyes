@@ -60,10 +60,9 @@ namespace signlang::telemetry_service {
   public:
     TelemetryService(asio::io_context& serial_io_context, asio::io_context& mqtt_io_context, ProgramOptions options)
         : serial_io_context_{serial_io_context},
-          mqtt_io_context_{mqtt_io_context},
-          serial_{serial_io_context},
-          mqtt_client_{mqtt_io_context},
-          mqtt_drain_timer_{mqtt_io_context},
+            serial_{serial_io_context},
+          mqtt_client_{asio::make_strand(mqtt_io_context)},
+          mqtt_drain_timer_{mqtt_client_.get_executor()},
           options_{std::move(options)},
           alert_listener_{options_.alert_event_service, "telemetry_service_alert_listener",
                           [this](const AlertEvent& event) {
@@ -83,11 +82,7 @@ namespace signlang::telemetry_service {
       serial_.set_option(asio::serial_port_base::stop_bits{asio::serial_port_base::stop_bits::one});
       serial_.set_option(asio::serial_port_base::flow_control{asio::serial_port_base::flow_control::none});
 
-      mqtt_client_.brokers(options_.mqtt_host, options_.mqtt_port)
-          .credentials(options_.mqtt_client_id, options_.mqtt_username, options_.mqtt_password)
-          .keep_alive(options_.keep_alive_seconds)
-          .async_run(asio::detached);
-      schedule_mqtt_drain();
+      asio::dispatch(mqtt_client_.get_executor(), [self = shared_from_this()] { self->start_mqtt_client(); });
       alert_listener_.start();
 
       spdlog::info("serial device: {} @ {}", options_.serial_device, options_.baud_rate);
@@ -112,6 +107,14 @@ namespace signlang::telemetry_service {
     [[nodiscard]] auto mqtt_done() const -> bool { return mqtt_done_.load(std::memory_order_acquire); }
 
   private:
+    void start_mqtt_client() {
+      mqtt_client_.brokers(options_.mqtt_host, options_.mqtt_port)
+          .credentials(options_.mqtt_client_id, options_.mqtt_username, options_.mqtt_password)
+          .keep_alive(options_.keep_alive_seconds)
+          .async_run(asio::detached);
+      schedule_mqtt_drain();
+    }
+
     void read_next_line() {
       asio::async_read_until(serial_, buffer_, '\n',
                              [self = shared_from_this()](const boost::system::error_code& error,
@@ -263,7 +266,6 @@ namespace signlang::telemetry_service {
     }
 
     asio::io_context& serial_io_context_;
-    asio::io_context& mqtt_io_context_;
     asio::serial_port serial_;
     asio::streambuf buffer_;
     MqttClient mqtt_client_;
