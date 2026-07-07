@@ -7,6 +7,11 @@
 #include <utility>
 
 namespace signlang::peripheral_service {
+  namespace {
+    constexpr std::uint64_t kMaxStateEventListeners = 8;
+    constexpr std::uint64_t kMaxStateEventNotifiers = 4;
+    constexpr std::uint64_t kMaxStateEventNodes = 16;
+  }
 
   IpcDisplayServer::IpcDisplayServer(const std::string& service_name) :
       node_{create_node()}, service_{create_service(node_, service_name)}, server_{create_server(service_)} {}
@@ -41,6 +46,82 @@ namespace signlang::peripheral_service {
       throw std::runtime_error("Failed to create peripheral display request-response server");
     }
     return std::move(server.value());
+  }
+
+  IpcStateSubscriber::IpcStateSubscriber(const std::string& event_service_name,
+                                         const std::string& blackboard_service_name) :
+      node_{create_node()},
+      blackboard_service_{open_blackboard_service(node_, blackboard_service_name)},
+      reader_{create_reader(blackboard_service_)}, state_entry_{create_state_entry(reader_)},
+      event_service_{open_event_service(node_, event_service_name)}, listener_{create_listener(event_service_)} {}
+
+  auto IpcStateSubscriber::current_state() const -> signlang::state_machine::AppState {
+    auto value = state_entry_.get();
+    return *value;
+  }
+
+  auto IpcStateSubscriber::poll_state_change() -> bool {
+    auto changed = false;
+    iox2::bb::StaticFunction<void(iox2::EventId)> callback{[&changed](iox2::EventId) { changed = true; }};
+    const auto result = listener_.try_wait_all(callback);
+    if (!result.has_value()) {
+      throw std::runtime_error("Failed to poll app state event in peripheral service");
+    }
+    return changed;
+  }
+
+  auto IpcStateSubscriber::create_node() -> iox2::Node<iox2::ServiceType::Ipc> {
+    return signlang::common::ipc::create_ipc_node(
+        "Failed to create iceoryx2 node for peripheral state subscriber");
+  }
+
+  auto IpcStateSubscriber::open_blackboard_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                                   const std::string& service_name) -> BlackboardService {
+    auto service = node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
+                       .blackboard_opener<signlang::state_machine::AppStateKey>()
+                       .open();
+    if (!service.has_value()) {
+      throw std::runtime_error("Failed to open app state blackboard service in peripheral service: " + service_name);
+    }
+    return std::move(service.value());
+  }
+
+  auto IpcStateSubscriber::create_reader(const BlackboardService& service) -> StateReader {
+    auto reader = service.reader_builder().create();
+    if (!reader.has_value()) {
+      throw std::runtime_error("Failed to create app state blackboard reader in peripheral service");
+    }
+    return std::move(reader.value());
+  }
+
+  auto IpcStateSubscriber::create_state_entry(StateReader& reader) -> StateEntry {
+    auto entry = reader.entry<signlang::state_machine::AppState>(signlang::state_machine::default_app_state_key());
+    if (!entry.has_value()) {
+      throw std::runtime_error("Failed to create app state blackboard entry reader in peripheral service");
+    }
+    return std::move(entry.value());
+  }
+
+  auto IpcStateSubscriber::open_event_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                              const std::string& service_name) -> EventService {
+    auto service = node.service_builder(signlang::common::ipc::service_name_from_string(service_name))
+                       .event()
+                       .max_notifiers(kMaxStateEventNotifiers)
+                       .max_listeners(kMaxStateEventListeners)
+                       .max_nodes(kMaxStateEventNodes)
+                       .open_or_create();
+    if (!service.has_value()) {
+      throw std::runtime_error("Failed to open app state event service in peripheral service: " + service_name);
+    }
+    return std::move(service.value());
+  }
+
+  auto IpcStateSubscriber::create_listener(const EventService& service) -> EventListener {
+    auto listener = service.listener_builder().create();
+    if (!listener.has_value()) {
+      throw std::runtime_error("Failed to create app state event listener in peripheral service");
+    }
+    return std::move(listener.value());
   }
 
   IpcStateControlClient::IpcStateControlClient(const std::string& service_name) :

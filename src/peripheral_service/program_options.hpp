@@ -19,6 +19,8 @@ namespace signlang::peripheral_service {
     DisplayOptions display;
     std::string font_file;
     std::string display_service_name;
+    std::string state_event_service_name;
+    std::string state_blackboard_service_name;
     std::string state_control_service_name;
     std::string alert_event_service_name;
     signlang::logging::Options logging;

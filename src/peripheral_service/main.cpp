@@ -158,6 +158,7 @@ namespace signlang::peripheral_service {
         options_{std::move(options)},
         font_{options_.font_file},
         state_control_client_{options_.state_control_service_name},
+        state_subscriber_{options_.state_event_service_name, options_.state_blackboard_service_name},
         alert_notifier_{options_.alert_event_service_name},
         serial_{options_.serial,
                 [this](ButtonEvent event) {
@@ -170,14 +171,21 @@ namespace signlang::peripheral_service {
       spdlog::info("Starting peripheral service");
       serial_.start();
       serial_.async_send(make_clear_frame());
+      serial_.async_send(make_motor_frame(false));
+      sync_motor_with_state(state_subscriber_.current_state());
       display_worker_.start();
       spdlog::info("peripheral serial device: {} @ {}", options_.serial.device, options_.serial.baud_rate);
       spdlog::info("peripheral display service: {}", options_.display_service_name);
+      spdlog::info("peripheral state event service: {}", options_.state_event_service_name);
+      spdlog::info("peripheral state blackboard service: {}", options_.state_blackboard_service_name);
       spdlog::info("peripheral state control service: {}", options_.state_control_service_name);
       spdlog::info("peripheral alert event service: {}", options_.alert_event_service_name);
 
       while (!signlang::runtime::shutdown_requested()) {
         (void)display_server_.wait_for_work(100);
+        if (state_subscriber_.poll_state_change()) {
+          sync_motor_with_state(state_subscriber_.current_state());
+        }
         display_server_.process_pending_requests([this](const DisplayRequest& request) {
           return handle_display_request(request);
         });
@@ -225,13 +233,26 @@ namespace signlang::peripheral_service {
       }
     }
 
+    void sync_motor_with_state(signlang::state_machine::AppState state) {
+      const auto should_enable = state == signlang::state_machine::AppState::DangerousSound;
+      if (motor_enabled_ == should_enable) {
+        return;
+      }
+
+      serial_.async_send(make_motor_frame(should_enable));
+      motor_enabled_ = should_enable;
+      spdlog::info("peripheral vibration motor {}", should_enable ? "enabled" : "disabled");
+    }
+
     ProgramOptions options_;
     HexFont font_;
     IpcStateControlClient state_control_client_;
+    IpcStateSubscriber state_subscriber_;
     IpcAlertNotifier alert_notifier_;
     SerialTransport serial_;
     DisplayWorker display_worker_;
     IpcDisplayServer display_server_;
+    bool motor_enabled_{false};
   };
 
 } // namespace signlang::peripheral_service

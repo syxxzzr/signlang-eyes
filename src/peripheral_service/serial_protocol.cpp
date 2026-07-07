@@ -65,7 +65,7 @@ namespace signlang::peripheral_service {
   }
 
   auto make_motor_frame(bool enabled) -> std::vector<std::uint8_t> {
-    return make_frame(OledCommand::Motor, 0, 0, 0, 0, {static_cast<std::uint8_t>(enabled ? 1 : 0)});
+    return make_frame(OledCommand::Motor, 0, 0, 0, 0, {static_cast<std::uint8_t>(enabled ? 0 : 1)});
   }
 
   auto split_draw_block(const OledBlock& block) -> std::vector<std::vector<std::uint8_t>> {
