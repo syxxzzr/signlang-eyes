@@ -17,6 +17,7 @@ namespace signlang::video_frontend {
     VideoFormatRequest output_format;
     std::uint32_t fps;
     bool mirror_output;
+    std::uint32_t rotation_degrees;
     signlang::logging::Options logging;
     signlang::runtime::CpuAffinityOptions cpu_affinity;
   };

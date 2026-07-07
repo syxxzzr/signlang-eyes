@@ -27,11 +27,31 @@ namespace signlang::video_frontend {
 
     auto is_even(std::uint32_t value) -> bool { return (value % 2) == 0; }
 
+    auto rga_rotation_usage(std::uint32_t rotation_degrees) -> int {
+      switch (rotation_degrees) {
+      case 0:
+        return 0;
+      case 90:
+        return IM_HAL_TRANSFORM_ROT_90;
+      case 180:
+        return IM_HAL_TRANSFORM_ROT_180;
+      case 270:
+        return IM_HAL_TRANSFORM_ROT_270;
+      default:
+        throw std::runtime_error("Video rotation must be one of: 0, 90, 180, 270");
+      }
+    }
+
+    auto rga_transform_usage(std::uint32_t rotation_degrees, bool mirror_output) -> int {
+      return IM_SYNC | rga_rotation_usage(rotation_degrees) | (mirror_output ? IM_HAL_TRANSFORM_FLIP_H : 0);
+    }
+
   } // namespace
 
-  VideoProcessor::VideoProcessor(VideoFormat capture_format, VideoFormat output_format, bool mirror_output) :
+  VideoProcessor::VideoProcessor(VideoFormat capture_format, VideoFormat output_format, bool mirror_output,
+                                 std::uint32_t rotation_degrees) :
       capture_format_{capture_format}, output_format_{output_format}, mirror_output_{mirror_output},
-      jpeg_decompressor_{nullptr} {
+      rotation_degrees_{rotation_degrees}, jpeg_decompressor_{nullptr} {
     if (output_format_.pixel_format != kPixelFormatRgb24) {
       throw std::runtime_error("Video output pixel format must be RGB24");
     }
@@ -104,7 +124,7 @@ namespace signlang::video_frontend {
       throw std::runtime_error("RGB video frame exceeds loaned output payload size");
     }
 
-    // RGA hardware accelerator: YUYV→RGB conversion + resize, with optional horizontal mirror.
+    // RGA hardware accelerator: YUYV→RGB conversion + resize, with optional transform.
     const auto src_buffer_size = static_cast<int>(captured_frame.size_bytes);
     const auto src_handle = importbuffer_virtualaddr(const_cast<std::uint8_t*>(captured_frame.data), src_buffer_size);
     if (src_handle == 0) {
@@ -127,7 +147,7 @@ namespace signlang::video_frontend {
     const auto dst_rect =
         im_rect{0, 0, static_cast<int>(output_format_.width), static_cast<int>(output_format_.height)};
     constexpr auto empty_rect = im_rect{0, 0, 0, 0};
-    const auto usage = IM_SYNC | (mirror_output_ ? IM_HAL_TRANSFORM_FLIP_H : 0);
+    const auto usage = rga_transform_usage(rotation_degrees_, mirror_output_);
 
     const auto status = improcess(src_img, dst_img, {}, src_rect, dst_rect, empty_rect, usage);
 
@@ -172,7 +192,7 @@ namespace signlang::video_frontend {
       throw std::runtime_error(std::string{"Failed to decode MJPEG frame: "} + tjGetErrorStr2(jpeg_decompressor_));
     }
 
-    // Step 2: Resize with optional horizontal mirror using RGA hardware accelerator
+    // Step 2: Resize with optional transform using RGA hardware accelerator
     const auto src_buffer_size = static_cast<int>(capture_rgb_buffer_.size());
     const auto src_handle = importbuffer_virtualaddr(capture_rgb_buffer_.data(), src_buffer_size);
     if (src_handle == 0) {
@@ -195,7 +215,7 @@ namespace signlang::video_frontend {
     const auto dst_rect =
         im_rect{0, 0, static_cast<int>(output_format_.width), static_cast<int>(output_format_.height)};
     constexpr auto empty_rect = im_rect{0, 0, 0, 0};
-    const auto usage = IM_SYNC | (mirror_output_ ? IM_HAL_TRANSFORM_FLIP_H : 0);
+    const auto usage = rga_transform_usage(rotation_degrees_, mirror_output_);
 
     const auto status = improcess(src_img, dst_img, {}, src_rect, dst_rect, empty_rect, usage);
 

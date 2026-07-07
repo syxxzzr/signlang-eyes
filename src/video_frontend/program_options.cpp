@@ -32,6 +32,12 @@ namespace signlang::video_frontend {
       }
     }
 
+    void validate_rotation_degrees(std::uint32_t rotation_degrees) {
+      if (rotation_degrees != 0 && rotation_degrees != 90 && rotation_degrees != 180 && rotation_degrees != 270) {
+        throw std::runtime_error("--rotation must be one of: 0, 90, 180, 270");
+      }
+    }
+
   } // namespace
 
   auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult {
@@ -48,7 +54,9 @@ namespace signlang::video_frontend {
         "output-width", "Published output width in pixels", cxxopts::value<std::uint32_t>())(
         "output-height", "Published output height in pixels", cxxopts::value<std::uint32_t>())(
         "mirror-output", "Horizontally mirror the published RGB output frame",
-        cxxopts::value<bool>()->default_value("false")->implicit_value("true"))("h,help", "Print usage");
+        cxxopts::value<bool>()->default_value("false")->implicit_value("true"))(
+        "rotation", "Clockwise rotation applied to the published RGB output frame: 0, 90, 180, or 270 degrees",
+        cxxopts::value<std::uint32_t>()->default_value("0"))("h,help", "Print usage");
     signlang::logging::add_cli_options(options);
     signlang::runtime::add_cpu_affinity_cli_options(options);
 
@@ -73,6 +81,8 @@ namespace signlang::video_frontend {
 
     validate_dimension_pair(capture_format, "capture-width", "capture-height");
     validate_dimension_pair(output_format, "output-width", "output-height");
+    const auto rotation_degrees = parsed_options["rotation"].as<std::uint32_t>();
+    validate_rotation_degrees(rotation_degrees);
 
     return ProgramOptionsParseResult{ProgramOptions{parsed_options["device"].as<std::string>(),
                                                     parsed_options["service"].as<std::string>(),
@@ -80,6 +90,7 @@ namespace signlang::video_frontend {
                                                     output_format,
                                                     fps,
                                                     parsed_options["mirror-output"].as<bool>(),
+                                                    rotation_degrees,
                                                     signlang::logging::parse_cli_options(parsed_options),
                                                     signlang::runtime::parse_cpu_affinity_cli_options(parsed_options)}};
   }

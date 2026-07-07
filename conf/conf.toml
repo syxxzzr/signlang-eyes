@@ -23,6 +23,7 @@ device = "/dev/video21"            # V4L2 camera device path
 output_width = 640                 # Published output width; omit to match capture width
 output_height = 480                # Published output height; omit to match capture height
 # mirror_output = false            # Horizontally mirror frames before publishing
+# rotation = 0                     # Clockwise rotation before publishing: 0, 90, 180, or 270 degrees; output_width/output_height remain final published dimensions
 # capture_width = 1920             # Requested capture width; omit to use largest supported camera mode
 # capture_height = 1080            # Requested capture height; omit to use largest supported camera mode
 # fps = 30                         # Requested frame rate

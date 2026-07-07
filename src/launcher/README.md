@@ -231,6 +231,7 @@ device = "/dev/video21"    # V4L2 camera
 output_width = 640         # Published width
 output_height = 480        # Published height
 mirror_output = false      # Horizontally mirror published frames
+# rotation = 0             # Clockwise rotation: 0, 90, 180, or 270; width/height stay final output size
 # cpu_core = 0              # Optional CPU core binding
 
 [speech_asr]

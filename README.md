@@ -175,6 +175,7 @@ device = "/dev/video21"    # V4L2 device path
 output_width = 640         # Output width in pixels
 output_height = 480        # Output height in pixels
 # mirror_output = false    # Horizontally mirror published video
+# rotation = 0             # Clockwise rotation: 0, 90, 180, or 270; width/height stay final output size
 
 [speech_asr]
 language = "zh"            # Recognition language: "zh" or "en"

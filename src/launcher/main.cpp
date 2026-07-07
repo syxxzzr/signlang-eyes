@@ -539,6 +539,7 @@ static auto build_video_frontend_args(const toml::table& cfg) -> std::vector<std
     add_opt_int(args, "--output-height", opt_int(*tbl, "output_height"));
     add_opt_int(args, "--fps", opt_int(*tbl, "fps"));
     add_opt_bool_assignment(args, "--mirror-output", opt_bool(*tbl, "mirror_output"));
+    add_opt_int(args, "--rotation", opt_int(*tbl, "rotation"));
     add_opt_int(args, "--cpu-core", opt_int(*tbl, "cpu_core"));
   }
   return args;
