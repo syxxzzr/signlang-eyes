@@ -1,5 +1,7 @@
 #include "piper_synthesizer.hpp"
 
+#include "spdlog/spdlog.h"
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -85,11 +87,13 @@ namespace signlang::speech_tts {
     }
 
     const auto phoneme_ids = phonemizer_.phonemize_to_ids(text);
+    spdlog::debug("Piper phonemized text bytes={} phoneme_ids={}", text.size(), phoneme_ids.size());
     if (should_cancel()) {
       return;
     }
 
     auto [z, y_mask] = run_encoder(phoneme_ids);
+    spdlog::debug("Piper encoder output z={} y_mask={}", z.size(), y_mask.size());
     if (should_cancel()) {
       return;
     }
@@ -298,6 +302,21 @@ namespace signlang::speech_tts {
       throw rknn_error("Failed to release RKNN Piper decoder outputs", result);
     }
 
+    const auto valid_mask_frames =
+        static_cast<std::size_t>(std::count_if(y_mask.begin(), y_mask.end(), [](float value) { return value > 0.5F; }));
+    if (decoder_mask_input_.empty()) {
+      throw std::runtime_error("RKNN Piper decoder mask input workspace is empty");
+    }
+    const auto samples_per_mask_frame = decoder_audio_output_.size() / decoder_mask_input_.size();
+    if (samples_per_mask_frame == 0) {
+      throw std::runtime_error("RKNN Piper decoder audio output is shorter than mask input capacity");
+    }
+
+    const auto valid_sample_count = std::min(audio.size(), valid_mask_frames * samples_per_mask_frame);
+    audio.resize(valid_sample_count);
+    spdlog::debug("Piper decoder audio static_samples={} valid_mask_frames={} samples_per_mask_frame={} "
+                  "trimmed_samples={}",
+                  decoder_audio_output_.size(), valid_mask_frames, samples_per_mask_frame, audio.size());
     return audio;
   }
 
