@@ -31,17 +31,17 @@ namespace {
   [[nodiscard]] auto state_chinese_title(signlang::state_machine::AppState state) -> const char* {
     switch (state) {
     case signlang::state_machine::AppState::Normal:
-      return "普通";
+      return "空闲模式";
     case signlang::state_machine::AppState::Asr:
-      return "语音识别";
+      return "语音识别模式";
     case signlang::state_machine::AppState::SignLanguageChat:
-      return "手语聊天";
+      return "手语交流模式";
     case signlang::state_machine::AppState::SignLanguageAi:
-      return "手语AI";
+      return "手语AI服务模式";
     case signlang::state_machine::AppState::DangerousSound:
-      return "危险声音";
+      return "检测到危险声音 请留意周边环境";
     }
-    return "未知";
+    return "系统异常";
   }
 
   class SignlangAiAccumulator {
