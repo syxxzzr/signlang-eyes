@@ -65,6 +65,7 @@ namespace signlang::speech_tts {
       decoder_z_input_index_{0},
       decoder_mask_input_index_{1},
       decoder_audio_output_index_{0},
+      decoder_z_channel_count_{0},
       decoder_z_element_count_{0},
       decoder_mask_element_count_{0} {
     onnx_session_options_.SetIntraOpNumThreads(1);
@@ -163,10 +164,10 @@ namespace signlang::speech_tts {
     decoder_mask_input_index_ = decoder_io_num_.n_input;
     for (std::uint32_t input_index = 0; input_index < decoder_input_attrs_.size(); ++input_index) {
       const auto& attr = decoder_input_attrs_[input_index];
-      if (attr.n_dims >= 3 && attr.dims[1] == 96) {
-        decoder_z_input_index_ = input_index;
-      } else if (attr.n_dims >= 3 && attr.dims[1] == 1) {
+      if (attr.n_dims >= 3 && attr.dims[1] == 1) {
         decoder_mask_input_index_ = input_index;
+      } else if (attr.n_dims >= 3 && attr.dims[1] > 1) {
+        decoder_z_input_index_ = input_index;
       }
     }
 
@@ -177,8 +178,10 @@ namespace signlang::speech_tts {
 
     decoder_z_element_count_ = decoder_input_attrs_[decoder_z_input_index_].n_elems;
     decoder_mask_element_count_ = decoder_input_attrs_[decoder_mask_input_index_].n_elems;
+    decoder_z_channel_count_ = static_cast<std::size_t>(decoder_input_attrs_[decoder_z_input_index_].dims[1]);
     if (decoder_z_element_count_ == 0 || decoder_mask_element_count_ == 0 ||
-        decoder_z_element_count_ != decoder_mask_element_count_ * 96) {
+        decoder_z_channel_count_ <= 1 ||
+        decoder_z_element_count_ != decoder_mask_element_count_ * decoder_z_channel_count_) {
       throw std::runtime_error("Unexpected RKNN Piper decoder input tensor shape");
     }
 
@@ -251,7 +254,8 @@ namespace signlang::speech_tts {
 
   auto PiperSynthesizer::run_decoder(const std::vector<float>& z, const std::vector<float>& y_mask)
       -> std::vector<float> {
-    if (y_mask.empty() || z.size() != y_mask.size() * 96) {
+    if (y_mask.empty() || decoder_z_channel_count_ == 0 ||
+        z.size() != y_mask.size() * decoder_z_channel_count_) {
       throw std::runtime_error("Unexpected Piper encoder output sizes for RKNN decoder");
     }
     if (z.size() > decoder_z_input_.size() || y_mask.size() > decoder_mask_input_.size()) {

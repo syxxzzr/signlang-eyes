@@ -10,9 +10,9 @@
 namespace signlang::speech_tts {
   namespace {
 
-    constexpr auto kDefaultEncoderModelPath = "models/piper/zh_CN-huayan-x_low.encoder.onnx";
-    constexpr auto kDefaultDecoderModelPath = "models/piper/zh_CN-huayan-x_low.decoder.rknn";
-    constexpr auto kDefaultConfigPath = "models/piper/zh_CN-huayan-x_low.json";
+    constexpr auto kDefaultEncoderModelPath = "models/piper/zh_CN-chaowen-medium.encoder.onnx";
+    constexpr auto kDefaultDecoderModelPath = "models/piper/zh_CN-chaowen-medium.decoder.rknn";
+    constexpr auto kDefaultConfigPath = "models/piper/zh_CN-chaowen-medium.json";
     constexpr auto kDefaultPinyinDictionaryPath = SIGNLANG_CPP_PINYIN_DICT_DIR;
 
     auto parse_npu_core_mask(const std::string& value) -> rknn_core_mask {

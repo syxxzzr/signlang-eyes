@@ -57,6 +57,7 @@ namespace signlang::speech_tts {
     std::uint32_t decoder_z_input_index_;
     std::uint32_t decoder_mask_input_index_;
     std::uint32_t decoder_audio_output_index_;
+    std::size_t decoder_z_channel_count_;
     std::size_t decoder_z_element_count_;
     std::size_t decoder_mask_element_count_;
     std::vector<float> decoder_z_input_;
