@@ -83,9 +83,9 @@ auto main(int argc, char** argv) -> int {
         bluetooth.notify_packet(packet);
         ++notified_packet_count;
         if (signlang_result != nullptr || notified_packet_count % 200 == 0) {
-          spdlog::info("Sent BLE stream packet count={} handpose_seq={} detections={} signlang_attached={} bytes={}",
-                       notified_packet_count, metadata.sequence_number, count, signlang_result != nullptr,
-                       packet.size());
+          spdlog::debug("Sent BLE stream packet count={} handpose_seq={} detections={} signlang_attached={} bytes={}",
+                        notified_packet_count, metadata.sequence_number, count, signlang_result != nullptr,
+                        packet.size());
         }
         pending_signlang_result.reset();
         next_stream_time_ns = now_ns + manager.stream_interval_ns();

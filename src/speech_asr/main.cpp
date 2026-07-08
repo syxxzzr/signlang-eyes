@@ -179,8 +179,8 @@ auto main(int argc, char** argv) -> int {
           copy_inference_result(inference_result, result);
 
           result_publisher.publish(result);
-          spdlog::info("Published ASR result seq={} transcript_len={} inference_ms={:.2f}", result.sequence_number,
-                       inference_result.transcript.size(), inference_result.inference_time_ms);
+          spdlog::debug("Published ASR result seq={} transcript_len={} inference_ms={:.2f}", result.sequence_number,
+                        inference_result.transcript.size(), inference_result.inference_time_ms);
           next_window_start_sample = audio_window.start_sample_index + hop_sample_count;
         }
       } catch (...) {

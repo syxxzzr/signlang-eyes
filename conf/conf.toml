@@ -2,13 +2,16 @@
 # restart_attempts = -1            # Restart whole system after module startup/runtime failure; <0 means unlimited
 
 [logging]
+level = "info"                    # Default module log level: trace, debug, info, warn, error, critical, off
 rotate_size = 1048576              # Log rotation size in bytes
 retain_files = 100                 # Number of log files to retain
 
 [state_machine]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 # initial_state = "normal"         # normal, asr, sign_language_chat, sign_language_ai
 
 [audio_frontend]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 device = "hw:2,0"                  # ALSA device name (e.g. "hw:0,0", "default")
 capture_rate = 16000               # Requested capture sample rate in Hz; omit to auto-select from ALSA
 capture_channels = 2               # Requested capture channel count; omit to auto-select from ALSA
@@ -19,16 +22,19 @@ capture_channels = 2               # Requested capture channel count; omit to au
 # localization_rms_weight = 0.3    # RMS contribution; must sum with TDOA weight to 1.0
 
 [video_frontend]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 device = "/dev/video21"            # V4L2 camera device path
 output_width = 640                 # Published output width; omit to match capture width
 output_height = 480                # Published output height; omit to match capture height
 # mirror_output = false            # Horizontally mirror frames before publishing
+# rotation = 0                     # Clockwise rotation before publishing: 0, 90, 180, or 270 degrees; output_width/output_height remain final published dimensions
 # capture_width = 1920             # Requested capture width; omit to use largest supported camera mode
 # capture_height = 1080            # Requested capture height; omit to use largest supported camera mode
 # fps = 30                         # Requested frame rate
 # cpu_core = 0                     # Optional CPU core binding; invalid or rejected values warn and fall back to system default scheduling
 
 [speech_asr]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 language = "zh"                    # Recognition language: en, zh; default is en
 npu_core = "1"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
 # window_ms = 15000                # ASR window length in milliseconds
@@ -45,20 +51,23 @@ npu_core = "1"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 # cpu_core = 1                     # Optional CPU core binding; invalid or rejected values warn and fall back to system default scheduling
 
 [speech_tts]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 device = "default"                 # ALSA playback device name
 npu_core = "auto"                  # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
-# encoder_model = "models/piper/zh_CN-huayan-x_low.encoder.onnx"
-# decoder_model = "models/piper/zh_CN-huayan-x_low.decoder.rknn"
-# config = "models/piper/zh_CN-huayan-x_low.json"
+# encoder_model = "models/piper/zh_CN-chaowen-medium.encoder.onnx"
+# decoder_model = "models/piper/zh_CN-chaowen-medium.decoder.rknn"
+# config = "models/piper/zh_CN-chaowen-medium.json"
 # pinyin_dict = "share/cpp-pinyin/dict"
 # rknn_priority = "medium"         # high, medium, low
 # cpu_core = 2                     # Optional CPU core binding; invalid or rejected values warn and fall back to system default scheduling
 
 [dataflow_dispatcher]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 # subscriber_buffer = 2            # signlang_det result subscriber queue size
 # signlang_ai_window_ms = 5000     # Send SignLanguageAi prompt after no new signlang_det result for this long
 
 [env_sound_det]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
 # window_ms = 3000                 # Detection window length in milliseconds
 # overlap = 0.2                    # Overlap ratio between adjacent detection windows
@@ -69,6 +78,7 @@ npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 # subscriber_buffer = 2            # iceoryx2 subscriber queue size
 
 [handpose_det]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 npu_core = "2"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
 swap_handedness = true             # Swap left/right handedness for mirrored cameras
 # model = "models/mediapipe/hand_detector.rknn"
@@ -99,6 +109,7 @@ swap_handedness = true             # Swap left/right handedness for mirrored cam
 # subscriber_buffer = 2            # iceoryx2 subscriber queue size
 
 [signlang_det]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is auto
 # model = "models/bilstm/biltsm.rknn"
 # prototypes = "conf/prototypes.sqlite"
@@ -116,6 +127,7 @@ npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 # subscriber_buffer = 2            # iceoryx2 subscriber queue size
 
 [signlang_manager]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 # bluetooth_name = "SignLang Eyes"
 # adapter_path = "/org/bluez/hci0"
 # subscriber_buffer = 2            # iceoryx2 subscriber queue size
@@ -124,14 +136,14 @@ npu_core = "0"                     # auto, all, 0, 1, 2, 0_1, 0_1_2; default is 
 # max_upload_bytes = 8388608       # Maximum BLE gesture upload size in bytes
 # enable_streaming_by_default = false
 
-[position_service]
+[telemetry_service]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 device = "/dev/ttyS9"              # GNSS serial device path
-baud_rate = 115200                 # GNSS serial baud rate
+# baud_rate = 9600                 # GNSS serial baud rate
 # mqtt_host = "127.0.0.1"          # MQTT broker host
 # mqtt_port = 1883                 # MQTT broker TCP port
-# mqtt_client_id = "signlang_eyes_position_service"
+# mqtt_client_id = "signlang_eyes_telemetry_service"
 # mqtt_topic = "signlang/position" # MQTT topic for position JSON payloads
-# alert_event_service = "position_alert"
 # alert_mqtt_topic = "signlang/alert"
 # mqtt_username = ""
 # mqtt_password = ""
@@ -140,6 +152,7 @@ baud_rate = 115200                 # GNSS serial baud rate
 # mqtt_retain = false              # Publish retained MQTT messages
 
 [peripheral_service]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 device = "/dev/ttyS3"              # Peripheral MCU serial device path
 baud_rate = 115200                 # Peripheral MCU serial baud rate
 # data_bits = 8                    # Serial data bits
@@ -152,11 +165,13 @@ baud_rate = 115200                 # Peripheral MCU serial baud rate
 # font_size = 16                   # Rendered glyph height in pixels
 # char_spacing = 1                 # Pixel spacing between glyphs
 # line_gap = 0                     # Pixel gap between the two text lines
-# scroll_step_px = 1               # Horizontal scroll pixels per tick
-# scroll_interval_ms = 80          # Horizontal scroll tick interval
-# refresh_interval_ms = 50         # Display worker refresh interval
+# scroll_speed_px_per_sec = 13     # Horizontal scroll speed in pixels per second
+# scroll_pause_ms = 800            # Pause at scroll start and end in milliseconds
+# scroll_loop = true               # Restart horizontal scrolling after the end pause
+# refresh_rate_hz = 20             # OLED dirty-region refresh rate
 
 [llm_client]
+# log_level = "info"                # Module log level; falls back to [logging].level when omitted
 # base_url = "https://api.openai.com/v1" # OpenAI-compatible API base URL
 # api_key = ""                           # API secret key; empty omits Authorization
 # model = "gpt-5.5"             # OpenAI-compatible model name

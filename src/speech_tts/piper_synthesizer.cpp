@@ -1,5 +1,7 @@
 #include "piper_synthesizer.hpp"
 
+#include "spdlog/spdlog.h"
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -63,6 +65,7 @@ namespace signlang::speech_tts {
       decoder_z_input_index_{0},
       decoder_mask_input_index_{1},
       decoder_audio_output_index_{0},
+      decoder_z_channel_count_{0},
       decoder_z_element_count_{0},
       decoder_mask_element_count_{0} {
     onnx_session_options_.SetIntraOpNumThreads(1);
@@ -85,11 +88,13 @@ namespace signlang::speech_tts {
     }
 
     const auto phoneme_ids = phonemizer_.phonemize_to_ids(text);
+    spdlog::debug("Piper phonemized text bytes={} phoneme_ids={}", text.size(), phoneme_ids.size());
     if (should_cancel()) {
       return;
     }
 
     auto [z, y_mask] = run_encoder(phoneme_ids);
+    spdlog::debug("Piper encoder output z={} y_mask={}", z.size(), y_mask.size());
     if (should_cancel()) {
       return;
     }
@@ -159,10 +164,10 @@ namespace signlang::speech_tts {
     decoder_mask_input_index_ = decoder_io_num_.n_input;
     for (std::uint32_t input_index = 0; input_index < decoder_input_attrs_.size(); ++input_index) {
       const auto& attr = decoder_input_attrs_[input_index];
-      if (attr.n_dims >= 3 && attr.dims[1] == 96) {
-        decoder_z_input_index_ = input_index;
-      } else if (attr.n_dims >= 3 && attr.dims[1] == 1) {
+      if (attr.n_dims >= 3 && attr.dims[1] == 1) {
         decoder_mask_input_index_ = input_index;
+      } else if (attr.n_dims >= 3 && attr.dims[1] > 1) {
+        decoder_z_input_index_ = input_index;
       }
     }
 
@@ -173,8 +178,10 @@ namespace signlang::speech_tts {
 
     decoder_z_element_count_ = decoder_input_attrs_[decoder_z_input_index_].n_elems;
     decoder_mask_element_count_ = decoder_input_attrs_[decoder_mask_input_index_].n_elems;
+    decoder_z_channel_count_ = static_cast<std::size_t>(decoder_input_attrs_[decoder_z_input_index_].dims[1]);
     if (decoder_z_element_count_ == 0 || decoder_mask_element_count_ == 0 ||
-        decoder_z_element_count_ != decoder_mask_element_count_ * 96) {
+        decoder_z_channel_count_ <= 1 ||
+        decoder_z_element_count_ != decoder_mask_element_count_ * decoder_z_channel_count_) {
       throw std::runtime_error("Unexpected RKNN Piper decoder input tensor shape");
     }
 
@@ -247,7 +254,8 @@ namespace signlang::speech_tts {
 
   auto PiperSynthesizer::run_decoder(const std::vector<float>& z, const std::vector<float>& y_mask)
       -> std::vector<float> {
-    if (y_mask.empty() || z.size() != y_mask.size() * 96) {
+    if (y_mask.empty() || decoder_z_channel_count_ == 0 ||
+        z.size() != y_mask.size() * decoder_z_channel_count_) {
       throw std::runtime_error("Unexpected Piper encoder output sizes for RKNN decoder");
     }
     if (z.size() > decoder_z_input_.size() || y_mask.size() > decoder_mask_input_.size()) {
@@ -256,8 +264,20 @@ namespace signlang::speech_tts {
 
     std::fill(decoder_z_input_.begin(), decoder_z_input_.end(), 0.0F);
     std::fill(decoder_mask_input_.begin(), decoder_mask_input_.end(), 0.0F);
-    std::copy(z.begin(), z.end(), decoder_z_input_.begin());
     std::copy(y_mask.begin(), y_mask.end(), decoder_mask_input_.begin());
+
+    const auto z_time_length = y_mask.size();
+    const auto z_time_capacity = decoder_z_input_.size() / decoder_z_channel_count_;
+    if (z_time_capacity < z_time_length || z_time_capacity != decoder_mask_input_.size()) {
+      throw std::runtime_error("Unexpected RKNN Piper decoder z/y_mask static time capacity");
+    }
+
+    for (std::size_t channel = 0; channel < decoder_z_channel_count_; ++channel) {
+      const auto source_offset = channel * z_time_length;
+      const auto target_offset = channel * z_time_capacity;
+      std::copy_n(z.begin() + static_cast<std::ptrdiff_t>(source_offset), z_time_length,
+                  decoder_z_input_.begin() + static_cast<std::ptrdiff_t>(target_offset));
+    }
 
     auto inputs = std::array<rknn_input, 2>{};
     inputs[decoder_z_input_index_] = {};
@@ -298,6 +318,21 @@ namespace signlang::speech_tts {
       throw rknn_error("Failed to release RKNN Piper decoder outputs", result);
     }
 
+    const auto valid_mask_frames =
+        static_cast<std::size_t>(std::count_if(y_mask.begin(), y_mask.end(), [](float value) { return value > 0.5F; }));
+    if (decoder_mask_input_.empty()) {
+      throw std::runtime_error("RKNN Piper decoder mask input workspace is empty");
+    }
+    const auto samples_per_mask_frame = decoder_audio_output_.size() / decoder_mask_input_.size();
+    if (samples_per_mask_frame == 0) {
+      throw std::runtime_error("RKNN Piper decoder audio output is shorter than mask input capacity");
+    }
+
+    const auto valid_sample_count = std::min(audio.size(), valid_mask_frames * samples_per_mask_frame);
+    audio.resize(valid_sample_count);
+    spdlog::debug("Piper decoder audio static_samples={} valid_mask_frames={} samples_per_mask_frame={} "
+                  "trimmed_samples={}",
+                  decoder_audio_output_.size(), valid_mask_frames, samples_per_mask_frame, audio.size());
     return audio;
   }
 

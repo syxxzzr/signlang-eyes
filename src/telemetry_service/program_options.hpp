@@ -1,5 +1,5 @@
-#ifndef SIGNLANG_EYES_POSITION_SERVICE_PROGRAM_OPTIONS_HPP
-#define SIGNLANG_EYES_POSITION_SERVICE_PROGRAM_OPTIONS_HPP
+#ifndef SIGNLANG_EYES_TELEMETRY_SERVICE_PROGRAM_OPTIONS_HPP
+#define SIGNLANG_EYES_TELEMETRY_SERVICE_PROGRAM_OPTIONS_HPP
 
 #include "common/logging.hpp"
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <variant>
 
-namespace signlang::position_service {
+namespace signlang::telemetry_service {
 
   struct ProgramOptions {
     std::string serial_device;
@@ -34,6 +34,6 @@ namespace signlang::position_service {
 
   auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult;
 
-} // namespace signlang::position_service
+} // namespace signlang::telemetry_service
 
-#endif // SIGNLANG_EYES_POSITION_SERVICE_PROGRAM_OPTIONS_HPP
+#endif // SIGNLANG_EYES_TELEMETRY_SERVICE_PROGRAM_OPTIONS_HPP

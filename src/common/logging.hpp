@@ -21,7 +21,30 @@ namespace signlang::logging {
   struct Options {
     std::optional<std::string> log_file;
     std::uint64_t rotate_size = kDefaultRotateSize;
+    spdlog::level::level_enum level = spdlog::level::info;
   };
+
+  inline auto level_name(spdlog::level::level_enum level) -> const char* {
+    switch (level) {
+    case spdlog::level::trace:
+      return "trace";
+    case spdlog::level::debug:
+      return "debug";
+    case spdlog::level::info:
+      return "info";
+    case spdlog::level::warn:
+      return "warn";
+    case spdlog::level::err:
+      return "error";
+    case spdlog::level::critical:
+      return "critical";
+    case spdlog::level::off:
+      return "off";
+    case spdlog::level::n_levels:
+      return "unknown";
+    }
+    return "unknown";
+  }
 
   inline void initialize(const Options& options = {}, std::uint64_t retain_files = kDefaultRetainFiles,
                          const std::string& module_name = "signlang") {
@@ -45,10 +68,12 @@ namespace signlang::logging {
 
     auto logger =
         std::make_shared<spdlog::logger>(module_name.empty() ? "signlang" : module_name, sinks.begin(), sinks.end());
-    logger->set_level(spdlog::level::info);
-    logger->flush_on(spdlog::level::info);
+    logger->set_level(options.level);
+    logger->flush_on(options.level);
     logger->set_pattern("[%Y-%m-%dT%H:%M:%S.%e%z] [%l] [%n] %v");
     spdlog::set_default_logger(std::move(logger));
+    spdlog::info("logging initialized level={} log_file={} rotate_size={}", level_name(options.level),
+                 options.log_file.value_or("<stdout-only>"), options.rotate_size);
   }
 
 } // namespace signlang::logging

@@ -2,13 +2,13 @@ set(SPEECH_TTS_MODEL_DIR
         ${SIGNLANG_MODEL_ROOT}/piper
         CACHE PATH "Directory containing Piper TTS model assets")
 set(SPEECH_TTS_ENCODER_MODEL_FILE
-        ${SPEECH_TTS_MODEL_DIR}/zh_CN-huayan-x_low.encoder.onnx
+        ${SPEECH_TTS_MODEL_DIR}/zh_CN-chaowen-medium.encoder.onnx
         CACHE FILEPATH "Piper encoder ONNX model")
 set(SPEECH_TTS_DECODER_MODEL_FILE
-        ${SPEECH_TTS_MODEL_DIR}/zh_CN-huayan-x_low.decoder.rknn
+        ${SPEECH_TTS_MODEL_DIR}/zh_CN-chaowen-medium.decoder.rknn
         CACHE FILEPATH "Piper decoder RKNN model")
 set(SPEECH_TTS_CONFIG_FILE
-        ${SPEECH_TTS_MODEL_DIR}/zh_CN-huayan-x_low.json
+        ${SPEECH_TTS_MODEL_DIR}/zh_CN-chaowen-medium.json
         CACHE FILEPATH "Piper voice JSON config")
 set(SPEECH_TTS_INSTALL_MODEL_DIR models/piper)
 
@@ -74,15 +74,15 @@ target_link_libraries(signlang_eyes_speech_tts PRIVATE
 signlang_add_runtime_asset(signlang_eyes_speech_tts
         "${SPEECH_TTS_ENCODER_MODEL_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_INSTALL_MODEL_DIR}"
-        zh_CN-huayan-x_low.encoder.onnx)
+        zh_CN-chaowen-medium.encoder.onnx)
 signlang_add_runtime_asset(signlang_eyes_speech_tts
         "${SPEECH_TTS_DECODER_MODEL_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_INSTALL_MODEL_DIR}"
-        zh_CN-huayan-x_low.decoder.rknn)
+        zh_CN-chaowen-medium.decoder.rknn)
 signlang_add_runtime_asset(signlang_eyes_speech_tts
         "${SPEECH_TTS_CONFIG_FILE}"
         "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_INSTALL_MODEL_DIR}"
-        zh_CN-huayan-x_low.json)
+        zh_CN-chaowen-medium.json)
 add_custom_command(TARGET signlang_eyes_speech_tts POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
         "$<TARGET_FILE_DIR:signlang_eyes_speech_tts>/${SPEECH_TTS_CPP_PINYIN_RUNTIME_DICT_DIR}"

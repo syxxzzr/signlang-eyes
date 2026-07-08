@@ -18,9 +18,10 @@ namespace signlang::peripheral_service {
     std::uint8_t font_size = 16;
     std::uint8_t char_spacing = 1;
     std::uint8_t line_gap = 0;
-    std::uint8_t scroll_step_px = 1;
-    std::uint32_t scroll_interval_ms = 80;
-    std::uint32_t refresh_interval_ms = 50;
+    std::uint32_t scroll_speed_px_per_sec = 13;
+    std::uint32_t scroll_pause_ms = 800;
+    bool scroll_loop = true;
+    std::uint32_t refresh_rate_hz = 20;
   };
 
   class ScrollingDisplay {
@@ -33,13 +34,14 @@ namespace signlang::peripheral_service {
     void set_second_line(std::string text);
     void clear_second_line();
     [[nodiscard]] auto tick(Clock::time_point now) -> std::vector<std::vector<std::uint8_t>>;
-    [[nodiscard]] auto full_refresh() -> std::vector<std::vector<std::uint8_t>>;
 
   private:
     struct LineState {
       std::string text;
       std::uint16_t width = 0;
       std::uint16_t offset = 0;
+      Clock::time_point pause_until{};
+      bool scroll_finished = false;
     };
 
     void update_widths();
@@ -55,7 +57,7 @@ namespace signlang::peripheral_service {
     LineState first_line_;
     LineState second_line_;
     Clock::time_point last_scroll_at_{};
-    Clock::time_point last_refresh_at_{};
+    std::uint32_t scroll_remainder_px_ms_{0};
     bool force_refresh_{true};
   };
 

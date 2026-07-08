@@ -11,7 +11,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace signlang::position_service {
+namespace signlang::telemetry_service {
 
   EventListener::EventListener(std::string service_name, std::string node_name, Callback callback) :
       service_name_{std::move(service_name)}, node_name_{std::move(node_name)}, callback_{std::move(callback)} {}
@@ -70,7 +70,7 @@ namespace signlang::position_service {
       while (!stop_requested_.load(std::memory_order_acquire)) {
         iox2::bb::StaticFunction<void(iox2::EventId)> callback{[this](iox2::EventId event_id) {
           if (callback_) {
-            spdlog::info("Alert event listener received event id {}", event_id.as_value());
+            spdlog::debug("Alert event listener received event id {}", event_id.as_value());
             callback_(AlertEvent{static_cast<std::uint64_t>(event_id.as_value()), 1});
           }
         }};
@@ -88,4 +88,4 @@ namespace signlang::position_service {
     running_.store(false, std::memory_order_release);
   }
 
-} // namespace signlang::position_service
+} // namespace signlang::telemetry_service

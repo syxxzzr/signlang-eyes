@@ -7,16 +7,16 @@
 #include <stdexcept>
 #include <string>
 
-namespace signlang::position_service {
+namespace signlang::telemetry_service {
   namespace {
 
     constexpr auto kDefaultSerialDevice = "/dev/ttyS9";
-    constexpr std::uint32_t kDefaultBaudRate = 115200;
+    constexpr std::uint32_t kDefaultBaudRate = 9600;
     constexpr auto kDefaultMqttHost = "127.0.0.1";
     constexpr std::uint16_t kDefaultMqttPort = 1883;
-    constexpr auto kDefaultMqttClientId = "signlang_eyes_position_service";
+    constexpr auto kDefaultMqttClientId = "signlang_eyes_telemetry_service";
     constexpr auto kDefaultMqttTopic = "signlang/position";
-    constexpr auto kDefaultAlertEventService = "position_alert";
+    constexpr auto kDefaultAlertEventService = "telemetry_alert";
     constexpr auto kDefaultAlertMqttTopic = "signlang/alert";
     constexpr std::uint16_t kDefaultKeepAliveSeconds = 30;
 
@@ -39,8 +39,8 @@ namespace signlang::position_service {
   } // namespace
 
   auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult {
-    cxxopts::Options options{"signlang_eyes_position_service",
-                             "Read GNSS NMEA from a serial device and publish positions to MQTT."};
+    cxxopts::Options options{"signlang_eyes_telemetry_service",
+                             "Read device telemetry sources and publish position and alert payloads to MQTT."};
 
     options.add_options()("d,device", "GNSS serial device path",
                           cxxopts::value<std::string>()->default_value(kDefaultSerialDevice))(
@@ -105,4 +105,4 @@ namespace signlang::position_service {
                                                     signlang::logging::parse_cli_options(parsed_options)}};
   }
 
-} // namespace signlang::position_service
+} // namespace signlang::telemetry_service

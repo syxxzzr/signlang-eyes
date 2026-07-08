@@ -8,7 +8,7 @@
 #include <limits>
 #include <string>
 
-namespace signlang::position_service {
+namespace signlang::telemetry_service {
   namespace {
 
     auto coord_to_degrees(const minmea_float& value) -> std::optional<double> {
@@ -39,27 +39,30 @@ namespace signlang::position_service {
 
   } // namespace
 
-  auto NmeaPositionParser::parse_line(const std::string& line) -> std::optional<PositionFix> {
+  auto NmeaPositionParser::parse_line(const std::string& line) -> PositionParseResult {
     const auto sentence = copy_sentence(line);
     if (sentence.empty()) {
-      return std::nullopt;
+      return PositionParseResult{PositionParseStatus::Empty, std::nullopt};
     }
 
     if (!minmea_check(sentence.c_str(), false)) {
-      return std::nullopt;
+      return PositionParseResult{PositionParseStatus::InvalidSentence, std::nullopt};
     }
 
     switch (minmea_sentence_id(sentence.c_str(), false)) {
       case MINMEA_SENTENCE_GGA: {
         minmea_sentence_gga frame{};
-        if (!minmea_parse_gga(&frame, sentence.c_str()) || frame.fix_quality == 0) {
-          return std::nullopt;
+        if (!minmea_parse_gga(&frame, sentence.c_str())) {
+          return PositionParseResult{PositionParseStatus::ParseFailed, std::nullopt};
+        }
+        if (frame.fix_quality == 0) {
+          return PositionParseResult{PositionParseStatus::NoFix, std::nullopt};
         }
 
         const auto latitude = coord_to_degrees(frame.latitude);
         const auto longitude = coord_to_degrees(frame.longitude);
         if (!latitude.has_value() || !longitude.has_value()) {
-          return std::nullopt;
+          return PositionParseResult{PositionParseStatus::InvalidCoordinates, std::nullopt};
         }
 
         latest_altitude_m_ = fraction_to_double(frame.altitude);
@@ -76,18 +79,21 @@ namespace signlang::position_service {
         fix.satellites = latest_satellites_;
         fix.hdop = latest_hdop_;
         fix.source_sentence = sentence;
-        return fix;
+        return PositionParseResult{PositionParseStatus::ValidFix, std::move(fix)};
       }
       case MINMEA_SENTENCE_RMC: {
         minmea_sentence_rmc frame{};
-        if (!minmea_parse_rmc(&frame, sentence.c_str()) || !frame.valid) {
-          return std::nullopt;
+        if (!minmea_parse_rmc(&frame, sentence.c_str())) {
+          return PositionParseResult{PositionParseStatus::ParseFailed, std::nullopt};
+        }
+        if (!frame.valid) {
+          return PositionParseResult{PositionParseStatus::NoFix, std::nullopt};
         }
 
         const auto latitude = coord_to_degrees(frame.latitude);
         const auto longitude = coord_to_degrees(frame.longitude);
         if (!latitude.has_value() || !longitude.has_value()) {
-          return std::nullopt;
+          return PositionParseResult{PositionParseStatus::InvalidCoordinates, std::nullopt};
         }
 
         auto speed_kph = fraction_to_double(frame.speed);
@@ -104,11 +110,11 @@ namespace signlang::position_service {
         fix.satellites = latest_satellites_;
         fix.hdop = latest_hdop_;
         fix.source_sentence = sentence;
-        return fix;
+        return PositionParseResult{PositionParseStatus::ValidFix, std::move(fix)};
       }
       default:
-        return std::nullopt;
+        return PositionParseResult{PositionParseStatus::UnsupportedSentence, std::nullopt};
     }
   }
 
-} // namespace signlang::position_service
+} // namespace signlang::telemetry_service

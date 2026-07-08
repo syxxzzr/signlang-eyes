@@ -5,6 +5,8 @@
 #include "cxxopts.hpp"
 
 #include <charconv>
+#include <algorithm>
+#include <cctype>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -23,18 +25,52 @@ namespace signlang::logging {
     return parsed;
   }
 
+  inline auto parse_level(std::string value, const char* option_name) -> spdlog::level::level_enum {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+      return static_cast<char>(std::tolower(ch));
+    });
+
+    if (value == "trace") {
+      return spdlog::level::trace;
+    }
+    if (value == "debug") {
+      return spdlog::level::debug;
+    }
+    if (value == "info") {
+      return spdlog::level::info;
+    }
+    if (value == "warn" || value == "warning") {
+      return spdlog::level::warn;
+    }
+    if (value == "error" || value == "err") {
+      return spdlog::level::err;
+    }
+    if (value == "critical") {
+      return spdlog::level::critical;
+    }
+    if (value == "off") {
+      return spdlog::level::off;
+    }
+
+    throw std::runtime_error(std::string{option_name} +
+                             " must be one of trace, debug, info, warn, error, critical, off");
+  }
+
   inline void add_cli_options(cxxopts::Options& options) {
     options.add_options("Logging")("log-file", "Write logs to this rotating file in addition to stdout",
                                    cxxopts::value<std::string>())(
         "log-rotate-size", "Rotate log files after this many bytes",
-        cxxopts::value<std::string>()->default_value(std::to_string(kDefaultRotateSize)));
+        cxxopts::value<std::string>()->default_value(std::to_string(kDefaultRotateSize)))(
+        "log-level", "Minimum log level: trace, debug, info, warn, error, critical, off",
+        cxxopts::value<std::string>()->default_value("info"));
   }
 
   inline auto parse_cli_options(const cxxopts::ParseResult& parsed_options) -> Options {
     return Options{parsed_options.count("log-file") == 0
                        ? std::nullopt
                        : std::optional<std::string>{parsed_options["log-file"].as<std::string>()},
-                   parse_positive_u64(parsed_options["log-rotate-size"].as<std::string>(), "--log-rotate-size")};
+                   parse_positive_u64(parsed_options["log-rotate-size"].as<std::string>(), "--log-rotate-size"),
+                   parse_level(parsed_options["log-level"].as<std::string>(), "--log-level")};
   }
 
 } // namespace signlang::logging

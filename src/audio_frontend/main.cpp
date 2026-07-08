@@ -89,7 +89,7 @@ auto main(int argc, char** argv) -> int {
       }
       publisher.publish(input_samples, audio_processor, current_sequence_number);
       if (current_sequence_number % 500 == 0) {
-        spdlog::info("Published audio frame sequence {}", current_sequence_number);
+        spdlog::debug("Published audio frame sequence {}", current_sequence_number);
       }
     }
 

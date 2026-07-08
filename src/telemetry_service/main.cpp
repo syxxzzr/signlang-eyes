@@ -22,13 +22,13 @@
 #include <thread>
 #include <utility>
 
-namespace signlang::position_service {
+namespace signlang::telemetry_service {
   namespace asio = boost::asio;
   namespace json = boost::json;
   namespace mqtt = boost::mqtt5;
   using TcpStream = asio::ip::tcp::socket;
   using MqttClient = mqtt::mqtt_client<TcpStream>;
-  using PositionPayloadQueue = PayloadQueue<64>;
+  using TelemetryPayloadQueue = PayloadQueue<64>;
 
   namespace {
 
@@ -56,20 +56,25 @@ namespace signlang::position_service {
 
   } // namespace
 
-  class PositionService : public std::enable_shared_from_this<PositionService> {
+  class TelemetryService : public std::enable_shared_from_this<TelemetryService> {
   public:
-    PositionService(asio::io_context& serial_io_context, asio::io_context& mqtt_io_context, ProgramOptions options)
+    TelemetryService(asio::io_context& serial_io_context, asio::io_context& mqtt_io_context, ProgramOptions options)
         : serial_io_context_{serial_io_context},
-          mqtt_io_context_{mqtt_io_context},
-          serial_{serial_io_context},
-          mqtt_client_{mqtt_io_context},
-          mqtt_drain_timer_{mqtt_io_context},
+            serial_{serial_io_context},
+          mqtt_client_{asio::make_strand(mqtt_io_context)},
+          mqtt_drain_timer_{mqtt_client_.get_executor()},
           options_{std::move(options)},
-          alert_listener_{options_.alert_event_service, "position_service_alert_listener",
-                          [this](const AlertEvent& event) { publish_alert(event); }} {}
+          alert_listener_{options_.alert_event_service, "telemetry_service_alert_listener",
+                          [this](const AlertEvent& event) {
+                            asio::post(serial_io_context_, [this, event] {
+                              if (!stop_requested_.load(std::memory_order_acquire)) {
+                                publish_alert(event);
+                              }
+                            });
+                          }} {}
 
     void start() {
-      spdlog::info("Starting position service");
+      spdlog::info("Starting telemetry service");
       serial_.open(options_.serial_device);
       serial_.set_option(asio::serial_port_base::baud_rate{options_.baud_rate});
       serial_.set_option(asio::serial_port_base::character_size{8});
@@ -77,11 +82,7 @@ namespace signlang::position_service {
       serial_.set_option(asio::serial_port_base::stop_bits{asio::serial_port_base::stop_bits::one});
       serial_.set_option(asio::serial_port_base::flow_control{asio::serial_port_base::flow_control::none});
 
-      mqtt_client_.brokers(options_.mqtt_host, options_.mqtt_port)
-          .credentials(options_.mqtt_client_id, options_.mqtt_username, options_.mqtt_password)
-          .keep_alive(options_.keep_alive_seconds)
-          .async_run(asio::detached);
-      schedule_mqtt_drain();
+      asio::dispatch(mqtt_client_.get_executor(), [self = shared_from_this()] { self->start_mqtt_client(); });
       alert_listener_.start();
 
       spdlog::info("serial device: {} @ {}", options_.serial_device, options_.baud_rate);
@@ -96,7 +97,7 @@ namespace signlang::position_service {
       if (stop_requested_.exchange(true, std::memory_order_acq_rel)) {
         return;
       }
-      spdlog::info("Stopping position service");
+      spdlog::info("Stopping telemetry service");
       boost::system::error_code ignored;
       serial_.cancel(ignored);
       serial_.close(ignored);
@@ -106,6 +107,14 @@ namespace signlang::position_service {
     [[nodiscard]] auto mqtt_done() const -> bool { return mqtt_done_.load(std::memory_order_acquire); }
 
   private:
+    void start_mqtt_client() {
+      mqtt_client_.brokers(options_.mqtt_host, options_.mqtt_port)
+          .credentials(options_.mqtt_client_id, options_.mqtt_username, options_.mqtt_password)
+          .keep_alive(options_.keep_alive_seconds)
+          .async_run(asio::detached);
+      schedule_mqtt_drain();
+    }
+
     void read_next_line() {
       asio::async_read_until(serial_, buffer_, '\n',
                              [self = shared_from_this()](const boost::system::error_code& error,
@@ -127,9 +136,11 @@ namespace signlang::position_service {
       std::string line;
       std::getline(input_stream, line);
 
-      if (auto fix = parser_.parse_line(line)) {
-        spdlog::info("parsed position fix lat={}, lon={}", fix->latitude_deg, fix->longitude_deg);
-        publish(*fix);
+      auto result = parser_.parse_line(line);
+      if (result.fix.has_value()) {
+        publish(*result.fix);
+      } else {
+        log_position_parse_warning(result.status, line);
       }
 
       if (signlang::runtime::shutdown_requested()) {
@@ -140,17 +151,54 @@ namespace signlang::position_service {
       read_next_line();
     }
 
-    void publish(const PositionFix& fix) {
-      if (!payload_queue_.push(MqttPayload{options_.mqtt_topic, payload_from_fix(fix)})) {
-        spdlog::warn("position payload queue is full; dropping newest fix");
+    void log_position_parse_warning(PositionParseStatus status, const std::string& line) const {
+      if (status == PositionParseStatus::Empty || status == PositionParseStatus::UnsupportedSentence) {
         return;
       }
-      spdlog::info("queued position MQTT payload for topic {}", options_.mqtt_topic);
+
+      constexpr auto kMaxLoggedSentenceLength = std::size_t{96};
+      auto sentence = line.substr(0, kMaxLoggedSentenceLength);
+      if (line.size() > kMaxLoggedSentenceLength) {
+        sentence += "...";
+      }
+
+      switch (status) {
+        case PositionParseStatus::InvalidSentence:
+          spdlog::warn("failed to parse GPS serial sentence: invalid NMEA sentence '{}'", sentence);
+          break;
+        case PositionParseStatus::UnsupportedSentence:
+          break;
+        case PositionParseStatus::ParseFailed:
+          spdlog::warn("failed to parse GPS serial sentence payload: '{}'", sentence);
+          break;
+        case PositionParseStatus::NoFix:
+          spdlog::warn("GPS serial sentence parsed without a valid position fix");
+          break;
+        case PositionParseStatus::InvalidCoordinates:
+          spdlog::warn("GPS serial sentence parsed with invalid coordinates: '{}'", sentence);
+          break;
+        case PositionParseStatus::Empty:
+        case PositionParseStatus::ValidFix:
+          break;
+      }
+    }
+
+    void publish(const PositionFix& fix) {
+      if (!payload_queue_.push(MqttPayload{options_.mqtt_topic, payload_from_fix(fix)})) {
+        spdlog::warn("telemetry payload queue is full; dropping newest position fix");
+        return;
+      }
+
+      ++position_fix_count_;
+      if (position_fix_count_ % 500 == 0) {
+        spdlog::debug("Processed position fixes count={} latest_lat={} latest_lon={}", position_fix_count_,
+                      fix.latitude_deg, fix.longitude_deg);
+      }
     }
 
     void publish_alert(const AlertEvent& event) {
       if (!payload_queue_.push(MqttPayload{options_.alert_mqtt_topic, payload_from_alert_event(event)})) {
-        spdlog::warn("position payload queue is full; dropping alert event");
+        spdlog::warn("telemetry payload queue is full; dropping alert event");
         return;
       }
       spdlog::info("queued alert MQTT payload from event {} for topic {}", event.id, options_.alert_mqtt_topic);
@@ -174,7 +222,7 @@ namespace signlang::position_service {
         }
         mqtt_client_.cancel();
         mqtt_done_.store(true, std::memory_order_release);
-        spdlog::info("position service MQTT client cancelled after drain");
+        spdlog::info("telemetry service MQTT client cancelled after drain");
         return;
       }
 
@@ -197,7 +245,6 @@ namespace signlang::position_service {
           spdlog::warn("mqtt publish failed: {}", error.message());
           return;
         }
-        spdlog::info("published mqtt payload to {} ({} bytes)", payload->topic, payload->payload.size());
       };
 
       switch (options_.qos) {
@@ -219,30 +266,30 @@ namespace signlang::position_service {
     }
 
     asio::io_context& serial_io_context_;
-    asio::io_context& mqtt_io_context_;
     asio::serial_port serial_;
     asio::streambuf buffer_;
     MqttClient mqtt_client_;
     asio::steady_timer mqtt_drain_timer_;
     NmeaPositionParser parser_;
-    PositionPayloadQueue payload_queue_;
+    TelemetryPayloadQueue payload_queue_;
     ProgramOptions options_;
     EventListener alert_listener_;
+    std::uint64_t position_fix_count_{0};
     std::atomic_bool stop_requested_{false};
     std::atomic_bool mqtt_done_{false};
   };
 
-} // namespace signlang::position_service
+} // namespace signlang::telemetry_service
 
 auto main(int argc, char** argv) -> int {
-  using signlang::position_service::PositionService;
-  using signlang::position_service::parse_program_options;
+  using signlang::telemetry_service::TelemetryService;
+  using signlang::telemetry_service::parse_program_options;
 
   return signlang::runtime::run_module(argc, argv, parse_program_options, [](const auto& options) {
     boost::asio::io_context serial_io_context;
     boost::asio::io_context mqtt_io_context;
     auto mqtt_work = boost::asio::make_work_guard(mqtt_io_context);
-    auto service = std::make_shared<PositionService>(serial_io_context, mqtt_io_context, options);
+    auto service = std::make_shared<TelemetryService>(serial_io_context, mqtt_io_context, options);
     service->start();
     auto mqtt_thread = std::thread{[&] { mqtt_io_context.run(); }};
 

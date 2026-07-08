@@ -24,3 +24,4 @@ tools.cmake.cmaketoolchain:extra_variables={"CMAKE_SYSTEM_NAME": "Linux", "CMAKE
 CHOST={{ target_triple }}
 CC={{ toolchain_prefix }}gcc
 CXX={{ toolchain_prefix }}g++
+CMAKE_POLICY_VERSION_MINIMUM=3.5

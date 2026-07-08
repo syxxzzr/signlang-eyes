@@ -150,8 +150,8 @@ auto main(int argc, char** argv) -> int {
 
           const auto inference_result = model.infer(audio_window);
           if (window_sequence % 200 == 0) {
-            spdlog::info("Processed environment sound window seq={} detected_classes={} inference_ms={:.2f}",
-                         window_sequence, inference_result.detected_class_count, inference_result.inference_time_ms);
+            spdlog::debug("Processed environment sound window seq={} detected_classes={} inference_ms={:.2f}",
+                          window_sequence, inference_result.detected_class_count, inference_result.inference_time_ms);
           }
           ++window_sequence;
 

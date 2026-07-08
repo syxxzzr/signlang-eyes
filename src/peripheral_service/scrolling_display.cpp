@@ -6,12 +6,6 @@
 #include <utility>
 
 namespace signlang::peripheral_service {
-  namespace {
-
-    constexpr auto kScrollGapPx = std::uint16_t{16};
-
-  } // namespace
-
   ScrollingDisplay::ScrollingDisplay(const HexFont& font, DisplayOptions options) :
       font_{font},
       options_{options},
@@ -24,6 +18,8 @@ namespace signlang::peripheral_service {
     }
     first_line_.text = std::move(text);
     first_line_.offset = 0;
+    first_line_.pause_until = Clock::time_point{};
+    first_line_.scroll_finished = false;
     update_widths();
     force_refresh_ = true;
   }
@@ -34,6 +30,8 @@ namespace signlang::peripheral_service {
     }
     second_line_.text = std::move(text);
     second_line_.offset = 0;
+    second_line_.pause_until = Clock::time_point{};
+    second_line_.scroll_finished = false;
     update_widths();
     force_refresh_ = true;
   }
@@ -41,28 +39,12 @@ namespace signlang::peripheral_service {
   void ScrollingDisplay::clear_second_line() { set_second_line({}); }
 
   auto ScrollingDisplay::tick(Clock::time_point now) -> std::vector<std::vector<std::uint8_t>> {
-    const auto refresh_elapsed = last_refresh_at_ == Clock::time_point{} ||
-                                 now - last_refresh_at_ >= std::chrono::milliseconds{options_.refresh_interval_ms};
-    if (!refresh_elapsed && !force_refresh_) {
+    advance_scroll(now);
+    if (!force_refresh_) {
       return {};
     }
 
-    advance_scroll(now);
     const auto frames = frames_for_current_dirty_region();
-    last_refresh_at_ = now;
-    force_refresh_ = false;
-    return frames;
-  }
-
-  auto ScrollingDisplay::full_refresh() -> std::vector<std::vector<std::uint8_t>> {
-    auto frames = std::vector<std::vector<std::uint8_t>>{};
-    frames.push_back(make_clear_frame());
-    auto next = OledFramebuffer{options_.width, options_.height};
-    render(next);
-    auto block_frames = split_draw_block(next.to_block(Rect{0, 0, options_.width, options_.height}));
-    frames.insert(frames.end(), std::make_move_iterator(block_frames.begin()), std::make_move_iterator(block_frames.end()));
-    frames.push_back(make_refresh_frame());
-    displayed_ = std::move(next);
     force_refresh_ = false;
     return frames;
   }
@@ -73,22 +55,65 @@ namespace signlang::peripheral_service {
   }
 
   void ScrollingDisplay::advance_scroll(Clock::time_point now) {
-    if (last_scroll_at_ != Clock::time_point{} &&
-        now - last_scroll_at_ < std::chrono::milliseconds{options_.scroll_interval_ms}) {
+    if (last_scroll_at_ == Clock::time_point{}) {
+      last_scroll_at_ = now;
+      return;
+    }
+
+    const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_scroll_at_).count();
+    if (elapsed_ms <= 0) {
+      return;
+    }
+    last_scroll_at_ = now;
+
+    const auto scroll_units = scroll_remainder_px_ms_ +
+                              static_cast<std::uint32_t>(elapsed_ms) * options_.scroll_speed_px_per_sec;
+    const auto advance_px = static_cast<std::uint16_t>(scroll_units / 1000U);
+    scroll_remainder_px_ms_ = scroll_units % 1000U;
+    if (advance_px == 0U) {
       return;
     }
 
     auto changed = false;
-    auto advance_line = [this, &changed](LineState& line) {
+    auto advance_line = [this, now, advance_px, &changed](LineState& line) {
       if (line.width <= options_.width) {
         if (line.offset != 0U) {
           line.offset = 0;
+          line.pause_until = Clock::time_point{};
+          line.scroll_finished = false;
           changed = true;
         }
         return;
       }
-      const auto wrap_width = static_cast<std::uint16_t>(line.width + kScrollGapPx);
-      line.offset = static_cast<std::uint16_t>((line.offset + options_.scroll_step_px) % wrap_width);
+      if (line.scroll_finished) {
+        return;
+      }
+
+      if (line.pause_until == Clock::time_point{}) {
+        line.pause_until = now + std::chrono::milliseconds{options_.scroll_pause_ms};
+        return;
+      }
+      if (now < line.pause_until) {
+        return;
+      }
+
+      const auto max_offset = static_cast<std::uint16_t>(line.width - options_.width);
+      if (line.offset >= max_offset) {
+        if (options_.scroll_loop) {
+          line.offset = 0;
+          line.pause_until = now + std::chrono::milliseconds{options_.scroll_pause_ms};
+          changed = true;
+        } else if (now >= line.pause_until) {
+          line.scroll_finished = true;
+        }
+        return;
+      }
+
+      const auto next_offset = static_cast<std::uint32_t>(line.offset) + advance_px;
+      line.offset = static_cast<std::uint16_t>(std::min<std::uint32_t>(next_offset, max_offset));
+      if (line.offset >= max_offset) {
+        line.pause_until = now + std::chrono::milliseconds{options_.scroll_pause_ms};
+      }
       changed = true;
     };
 
@@ -120,10 +145,6 @@ namespace signlang::peripheral_service {
     }
 
     renderer_.draw_text(framebuffer, line.text, -static_cast<std::int16_t>(line.offset), y);
-    const auto repeated_x = static_cast<std::int16_t>(line.width + kScrollGapPx - line.offset);
-    if (repeated_x < options_.width) {
-      renderer_.draw_text(framebuffer, line.text, repeated_x, y);
-    }
   }
 
   auto ScrollingDisplay::frames_for_current_dirty_region() -> std::vector<std::vector<std::uint8_t>> {

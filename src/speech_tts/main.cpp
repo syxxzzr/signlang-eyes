@@ -56,8 +56,8 @@ namespace signlang::speech_tts {
               playback = std::make_unique<AlsaPlaybackDevice>(options.audio_device_name, chunk.sample_rate_hz);
             }
 
-            spdlog::info("Playing speech TTS chunk generation={} samples={} sample_rate={}", task->generation,
-                         chunk.sample_count, chunk.sample_rate_hz);
+            spdlog::debug("Playing speech TTS chunk generation={} samples={} sample_rate={}", task->generation,
+                          chunk.sample_count, chunk.sample_rate_hz);
             playback->play(chunk.samples, chunk.sample_count, should_cancel);
             return !should_cancel();
           });

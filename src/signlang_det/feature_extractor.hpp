@@ -33,11 +33,17 @@ namespace signlang::signlang_det {
     [[nodiscard]] static auto assign_hands_to_slots(const std::vector<const handpose_det::HandPoseDetection*>& hands)
         -> std::array<const handpose_det::HandPoseDetection*, kMaxHandCount>;
 
-    auto extract_single_hand(const handpose_det::HandPoseDetection& hand, std::uint32_t hand_index,
+    auto extract_single_hand(const handpose_det::HandPoseFrameMetadata& metadata,
+                             const handpose_det::HandPoseDetection& hand, std::uint32_t hand_index,
                              bool sequence_continuous) -> HandFeatures;
 
     [[nodiscard]] static auto compute_bounding_box_scale(
         const std::array<handpose_det::HandPoseKeypoint, handpose_det::kHandPoseKeypointCount>& keypoints) -> float;
+
+    [[nodiscard]] static auto normalize_keypoints(
+        const handpose_det::HandPoseFrameMetadata& metadata,
+        const std::array<handpose_det::HandPoseKeypoint, handpose_det::kHandPoseKeypointCount>& keypoints)
+        -> std::array<handpose_det::HandPoseKeypoint, handpose_det::kHandPoseKeypointCount>;
 
     float min_confidence_;
     std::array<HandSlot, kMaxHandCount> prev_hands_{};

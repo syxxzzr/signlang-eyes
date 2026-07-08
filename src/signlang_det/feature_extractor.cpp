@@ -70,9 +70,26 @@ namespace signlang::signlang_det {
     return max_distance + kScaleEpsilon;
   }
 
-  auto FeatureExtractor::extract_single_hand(const handpose_det::HandPoseDetection& hand, std::uint32_t hand_index,
+  auto FeatureExtractor::normalize_keypoints(
+      const handpose_det::HandPoseFrameMetadata& metadata,
+      const std::array<handpose_det::HandPoseKeypoint, handpose_det::kHandPoseKeypointCount>& keypoints)
+      -> std::array<handpose_det::HandPoseKeypoint, handpose_det::kHandPoseKeypointCount> {
+    const auto width = std::max(1.0F, static_cast<float>(metadata.image_width));
+    const auto height = std::max(1.0F, static_cast<float>(metadata.image_height));
+
+    auto normalized = keypoints;
+    for (auto& kp : normalized) {
+      kp.x /= width;
+      kp.y /= height;
+      kp.z /= width;
+    }
+    return normalized;
+  }
+
+  auto FeatureExtractor::extract_single_hand(const handpose_det::HandPoseFrameMetadata& metadata,
+                                             const handpose_det::HandPoseDetection& hand, std::uint32_t hand_index,
                                              bool sequence_continuous) -> HandFeatures {
-    const auto& keypoints = hand.keypoints;
+    const auto keypoints = normalize_keypoints(metadata, hand.keypoints);
     const auto& wrist = keypoints[0];
     const auto scale = compute_bounding_box_scale(keypoints);
 
@@ -122,7 +139,7 @@ namespace signlang::signlang_det {
 
     for (std::uint32_t i = 0; i < kMaxHandCount; ++i) {
       if (assigned_hands[i] != nullptr) {
-        feature.hands[i] = extract_single_hand(*assigned_hands[i], i, sequence_continuous);
+        feature.hands[i] = extract_single_hand(metadata, *assigned_hands[i], i, sequence_continuous);
       } else {
         feature.hands[i].present = false;
         for (auto& kp_feat : feature.hands[i].features) {

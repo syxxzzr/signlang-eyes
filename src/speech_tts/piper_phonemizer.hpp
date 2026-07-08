@@ -29,7 +29,8 @@ namespace signlang::speech_tts {
   private:
     [[nodiscard]] auto has_token(const std::string& token) const -> bool;
     void append_token_ids(const std::string& token, std::vector<std::int64_t>& ids) const;
-    void append_pinyin_syllable(const std::string& syllable, std::vector<std::int64_t>& ids) const;
+    void append_pinyin_syllable(const std::string& syllable, std::vector<std::int64_t>& ids,
+                                std::vector<std::string>& debug_tokens) const;
 
     PiperVoiceConfig config_;
   };

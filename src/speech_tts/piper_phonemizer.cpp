@@ -3,10 +3,12 @@
 #include <boost/json.hpp>
 #include <cpp-pinyin/G2pglobal.h>
 #include <cpp-pinyin/Pinyin.h>
+#include <spdlog/spdlog.h>
 
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
 
@@ -113,6 +115,20 @@ namespace signlang::speech_tts {
       }
     }
 
+    [[nodiscard]] auto longest_prefix_token(const std::string& value, std::size_t position,
+                                            const std::unordered_map<std::string, std::vector<std::int64_t>>& tokens)
+        -> std::string {
+      auto best = std::string{};
+      for (const auto& [token, ids] : tokens) {
+        (void)ids;
+        if (token.size() > best.size() && position + token.size() <= value.size() &&
+            value.compare(position, token.size(), token) == 0) {
+          best = token;
+        }
+      }
+      return best;
+    }
+
   } // namespace
 
   auto load_piper_voice_config(const std::string& config_path) -> PiperVoiceConfig {
@@ -158,27 +174,42 @@ namespace signlang::speech_tts {
     }
 
     auto ids = std::vector<std::int64_t>{};
+    auto debug_tokens = std::vector<std::string>{};
     append_token_ids("^", ids);
+    debug_tokens.emplace_back("^");
 
     const auto result = pinyin.hanziToPinyin(text, Pinyin::ManTone::Style::TONE3, Pinyin::Error::Default, false, false,
                                              true);
     for (const auto& item : result) {
       if (!item.error && !item.pinyin.empty()) {
-        append_pinyin_syllable(item.pinyin, ids);
-        append_token_ids("_", ids);
+        append_pinyin_syllable(item.pinyin, ids, debug_tokens);
         continue;
       }
 
       if (!item.hanzi.empty() && has_token(item.hanzi)) {
         append_token_ids(item.hanzi, ids);
+        debug_tokens.push_back(item.hanzi);
         append_token_ids("_", ids);
+        debug_tokens.emplace_back("_");
       }
     }
 
     append_token_ids("$", ids);
+    debug_tokens.emplace_back("$");
     if (ids.size() <= 2) {
       throw std::runtime_error("cpp-pinyin produced no phoneme ids for text");
     }
+    spdlog::debug("Piper phoneme tokens: {}", [&] {
+      auto stream = std::ostringstream{};
+      for (std::size_t index = 0; index < debug_tokens.size(); ++index) {
+        if (index != 0) {
+          stream << ' ';
+        }
+        stream << debug_tokens[index];
+      }
+      return stream.str();
+    }());
+    spdlog::debug("Piper phoneme id count: {}", ids.size());
     return ids;
   }
 
@@ -197,22 +228,29 @@ namespace signlang::speech_tts {
     ids.insert(ids.end(), found->second.begin(), found->second.end());
   }
 
-  void PiperPhonemizer::append_pinyin_syllable(const std::string& syllable, std::vector<std::int64_t>& ids) const {
+  void PiperPhonemizer::append_pinyin_syllable(const std::string& syllable, std::vector<std::int64_t>& ids,
+                                               std::vector<std::string>& debug_tokens) const {
     auto normalized = syllable;
     replace_all(normalized, "u:", "v");
     replace_all(normalized, "ü", "v");
 
-    for (unsigned char character : normalized) {
-      if (std::isdigit(character)) {
-        continue;
-      }
+    for (auto& character : normalized) {
+      character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+    }
 
-      auto token = std::string{1, static_cast<char>(std::tolower(character))};
-      if (!has_token(token)) {
-        throw std::runtime_error("Piper phoneme_id_map does not contain cpp-pinyin token: " + token);
+    auto position = std::size_t{0};
+    while (position < normalized.size()) {
+      const auto token = longest_prefix_token(normalized, position, config_.phoneme_id_map);
+      if (token.empty()) {
+        throw std::runtime_error("Piper phoneme_id_map does not contain cpp-pinyin token near: " +
+                                 normalized.substr(position));
       }
       append_token_ids(token, ids);
+      debug_tokens.push_back(token);
+      position += token.size();
     }
+    append_token_ids("_", ids);
+    debug_tokens.emplace_back("_");
   }
 
 } // namespace signlang::speech_tts

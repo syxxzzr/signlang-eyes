@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include <termios.h>
+
 namespace signlang::peripheral_service {
   namespace asio = boost::asio;
 
@@ -50,6 +52,17 @@ namespace signlang::peripheral_service {
       return value;
     }
 
+    void discard_serial_buffers(asio::serial_port& serial) {
+      if (!serial.is_open()) {
+        return;
+      }
+
+      const auto fd = serial.native_handle();
+      if (fd >= 0) {
+        (void)::tcflush(fd, TCIOFLUSH);
+      }
+    }
+
   } // namespace
 
   SerialTransport::SerialTransport(SerialOptions options, ButtonCallback button_callback) :
@@ -80,6 +93,7 @@ namespace signlang::peripheral_service {
         write_queue_.clear();
         if (serial_.is_open()) {
           serial_.cancel(ignored);
+          discard_serial_buffers(serial_);
           serial_.close(ignored);
         }
       });
@@ -95,6 +109,7 @@ namespace signlang::peripheral_service {
       write_queue_.clear();
       if (serial_.is_open()) {
         serial_.cancel(ignored);
+        discard_serial_buffers(serial_);
         serial_.close(ignored);
       }
       io_context_.restart();

@@ -260,14 +260,14 @@ namespace {
         if (should_publish) {
           publisher.publish(result);
           ++published_result_count;
-          spdlog::info("Published sign language result count={} recognized={} gesture={} confidence={:.2f}",
-                       published_result_count, result.recognized, result.gesture_name.data(), result.confidence);
+          spdlog::debug("Published sign language result count={} recognized={} gesture={} confidence={:.2f}",
+                        published_result_count, result.recognized, result.gesture_name.data(), result.confidence);
         }
 
         ++processed_window_count;
         if (processed_window_count % 200 == 0) {
-          spdlog::info("Processed sign language windows={} published_results={}", processed_window_count,
-                       published_result_count);
+          spdlog::debug("Processed sign language windows={} published_results={}", processed_window_count,
+                        published_result_count);
         }
         next_window_end_seq = window_end_seq + hop_frames;
       } catch (const std::exception& e) {

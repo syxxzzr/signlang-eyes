@@ -37,12 +37,12 @@ All module executables also accept `--log-file <path>` and `--log-rotate-size <b
 - **Capture Pixel Format**: YUYV 4:2:2 or MJPEG
 - **Published Pixel Format**: RGB24
 - **Output Frame Size**: `width × height × 3` bytes
-- **Hardware Acceleration**: Rockchip RGA used for YUYV→RGB24 conversion, scaling, and optional horizontal mirroring
+- **Hardware Acceleration**: Rockchip RGA used for YUYV→RGB24 conversion, scaling, and optional horizontal mirroring/rotation
 
 ### Processing Pipeline
 
-1. **YUYV capture**: RGA hardware converts YUYV to RGB24, scales, and optionally mirrors in a single operation
-2. **MJPEG capture**: libjpeg-turbo decodes to RGB24, then RGA scales and optionally mirrors
+1. **YUYV capture**: RGA hardware converts YUYV to RGB24, scales, and optionally mirrors/rotates in a single operation
+2. **MJPEG capture**: libjpeg-turbo decodes to RGB24, then RGA scales and optionally mirrors/rotates
 
 ### RGA Hardware Acceleration
 
@@ -149,6 +149,18 @@ install/bin/video_frontend \
     --fps 60
 ```
 
+### Rotate Output
+
+```bash
+# Rotate the published frame clockwise. output-width/output-height are final published dimensions.
+install/bin/video_frontend \
+    --device /dev/video0 \
+    --service video_capture \
+    --output-width 640 \
+    --output-height 480 \
+    --rotation 90
+```
+
 ### List Available Devices
 
 ```bash
@@ -168,7 +180,7 @@ v4l2-ctl -d /dev/video0 --list-formats-ext
 | `v4l2_capture_device.{cpp,hpp}` | V4L2 device enumeration, format negotiation, frame capture |
 | `video_format.hpp` | `VideoFormat`, `VideoFormatRequest` structs |
 | `video_frame.hpp` | `VideoFrameMetadata` IPC user-header definition |
-| `video_processor.{cpp,hpp}` | RGA-accelerated YUYV/MJPEG to RGB24 conversion and scaling |
+| `video_processor.{cpp,hpp}` | RGA-accelerated YUYV/MJPEG to RGB24 conversion, scaling, mirroring, and rotation |
 | `video_publisher.{cpp,hpp}` | iceoryx2 publisher wrapper with payload management |
 | `rga_context.{cpp,hpp}` | Rockchip RGA API wrapper |
 

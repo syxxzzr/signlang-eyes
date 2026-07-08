@@ -80,8 +80,9 @@ auto main(int argc, char** argv) -> int {
     const auto output_format = resolve_output_format(capture_format, options.output_format);
     spdlog::info("Actual output: {}x{}", output_format.width, output_format.height);
     spdlog::info("Mirror output: {}", options.mirror_output ? "enabled" : "disabled");
+    spdlog::info("Output rotation: {} degrees clockwise", options.rotation_degrees);
 
-    VideoProcessor video_processor{capture_format, output_format, options.mirror_output};
+    VideoProcessor video_processor{capture_format, output_format, options.mirror_output, options.rotation_degrees};
     VideoPublisher publisher{options.service_name,
                              video_processor.max_output_size_bytes(capture_device.max_frame_size_bytes())};
 
@@ -106,7 +107,7 @@ auto main(int argc, char** argv) -> int {
       const auto current_sequence_number = sequence_number++;
       publisher.publish(frame, video_processor, capture_device.fps(), current_sequence_number);
       if (current_sequence_number % 300 == 0) {
-        spdlog::info("Published video frame sequence {}", current_sequence_number);
+        spdlog::debug("Published video frame sequence {}", current_sequence_number);
       }
       frame_guard.release();
     }

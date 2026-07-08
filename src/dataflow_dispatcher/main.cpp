@@ -31,17 +31,17 @@ namespace {
   [[nodiscard]] auto state_chinese_title(signlang::state_machine::AppState state) -> const char* {
     switch (state) {
     case signlang::state_machine::AppState::Normal:
-      return "普通";
+      return "空闲模式";
     case signlang::state_machine::AppState::Asr:
-      return "语音识别";
+      return "语音识别模式";
     case signlang::state_machine::AppState::SignLanguageChat:
-      return "手语聊天";
+      return "手语交流模式";
     case signlang::state_machine::AppState::SignLanguageAi:
-      return "手语AI";
+      return "手语AI服务模式";
     case signlang::state_machine::AppState::DangerousSound:
-      return "危险声音";
+      return "检测到危险声音 请留意周边环境";
     }
-    return "未知";
+    return "系统异常";
   }
 
   class SignlangAiAccumulator {
@@ -256,12 +256,12 @@ auto main(int argc, char** argv) -> int {
         asr_subscriber->receive_latest([&](const auto& result) {
           const auto text = tts_text_from_speech_asr_result(result);
           if (!text.has_value()) {
-            spdlog::info("Received ASR result {} with empty transcript", result.sequence_number);
+            spdlog::debug("Received ASR result {} with empty transcript", result.sequence_number);
             return;
           }
 
-          spdlog::info("Received ASR result {} transcript ({} chars), forwarding to display only",
-                       result.sequence_number, text->size());
+          spdlog::debug("Received ASR result {} transcript ({} chars), forwarding to display only",
+                        result.sequence_number, text->size());
           display_asr_transcript(display_client, text.value());
         });
         continue;
@@ -280,12 +280,12 @@ auto main(int argc, char** argv) -> int {
       signlang_subscriber->receive_latest([&](const auto& result) {
         const auto text = tts_text_from_signlang_result(result);
         if (!text.has_value()) {
-          spdlog::info("Received signlang result {} without displayable text", result.sequence_number);
+          spdlog::debug("Received signlang result {} without displayable text", result.sequence_number);
           return;
         }
 
-        spdlog::info("Received signlang result {} text '{}' while state is {}", result.sequence_number, text.value(),
-                     signlang::state_machine::app_state_name(current_state));
+        spdlog::debug("Received signlang result {} text '{}' while state is {}", result.sequence_number, text.value(),
+                      signlang::state_machine::app_state_name(current_state));
         switch (current_state) {
         case signlang::state_machine::AppState::SignLanguageChat: {
           const auto response = tts_client.send_text(text.value());

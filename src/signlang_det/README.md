@@ -71,12 +71,13 @@ Each frame produces a 168-dim feature vector (2 hands × 21 keypoints × 4 chann
 
 | Channel | Formula | Description |
 |---------|---------|-------------|
-| `normalized_x` | `(kp.x − wrist.x) / scale` | X-coordinate relative to wrist, normalized by max wrist-relative distance across hand |
-| `normalized_y` | `(kp.y − wrist.y) / scale` | Y-coordinate relative to wrist, same normalization scale |
-| `normalized_z` | `(kp.z − wrist.z) / scale` | Z-coordinate relative to wrist, same normalization scale |
+| `normalized_x` | `(x_norm − wrist.x_norm) / scale` | X-coordinate first normalized as `x_px / image_width`, then made wrist-relative |
+| `normalized_y` | `(y_norm − wrist.y_norm) / scale` | Y-coordinate first normalized as `y_px / image_height`, then made wrist-relative |
+| `normalized_z` | `(z_norm − wrist.z_norm) / scale` | Relative depth first normalized as `z / image_width`, then made wrist-relative |
 | `velocity_magnitude` | `‖(x_t, y_t, z_t) − (x_{t−1}, y_{t−1}, z_{t−1})‖ × motion_weight` | Frame-to-frame 3D motion speed, weighted by `--motion-weight` |
 
 **Normalization invariants:**
+- MediaPipe-style input normalization: `x_norm = x_px / W`, `y_norm = y_px / H`, `z_norm = z / W`
 - Translation: All coordinates relative to wrist (landmark 0)
 - Scale: Normalized by max distance from wrist to any other landmark
 - Position-only by default: `motion_weight = 0.0` (velocity disabled)

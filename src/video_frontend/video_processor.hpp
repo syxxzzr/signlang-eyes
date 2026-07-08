@@ -13,7 +13,8 @@ namespace signlang::video_frontend {
 
   class VideoProcessor {
   public:
-    VideoProcessor(VideoFormat capture_format, VideoFormat output_format, bool mirror_output);
+    VideoProcessor(VideoFormat capture_format, VideoFormat output_format, bool mirror_output,
+                   std::uint32_t rotation_degrees);
     ~VideoProcessor();
 
     VideoProcessor(const VideoProcessor&) = delete;
@@ -38,6 +39,7 @@ namespace signlang::video_frontend {
     VideoFormat capture_format_;
     VideoFormat output_format_;
     bool mirror_output_;
+    std::uint32_t rotation_degrees_;
     mutable std::vector<std::uint8_t> capture_rgb_buffer_;
     tjhandle jpeg_decompressor_;
   };

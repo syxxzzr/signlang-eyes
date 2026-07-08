@@ -59,8 +59,8 @@ auto main(int argc, char** argv) -> int {
                               result.model_height},
                           detection_buffer.data());
         if (result.detection_count > 0 || current_sequence_number % 300 == 0) {
-          spdlog::info("Published hand pose frame seq={} source_seq={} detections={}", current_sequence_number,
-                       sample.metadata->sequence_number, result.detection_count);
+          spdlog::debug("Published hand pose frame seq={} source_seq={} detections={}", current_sequence_number,
+                        sample.metadata->sequence_number, result.detection_count);
         }
       });
     }

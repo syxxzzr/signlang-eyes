@@ -4,8 +4,10 @@
 #include "peripheral_protocol.hpp"
 
 #include "iox2/iceoryx2.hpp"
+#include "state_machine/app_state.hpp"
 #include "state_machine/state_control.hpp"
 
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -39,6 +41,44 @@ namespace signlang::peripheral_service {
     iox2::Node<iox2::ServiceType::Ipc> node_;
     DisplayService service_;
     DisplayServer server_;
+  };
+
+  class IpcStateSubscriber {
+  public:
+    IpcStateSubscriber(const std::string& event_service_name, const std::string& blackboard_service_name);
+
+    IpcStateSubscriber(const IpcStateSubscriber&) = delete;
+    auto operator=(const IpcStateSubscriber&) -> IpcStateSubscriber& = delete;
+    IpcStateSubscriber(IpcStateSubscriber&&) = delete;
+    auto operator=(IpcStateSubscriber&&) -> IpcStateSubscriber& = delete;
+
+    [[nodiscard]] auto current_state() const -> signlang::state_machine::AppState;
+    [[nodiscard]] auto poll_state_change() -> bool;
+
+  private:
+    using BlackboardService =
+        iox2::PortFactoryBlackboard<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey>;
+    using StateReader = iox2::Reader<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey>;
+    using StateEntry = iox2::EntryHandle<iox2::ServiceType::Ipc, signlang::state_machine::AppStateKey,
+                                         signlang::state_machine::AppState>;
+    using EventService = iox2::PortFactoryEvent<iox2::ServiceType::Ipc>;
+    using EventListener = iox2::Listener<iox2::ServiceType::Ipc>;
+
+    static auto create_node() -> iox2::Node<iox2::ServiceType::Ipc>;
+    static auto open_blackboard_service(const iox2::Node<iox2::ServiceType::Ipc>& node,
+                                        const std::string& service_name) -> BlackboardService;
+    static auto create_reader(const BlackboardService& service) -> StateReader;
+    static auto create_state_entry(StateReader& reader) -> StateEntry;
+    static auto open_event_service(const iox2::Node<iox2::ServiceType::Ipc>& node, const std::string& service_name)
+        -> EventService;
+    static auto create_listener(const EventService& service) -> EventListener;
+
+    iox2::Node<iox2::ServiceType::Ipc> node_;
+    BlackboardService blackboard_service_;
+    StateReader reader_;
+    StateEntry state_entry_;
+    EventService event_service_;
+    EventListener listener_;
   };
 
   class IpcStateControlClient {
