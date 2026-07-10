@@ -1,124 +1,66 @@
-# signlang_manager — BLE Handpose Stream and Gesture Library Gateway
+# Sign Language Manager
 
-## Overview
+[简体中文](README.md) | [English](README.en.md)
 
-`signlang_manager` exposes a BLE GATT access point for external tools:
+BLE 手势库管理与手部数据流模块。通过蓝牙低功耗（BLE）GATT 服务暴露手部关键点实时数据流和手语词汇管理功能，作为外部设备（如手机 App）与系统内部 iceoryx2 IPC 之间的桥梁。
 
-- streams latest `handpose_det` results through BLE notifications
-- includes newly recognized `signlang_det` results in the next handpose stream notification
-- forwards gesture list/add/delete requests to `signlang_det`
-- validates and gates BLE uploads before sending raw handpose recordings to `signlang_det`
+## 功能
 
-`signlang_det` owns SQLite prototype storage, upload feature extraction, BiLSTM encoding, DTW representative selection,
-and prototype reloads. At startup `signlang_manager` verifies the configured BlueZ adapter, powers it on if needed,
-and exits with an error if GATT
-application or LE advertisement registration fails.
+- 注册 BlueZ BLE GATT 服务，对外广播设备
+- 实时手部数据流：从 iceoryx2 订阅 handpose_det 的关键点数据和 signlang_det 的识别结果，打包为二进制协议帧通过 BLE Notification 推送
+- 手势库管理：接收 BLE 客户端的请求（列举、添加、删除手势），通过 iceoryx2 转发给 signlang_det 的 GestureManagementService
+- 支持可配置的流帧率（`--stream-fps`）和通知负载大小限制
 
-## BLE Service
-
-Custom service UUID:
+## 数据流
 
 ```text
-3b5f1000-4ad2-4f53-9a65-6f6d65796573
+BLE 客户端 ←→ BluetoothGattServer（BlueZ D-Bus）
+                    ↕
+              ManagerService（协议编解码）
+                    ↕
+    ┌───────────────┼───────────────┐
+    ↓                               ↓
+iceoryx2 订阅                    iceoryx2 客户端
+(handpose + signlang)           (gesture_management)
 ```
 
-Characteristics:
+## 协议命令
 
-| UUID | Direction | Flags | Description |
-|------|-----------|-------|-------------|
-| `3b5f1001-4ad2-4f53-9a65-6f6d65796573` | external -> device | write, write-without-response | command packets and upload chunks |
-| `3b5f1002-4ad2-4f53-9a65-6f6d65796573` | device -> external | notify, read | responses and handpose stream packets |
+| 命令 | 方向 | 说明 |
+| --- | --- | --- |
+| `GetCapabilities` | 客户端→设备 | 查询设备能力（流帧率、负载限制） |
+| `SetStreamConfig` | 客户端→设备 | 开关手部数据流 |
+| `HandposeFrame` | 设备→客户端 | 实时手部+手语结果帧 |
+| `ListGestures` | 客户端→设备 | 列出已注册手势 |
+| `AddGesture` | 客户端→设备 | 分块上传新手势 |
+| `DeleteGesture` | 客户端→设备 | 按 ID 或名称删除手势 |
+| `GetStatus` | 客户端→设备 | 查询词库和上传状态 |
 
-Payloads use the versioned packet format in `protocol.{hpp,cpp}`. Larger notifications are split by
-`--max-notify-payload`; the receiver should reassemble packets using the protocol header length and payload length.
-Only one BLE client may subscribe to streaming notifications at a time. Additional `StartNotify` attempts are rejected
-until the current streaming client calls `StopNotify` or its D-Bus owner disappears after disconnect.
+## 命令行参数
 
-## Commands
+| 参数 | 说明 |
+| --- | --- |
+| `-i, --input-service <name>` | iceoryx2 手部数据输入服务（必填） |
+| `--signlang-result-service <name>` | iceoryx2 手语识别结果服务 |
+| `--gesture-management-service <name>` | iceoryx2 手势管理服务 |
+| `--bluetooth-name <name>` | BLE 广播名称（默认 "SignLang Eyes"） |
+| `--adapter-path <path>` | BlueZ 适配器对象路径（默认 `/org/bluez/hci0`） |
+| `--subscriber-buffer <n>` | iceoryx2 订阅者队列大小（默认 2） |
+| `--stream-fps <rate>` | 最大 BLE 流帧率（默认 30） |
+| `--max-notify-payload <bytes>` | 单次 BLE 通知最大负载（默认 180） |
+| `--max-upload-bytes <bytes>` | 单次手势上传上限（默认 8 MB） |
+| `--enable-streaming-by-default` | 客户端订阅后自动开始流式传输 |
 
-| Command | ID | Purpose |
-|---------|----|---------|
-| `GetCapabilities` | `0x0001` | Returns protocol/model/stream status |
-| `SetStreamConfig` | `0x0101` | Enables or disables handpose streaming |
-| `ListGestures` | `0x0201` | Lists gesture id/name/enabled/sample count |
-| `AddGestureBegin` | `0x0202` | Starts an upload session |
-| `AddGestureChunk` | `0x0203` | Writes an upload chunk |
-| `AddGestureCommit` | `0x0204` | Encodes uploaded handpose frames and stores samples |
-| `AddGestureAbort` | `0x0205` | Cancels current upload |
-| `DeleteGesture` | `0x0206` | Deletes by id or name |
-| `GetStatus` | `0x0301` | Returns current status |
+## 手势上传协议
 
-No application-level authentication is implemented.
+大手势样本通过分块上传传输：
+1. `AddGestureBegin` — 指定手势名称、传输 ID、总大小
+2. `AddGestureChunk` — 发送数据块
+3. `AddGestureCommit` — 校验完整性，提交给 signlang_det 编码
+4. `AddGestureAbort` — 中途取消
 
-## Upload Format
+## 依赖
 
-`AddGestureBegin` declares a transfer id, total byte size, replace flag, and gesture name. `AddGestureChunk` writes byte
-ranges. `AddGestureCommit` fails unless every byte in the declared upload has arrived.
-
-The uploaded blob contains:
-
-```text
-u32 frame_count
-repeat frame_count:
-  u32 frame_payload_size
-  wire_handpose_frame payload
-```
-
-Each frame payload is the raw-f32 wire format produced by `wire_handpose.{hpp,cpp}`.
-
-During commit, the manager:
-
-1. verifies all BLE upload chunks arrived
-2. decodes each wire handpose frame into `HandPoseFrameMetadata` plus `HandPoseDetection` values
-3. forwards the decoded frames to `signlang_det` over the gesture-management request-response service
-4. returns the stored gesture id from `signlang_det`
-
-## Command-Line Parameters
-
-Relative paths are resolved from the installation root. For installed module executables under `bin/`, the runtime root is the parent directory, so defaults like `models/…`, `conf/…`, and `log/…` do not depend on the shell current working directory.
-
-All module executables also accept `--log-file <path>` and `--log-rotate-size <bytes>`; the launcher supplies these automatically when it starts modules.
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--input-service` | required | handpose iceoryx2 service |
-| `--signlang-result-service` | required | signlang result iceoryx2 service |
-| `--gesture-management-service` | required | signlang_det gesture management request-response service |
-| `--bluetooth-name` | `SignLang Eyes` | BLE advertising local name |
-| `--adapter-path` | `/org/bluez/hci0` | BlueZ adapter object path |
-| `--subscriber-buffer` | `2` | iceoryx2 handpose queue size |
-| `--stream-fps` | `30` | max BLE stream frame rate |
-| `--max-notify-payload` | `180` | notification chunk size |
-| `--enable-streaming-by-default` | false | stream as soon as a client subscribes |
-
-## Running Board BLE Check
-
-Run these on the target board before relying on BLE:
-
-```bash
-bluetoothctl list
-bluetoothctl show
-bluetoothctl power on
-bluetoothctl advertise on
-```
-
-Then run the installed stack and inspect logs:
-
-```bash
-install/launcher --config conf/conf.toml
-tail -f log/*signlang_manager*.log
-```
-
-Expected manager log line:
-
-```text
-BLE GATT service registered on /org/bluez/hci0
-```
-
-From a phone or Linux central, scan for the configured local name and connect. If registration fails, capture:
-
-```bash
-bluetoothctl show
-ps -ef | grep bluetoothd
-journalctl -u bluetooth -n 100 --no-pager
-```
+- BlueZ（D-Bus API，BLE GATT 服务）
+- GLib / GIO
+- iceoryx2（Publish-Subscribe、Request-Response）

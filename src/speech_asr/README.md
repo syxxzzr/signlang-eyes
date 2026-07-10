@@ -1,227 +1,57 @@
-# speech_asr — Speech Recognition (Whisper)
+# Speech ASR
 
-## Overview
+[简体中文](README.md) | [English](README.en.md)
 
-The **speech_asr** module performs real-time speech-to-text recognition using an OpenAI Whisper base encoder-decoder model. The encoder runs on CPU through ONNX Runtime, while the decoder runs on the RKNN NPU. It subscribes to audio frames, processes them through a sliding-window log-Mel spectrogram pipeline, runs encoder-decoder inference, and publishes transcription results. Supports English and Chinese languages.
+语音识别模块，基于 OpenAI Whisper 架构实现中英文语音转文字。编码器运行在 ONNX Runtime（CPU），解码器运行在 RKNN（NPU），通过滑窗方式实现连续语音识别。
 
-- **Executable**: `speech_asr` (installed under `bin/`)
-- **IPC Pattern**: Publish-Subscribe (audio subscriber + result publisher)
-- **Input**: `signlang::audio_frontend::AudioFrame` from iceoryx2
-- **Output**: `signlang::speech_asr::SpeechAsrResult` on iceoryx2
-- **Model**: Whisper base (CPU ONNX encoder + RKNN decoder, 15s window)
+## 功能
 
-## Command-Line Parameters
+- 从 iceoryx2 订阅音频帧（16 kHz 单声道）
+- 计算 Mel 频谱特征（80 维滤波器组，使用 FFTW3 加速 FFT）
+- Whisper 编码器在 ONNX Runtime 上运行，解码器在 RK3588 NPU 上运行
+- 通过 iceoryx2 Publish-Subscribe 发布识别结果
+- 当无下游订阅者时暂停推理
 
-Relative paths are resolved from the installation root. For installed module executables under `bin/`, the runtime root is the parent directory, so defaults like `models/…`, `conf/…`, and `log/…` do not depend on the shell current working directory.
+## 处理管线
 
-All module executables also accept `--log-file <path>` and `--log-rotate-size <bytes>`; the launcher supplies these automatically when it starts modules.
-
-### IPC (Required)
-
-| Parameter | Description |
-|-----------|-------------|
-| `--input-service` / `-i` | iceoryx2 audio input publish-subscribe service name |
-| `--output-service` / `-o` | iceoryx2 ASR result output service name |
-
-### Model Paths
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--encoder-model` | `models/whisper/whisper_encoder_base_15s.onnx` | Whisper encoder ONNX model path |
-| `--decoder-model` | `models/whisper/whisper_decoder_base_15s.rknn` | Whisper decoder RKNN model path |
-| `--vocab-en` | `models/whisper/vocab_en.txt` | English vocabulary file |
-| `--vocab-zh` | `models/whisper/vocab_zh.txt` | Chinese vocabulary file (base64-encoded) |
-| `--mel-filters` | `models/whisper/mel_80_filters.txt` | 80-bin Mel filterbank coefficients |
-
-### Processing
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--language` | `en` | Recognition language: `en` or `zh` |
-| `--window-ms` / `-w` | `15000` | ASR analysis window duration in milliseconds (must be > 0) |
-| `--overlap` | `0.2` | Overlap ratio between adjacent windows (0.0-1.0) |
-| `--max-decode-steps` | `96` | Maximum autoregressive decoder iterations per window (must be > 0) |
-
-### Performance
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--npu-core` | `auto` | Default decoder NPU core mask: `auto`, `all`, `0`, `1`, `2`, `0_1`, `0_1_2` |
-| `--decoder-npu-core` | *(from `--npu-core`)* | Decoder-specific NPU core mask (overrides `--npu-core`) |
-| `--rknn-priority` | `medium` | RKNN context priority: `high`, `medium`, `low` |
-| `--subscriber-buffer` | `2` | iceoryx2 subscriber queue size (must be > 0) |
-| `--cpu-core` | *(system default)* | Best-effort bind to one CPU core; invalid values or binding failures log a warning and keep system default scheduling |
-
-## Technical Details
-
-### Signal Processing Pipeline
-
-1. **Reflect Padding**: ±200 samples at each edge of the audio window (prevents edge artifacts)
-2. **STFT**: 400-point FFT with Hann window, 160-sample hop length → 201 frequency bins (FFTW3f)
-3. **Mel Filtering**: 80-bin Mel filterbank maps 201-bin power spectra to perceptual Mel scale
-4. **Log Compression & Normalization**: `log10(mel_value)`, threshold at max − 8 dB, scale to [−1, 1]
-5. **Encoder**: Single-pass ONNX Runtime CPU encoding of the Mel spectrogram → fixed-length feature vector
-6. **Decoder**: RKNN autoregressive token generation with prompt `<|startoftranscript|> <language> <|transcribe|> <|notimestamps|>`, terminates on `<|endoftext|>` or max steps
-
-**Window dimensions**: 15s @ 16kHz = 240,000 samples → 80×1500 Mel spectrogram
-
-### Thread Architecture
-
-- **Receiver Thread**: Event-driven subscription via `Node::wait()`, accumulates samples in ring buffer (zero CPU when idle)
-- **Inference Thread**: Waits for full window → Mel computation → encoder → decoder → publish result
-
-### Event-Driven Subscription
-
-The module uses iceoryx2 `Node::wait()` for event-driven audio frame reception:
-- No periodic polling when idle
-- Zero CPU usage while waiting for frames
-- 5ms timeout for responsive shutdown
-- Replaces legacy polling loops for better power efficiency
-
-### ASR Window Strategy
-
-- **Window Size**: 15 seconds (15000ms) at 16 kHz = 240,000 samples
-- **Overlap**: 20% (0.2) → hop of 192,000 samples (12 seconds)
-- **Ring Buffer**: Maintains `window + max(window, hop) + 1s` capacity for continuous streaming
-
-## Architecture
-
-```
-Audio Subscriber (iceoryx2)
-    │ [event-driven via Node::wait()]
-    ▼
-AudioRingBuffer
-(circular buffer)
-    │
-    ▼
-WhisperModel
-    │
-    ├─► STFT + Mel Spectrogram (FFTW3f)
-    │
-    ├─► Encoder (RKNN NPU)
-    │       │
-    │       ▼
-    │   Encoded Features
-    │       │
-    └─► Decoder (RKNN NPU, autoregressive)
-            │
-            ▼
-        Token IDs
-            │
-            ▼
-        Vocabulary Lookup
-            │
-            ▼
-    Result Publisher (iceoryx2)
+```text
+iceoryx2 音频 → AudioRingBuffer → 滑窗提取 → Mel频谱计算（FFTW3）
+                                                  ↓
+                                          Whisper编码器（ONNX Runtime / CPU）
+                                                  ↓
+                                          Whisper解码器（RKNN / NPU）
+                                                  ↓
+                                          SpeechAsrResult → iceoryx2
 ```
 
-## Dependencies
+## 命令行参数
 
-- **iceoryx2**: Zero-copy IPC
-- **RKNN Runtime**: NPU inference
-- **FFTW3f**: Fast Fourier Transform
-- **spdlog**: Logging
+| 参数 | 说明 |
+| --- | --- |
+| `-i, --input-service <name>` | iceoryx2 音频输入服务（必填） |
+| `-o, --output-service <name>` | iceoryx2 ASR 结果输出服务（必填） |
+| `--language <en|zh>` | 识别语言（默认 `en`） |
+| `--encoder-model <path>` | Whisper 编码器 ONNX 模型路径 |
+| `--decoder-model <path>` | Whisper 解码器 RKNN 模型路径 |
+| `--vocab-en <path>` | 英文词表文件 |
+| `--vocab-zh <path>` | 中文词表文件 |
+| `--mel-filters <path>` | 80 维 Mel 滤波器文件 |
+| `-w, --window-ms <ms>` | ASR 窗口长度（默认 15000 ms） |
+| `--overlap <ratio>` | 窗口重叠比例（默认 0.1） |
+| `--max-decode-steps <n>` | 解码器最大迭代步数（默认 96） |
+| `--subscriber-buffer <n>` | iceoryx2 订阅者队列大小（默认 2） |
+| `--npu-core <mask>` | 编码器 NPU 核心掩码 |
+| `--decoder-npu-core <mask>` | 解码器 NPU 核心掩码 |
+| `--rknn-priority <high|medium|low>` | NPU 优先级 |
+| `--cpu-core <n>` | 绑定的 CPU 核心 |
 
-## Usage Examples
+## 架构
 
-### Basic Usage (English)
+双线程设计：接收线程从 iceoryx2 拉取音频写入环形缓冲区，检测线程从缓冲区读取音频窗口执行推理。音频环形缓冲区、Mel 滤波器和编码器输出均使用预分配内存，避免运行时动态分配。
 
-```bash
-install/bin/speech_asr \
-    --input-service audio_capture \
-    --output-service speech_asr_result \
-    --language en
-```
+## 依赖
 
-### Chinese Recognition
-
-```bash
-install/bin/speech_asr \
-    --input-service audio_capture \
-    --output-service speech_asr_result \
-    --language zh \
-    --window-ms 15000 \
-    --overlap 0.2
-```
-
-### Multi-Core NPU
-
-```bash
-# Use NPU cores 0 and 1 for the RKNN decoder
-install/bin/speech_asr \
-    --input-service audio_capture \
-    --output-service speech_asr_result \
-    --language en \
-    --npu-core 0_1
-```
-
-## File Organization
-
-| File | Description |
-|------|-------------|
-| `main.cpp` | Entry point; dual-thread orchestration (receiver + inference) |
-| `program_options.{cpp,hpp}` | CLI argument parsing via cxxopts |
-| `whisper_model.{cpp,hpp}` | Whisper encoder/decoder RKNN model wrapper |
-| `iceoryx_gateway.{cpp,hpp}` | iceoryx2 subscriber and publisher |
-| `speech_asr_result.{cpp,hpp}` | `SpeechAsrResult` IPC message definition |
-
-Shared with other modules:
-| File | Description |
-|------|-------------|
-| `common/audio_ring_buffer.{cpp,hpp}` | Thread-safe circular buffer for audio windows |
-
-## IPC Data Structures
-
-### SpeechAsrResult (Published)
-
-```cpp
-struct SpeechAsrResult {
-    std::uint64_t timestamp_ns;
-    std::uint64_t window_start_sequence;
-    std::uint64_t window_end_sequence;
-    std::uint32_t window_ms;
-    float overlap_ratio;
-    std::uint32_t token_count;
-    float inference_time_ms;
-    std::array<char, kMaxTranscriptLength> transcript;
-};
-```
-
-## Performance Characteristics
-
-- **Inference time**: ~1.5-2.5s for 15s window on single NPU core (RK3588)
-- **Throughput**: Real-time factor ~0.15-0.20 (processes 15s in 1.5-2.5s)
-- **Memory**: ~150MB model footprint (encoder + decoder RKNN models)
-- **CPU usage**: <5% on single core (event-driven, no polling; Cortex-A76 @ 2.4GHz)
-- **Latency**: ~2-3s glass-to-glass (15s window with 20% overlap = 12s hop)
-- **STFT computation**: ~50-100ms for 240k samples via FFTW3f
-
-## Vocabulary Files
-
-- **vocab_en.txt**: 50,257 tokens (plain text, one per line)
-- **vocab_zh.txt**: 50,257 tokens (base64-encoded UTF-8 for Chinese characters)
-- **mel_filters.txt**: 80×201 Mel filterbank matrix (text format)
-
-## Troubleshooting
-
-### No Audio Received
-
-Check that audio_frontend is running and publishing to the correct service:
-```bash
-# Should show audio_capture service
-iox2-list
-```
-
-### RKNN Initialization Failed
-
-Ensure RKNN models are present and `librknnrt.so` is in library path:
-```bash
-ls models/whisper/
-export LD_LIBRARY_PATH=/path/to/lib:$LD_LIBRARY_PATH
-```
-
-### Poor Recognition Quality
-
-- Check input audio sample rate matches expected 16 kHz
-- Increase window size for longer utterances
-- Verify vocabulary file matches the selected language
+- ONNX Runtime（编码器推理）
+- RKNN API（解码器推理）
+- FFTW3（频谱计算）
+- iceoryx2（Publish-Subscribe）

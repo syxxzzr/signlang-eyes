@@ -1,331 +1,48 @@
-# state_machine — Global Application State Controller
+# State Machine
 
-## Overview
+[简体中文](README.md) | [English](README.en.md)
 
-The **state_machine** module is the central application state controller for the sign language edge AI system. It manages the global application state (Normal, ASR, SignLanguageChat, SignLanguageAi, DangerousSound) and distributes state changes to all other modules via iceoryx2 Event + Blackboard pattern. It accepts state change requests from other modules via a Request-Response service, with special-state timeout handling.
+应用状态管理模块，维护系统全局状态并提供状态切换控制接口。通过 iceoryx2 事件（Event）、黑板（Blackboard）和请求-响应（Request-Response）三种 IPC 模式对外暴露状态信息与控制能力。
 
-- **Executable**: `state_machine` (installed under `bin/`)
-- **IPC Pattern**: Event (state change notification) + Blackboard (state storage) + Request-Response (state control)
-- **Input**: `StateControlRequest` via iceoryx2 Request-Response server
-- **Output**: `AppState` on Event notifier + Blackboard services
+## 状态定义
 
-## Application States
+| 状态 | 类型 | 说明 |
+| --- | --- | --- |
+| `Normal` | 基础状态 | 默认状态，保持环境声音检测，语音与手语推理空闲 |
+| `Asr` | 基础状态 | 启用 Whisper 语音识别，OLED 显示转写结果 |
+| `SignLanguageChat` | 基础状态 | 启用手语识别，TTS 播报识别结果 |
+| `SignLanguageAi` | 基础状态 | 启用手语识别，累积结果调用 LLM 并显示回复 |
+| `DangerousSound` | 特殊状态 | 危险声音触发，带超时自动恢复到基础状态（默认 15 秒） |
 
-| State | Value | Type | Description |
-|-------|-------|------|-------------|
-| `Normal` | `0` | Base | Default idle state; ASR and sign-language inference modules remain disabled |
-| `Asr` | `1` | Base | Speech recognition mode; ASR module active, sign language modules disabled |
-| `SignLanguageChat` | `2` | Base | Sign language chat mode; sign language recognition active, ASR disabled |
-| `SignLanguageAi` | `3` | Base | Sign language AI interaction mode; sign language recognition active |
-| `DangerousSound` | `4` | Special | Alert state; triggered by env_sound_det on horn/siren detection; auto-expires after timeout (default 15s) |
+基础状态之间可通过 `NextBase` 命令循环切换，也可通过 `SetBase` 直接指定。特殊状态在超时后自动退回到进入前的基础状态，在特殊状态期间基础状态切换请求会被拒绝。
 
-- **Base states**: Mutually exclusive; transitioning to a new base state replaces the current one
-- **Special states**: Overlay on top of base states; auto-expire after `timeout_ms`; the base state persists underneath and is restored on expiration
-- **State persistence**: Base state is never lost; special states are ephemeral overlays
+## IPC 接口
 
-## Command-Line Parameters
+| 接口 | 模式 | 服务名 | 说明 |
+| --- | --- | --- | --- |
+| 状态事件 | Event | `app_state_event` | 每次状态变更时通知所有订阅者 |
+| 状态黑板 | Blackboard | `app_state_blackboard` | 供模块随时读取当前状态 |
+| 状态控制 | Request-Response | `app_state_control` | 接收状态切换请求并返回执行结果 |
 
-Relative paths are resolved from the installation root. For installed module executables under `bin/`, the runtime root is the parent directory, so defaults like `models/…`, `conf/…`, and `log/…` do not depend on the shell current working directory.
+## 状态控制命令
 
-All module executables also accept `--log-file <path>` and `--log-rotate-size <bytes>`; the launcher supplies these automatically when it starts modules.
+| 命令 | 说明 |
+| --- | --- |
+| `NextBase` | 切换到下一个基础状态（循环） |
+| `SetBase` | 直接设置指定的基础状态 |
+| `EnterSpecial` | 进入特殊状态，可指定超时时间（0 表示使用默认值） |
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--state-event-service` | *(required)* | iceoryx2 event service name for app state change notifications |
-| `--state-blackboard-service` | *(required)* | iceoryx2 blackboard service name for app state storage |
-| `--state-control-service` | *(required)* | iceoryx2 request-response service name for state control commands |
-| `--initial-state` | `normal` | Initial base app state: `normal`, `asr`, `sign_language_chat`, or `sign_language_ai` |
-| `--help` / `-h` | — | Print usage |
+## 命令行参数
 
-## Technical Details
+| 参数 | 说明 |
+| --- | --- |
+| `--state-event-service <name>` | iceoryx2 状态事件服务名 |
+| `--state-blackboard-service <name>` | iceoryx2 状态黑板服务名 |
+| `--state-control-service <name>` | iceoryx2 状态控制服务名 |
+| `--initial-state <state>` | 初始状态（默认 `Normal`） |
 
-### State Control Commands
+## 设计要点
 
-Other modules can send `StateControlRequest` messages with these commands:
-
-| Command | Value | Description |
-|---------|-------|-------------|
-| `NextBase` | `0` | Cycle to the next base state (Normal → ASR → SignLanguageChat → SignLanguageAi → Normal) |
-| `SetBase` | `1` | Set a specific base state (target in `target_state` field) |
-| `EnterSpecial` | `2` | Enter a special state (target in `target_state` field, timeout in `timeout_ms`); rejected during another special state |
-
-### Response Codes
-
-| Error Code | Description |
-|------------|-------------|
-| `None` (`0`) | Command accepted; state changed successfully |
-| `InvalidTargetState` (`1`) | Target state is not valid for the given command |
-| `IgnoredDuringSpecialState` (`2`) | Command ignored because a special state is currently active |
-| `InvalidCommand` (`3`) | Unrecognized or malformed command |
-
-### Main Control Loop (100ms cycle)
-
-1. Check if the current special state has expired (`expire_special_state()`)
-2. If expired, revert to the base state and publish the change via Event + Blackboard
-3. Process pending state control requests from the Request-Response server
-4. Send responses back to clients
-5. Sleep for 100ms (10 Hz control loop)
-
-**Characteristics:**
-- Fixed 10 Hz control frequency (100ms period)
-- Special state timeout precision: ±100ms (limited by control loop frequency)
-- Non-blocking request processing (handles multiple clients)
-- Event notification latency: <1ms
-
-### IPC Integration
-
-- **Event Service**: When state changes, a `notify()` is sent to wake up other modules blocked on the event FD
-- **Blackboard Service**: Stores the current `AppState` value; other modules read it after receiving the event notification
-- **Request-Response Server**: Listens for `StateControlRequest` messages, processes them via `StateController`, sends back `StateControlResponse`
-
-### Module Integration Flow
-
-```
-state_machine                              other modules
-     │                                           │
-     │  ── Event.notify() ───────────────────→  │  (wake up from event)
-     │  ── Blackboard.write(state) ──────────→  │  (read current state)
-     │                                           │
-     │  ←── Request-Response: request ────────  │  (env_sound_det sends horn alert)
-     │  ── Request-Response: response ───────→  │
-     │  ── Event.notify() ───────────────────→  │  (notify all modules of state change)
-```
-
-## Architecture
-
-```
-Request-Response Server
-(state control requests)
-        │
-        ▼
-StateController
-(state machine logic)
-        │
-        ├─► Base State Transitions
-        │   (Normal/Asr/SignLanguageChat/SignLanguageAi)
-        │
-        ├─► Special State Handling
-        │   (DangerousSound with timeout)
-        │
-        └─► Timeout Expiration
-                │
-                ▼
-        Event Notifier
-        (state change events)
-                │
-                ▼
-        Blackboard Publisher
-        (current state storage)
-```
-
-## Dependencies
-
-- **iceoryx2**: Zero-copy IPC (Event, Blackboard, Request-Response)
-- **spdlog**: Logging
-
-## Usage Examples
-
-### Basic Usage
-
-```bash
-# Start the state machine (typically first in the startup sequence)
-install/bin/state_machine \
-    --state-event-service app_state_event \
-    --state-blackboard-service app_state_blackboard \
-    --state-control-service app_state_control \
-    --initial-state normal
-```
-
-### Full System Startup Sequence
-
-The state_machine should be started before other modules that depend on it:
-
-```bash
-# 1. Start state machine
-install/bin/state_machine \
-    --state-event-service app_state_event \
-    --state-blackboard-service app_state_blackboard \
-    --state-control-service app_state_control \
-    --initial-state normal &
-
-# 2. Start audio/video frontends (no state dependency)
-install/bin/audio_frontend --device hw:0,0 --service audio_capture &
-install/bin/video_frontend --device /dev/video0 --service video_capture &
-
-# 3. Start inference modules (each references the same state services)
-install/bin/speech_asr \
-    --input-service audio_capture --output-service speech_asr_result \
-    --state-event-service app_state_event --state-blackboard-service app_state_blackboard &
-
-install/bin/env_sound_det \
-    --input-service audio_capture \
-    --state-control-service app_state_control &
-
-install/bin/handpose_det \
-    --input-service video_capture --output-service handpose_result \
-    --state-event-service app_state_event --state-blackboard-service app_state_blackboard &
-
-install/bin/signlang_manager \
-    --input-service handpose_result \
-    --signlang-control-service signlang_prototype_control &
-
-install/bin/signlang_det \
-    --input-service handpose_result --output-service signlang_result \
-    --prototype-control-service signlang_prototype_control \
-    --state-event-service app_state_event --state-blackboard-service app_state_blackboard &
-```
-
-## File Organization
-
-| File | Description |
-|------|-------------|
-| `main.cpp` | Entry point; main control loop (100ms cycle) |
-| `program_options.{cpp,hpp}` | CLI argument parsing via cxxopts |
-| `app_state.{cpp,hpp}` | `AppState` enum (5 states), `AppStateKey` struct, helper functions |
-| `state_control.{cpp,hpp}` | `StateController` class: state machine logic, base/special state transitions, timeout handling |
-| `iceoryx_gateway.{cpp,hpp}` | iceoryx2 Event notifier, Blackboard publisher, Request-Response server |
-
-## IPC Data Structures
-
-### AppState (Published to Blackboard)
-
-```cpp
-enum class AppState : std::uint32_t {
-    Normal = 0,
-    Asr = 1,
-    SignLanguageChat = 2,
-    SignLanguageAi = 3,
-    DangerousSound = 4
-};
-
-struct AppStateKey {
-    std::uint32_t id;  // Always 0 (single-entry blackboard)
-};
-```
-
-### StateControlRequest (Request-Response)
-
-```cpp
-enum class StateControlCommand : std::uint32_t {
-    NextBase = 0,
-    SetBase = 1,
-    EnterSpecial = 2
-};
-
-struct StateControlRequest {
-    StateControlCommand command;
-    AppState target_state;
-    std::uint32_t timeout_ms;  // For EnterSpecial only
-};
-```
-
-### StateControlResponse (Request-Response)
-
-```cpp
-enum class StateControlError : std::uint32_t {
-    None = 0,
-    InvalidTargetState = 1,
-    IgnoredDuringSpecialState = 2,
-    InvalidCommand = 3
-};
-
-struct StateControlResponse {
-    StateControlError error;
-};
-```
-
-## State Transition Examples
-
-### Cycle Base States
-
-```cpp
-// Client sends: NextBase command
-StateControlRequest request{
-    .command = StateControlCommand::NextBase,
-    .target_state = AppState::Normal,  // Ignored for NextBase
-    .timeout_ms = 0
-};
-```
-
-### Set Specific Base State
-
-```cpp
-// Client sends: SetBase command to enter ASR mode
-StateControlRequest request{
-    .command = StateControlCommand::SetBase,
-    .target_state = AppState::Asr,
-    .timeout_ms = 0
-};
-```
-
-### Enter Special State (Dangerous Sound)
-
-```cpp
-// Client sends: EnterSpecial command with 15s timeout
-StateControlRequest request{
-    .command = StateControlCommand::EnterSpecial,
-    .target_state = AppState::DangerousSound,
-    .timeout_ms = 15000
-};
-```
-
-## Performance Characteristics
-
-- **Control loop frequency**: 10 Hz (100ms period)
-- **Event notification latency**: <1ms (iceoryx2 event notifier)
-- **Blackboard write latency**: <0.5ms (single-entry zero-copy write)
-- **Memory**: <1MB resident (minimal state machine logic)
-- **CPU usage**: <1% on single core (Cortex-A76 @ 2.4GHz)
-- **Special state timeout precision**: ±100ms (limited by control loop frequency)
-- **Request-response throughput**: ~100 requests/second (limited by 100ms loop)
-
-## Module State Integration
-
-### State-Aware Modules
-
-Modules that subscribe to state events and adjust behavior:
-
-| Module | States When Active | Behavior When Disabled |
-|--------|-------------------|------------------------|
-| `speech_asr` | Asr | Skips inference, event-driven idle |
-| `handpose_det` | SignLanguageChat, SignLanguageAi | Skips inference, event-driven idle |
-| `signlang_det` | SignLanguageChat, SignLanguageAi | Skips inference, event-driven idle |
-
-### State-Triggering Modules
-
-Modules that send state control requests:
-
-| Module | Request Type | Trigger Condition |
-|--------|--------------|-------------------|
-| `env_sound_det` | EnterSpecial (DangerousSound) | Horn/siren detected above threshold |
-
-## Troubleshooting
-
-### Modules Not Responding to State Changes
-
-Check that all modules are using the same service names:
-```bash
-# Should show app_state_event, app_state_blackboard, app_state_control
-iox2-list
-```
-
-### State Changes Not Propagating
-
-Check state_machine logs:
-```bash
-# Should show state transition messages
-tail -f log/state_machine.log
-```
-
-### Special State Not Expiring
-
-- Check timeout value in EnterSpecial request
-- Verify control loop is running (should log every state change)
-- Special state expiration precision is ±100ms
-
-### Request-Response Timeout
-
-Ensure state_machine is running before modules try to send requests:
-```bash
-ps aux | grep state_machine
-```
+- 特殊状态的超时管理基于 `std::chrono::steady_clock`，确保系统时钟调整不影响超时判定
+- 状态切换时同时更新黑板数据和发送事件通知，保证订阅者不会丢失状态变更
+- 控制响应中携带当前基础状态和特殊状态信息，便于调用方确认执行结果

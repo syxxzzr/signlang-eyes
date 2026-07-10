@@ -1,291 +1,48 @@
-# env_sound_det — Environmental Sound Detection (YAMNet)
+# Environmental Sound Detection
 
-## Overview
+[简体中文](README.md) | [English](README.en.md)
 
-The **env_sound_det** module performs real-time environmental sound classification using Google's YAMNet (MobileNetV1-based) model running on the RKNN NPU. It subscribes to audio frames, processes them through a sliding window, runs inference, and requests alert-state changes via the state control service when configured dangerous-sound labels are detected.
+环境声音识别模块。基于 YAMNet 模型在 RK3588 NPU 上进行环境声音分类，识别危险声音（如车辆喇叭）并触发应用危险状态。
 
-- **Executable**: `env_sound_det` (installed under `bin/`)
-- **IPC Pattern**: Publish-Subscribe (audio subscriber) + Request-Response (state control client)
-- **Input**: `signlang::audio_frontend::AudioFrame` from iceoryx2
-- **Output**: `DangerousSound` state-control requests when horn/siren detected
-- **Model**: YAMNet (521-class environmental sound classifier, 3s window, RKNN-accelerated)
+## 功能
 
-## Command-Line Parameters
+- 从 iceoryx2 订阅音频帧（16 kHz 单声道）
+- 使用 YAMNet 模型在 RKNN NPU 上进行推理
+- 检测预定义的危险声音类别：气喇叭/卡车喇叭、车辆喇叭/汽车喇叭/鸣笛、火车喇叭
+- 检测到危险声音时通过 iceoryx2 状态控制接口触发 `DangerousSound` 状态
+- 采用滑窗方式实现连续检测，窗口默认 3 秒
 
-Relative paths are resolved from the installation root. For installed module executables under `bin/`, the runtime root is the parent directory, so defaults like `models/…`, `conf/…`, and `log/…` do not depend on the shell current working directory.
+## 处理管线
 
-All module executables also accept `--log-file <path>` and `--log-rotate-size <bytes>`; the launcher supplies these automatically when it starts modules.
-
-### IPC (Required)
-
-| Parameter | Description |
-|-----------|-------------|
-| `--input-service` / `-i` | iceoryx2 audio input publish-subscribe service name |
-| `--state-control-service` | iceoryx2 app state control request-response service name |
-
-### Model Paths
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--model` / `-m` | `models/yamnet/yamnet_3s.rknn` | YAMNet RKNN model path |
-| `--class-map` | `models/yamnet/yamnet_class_map.txt` | YAMNet 521-class label mapping file |
-
-### Processing
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--window-ms` / `-w` | `3000` | Detection window duration in milliseconds (must be > 0) |
-| `--overlap` | `0.2` | Overlap ratio between adjacent windows (0.0-1.0) |
-| `--score-threshold` | `0.3` | Minimum score threshold for detection (0.0-1.0) |
-
-### Performance
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--npu-core` | `auto` | NPU core mask: `auto`, `all`, `0`, `1`, `2`, `0_1`, `0_1_2` |
-| `--rknn-priority` | `medium` | RKNN context priority: `high`, `medium`, `low` |
-| `--subscriber-buffer` | `2` | iceoryx2 subscriber queue size (must be > 0) |
-
-## Technical Details
-
-### YAMNet Architecture
-
-- **Backbone**: MobileNetV1 with depthwise-separable convolutions (lightweight CNN)
-- **Input**: `[1, 48000]` — 3 seconds of audio @ 16 kHz mono
-- **Output**: `[N_frames × 521]` — per-frame class scores (N_frames varies with model variant)
-- **Post-processing**: Average scores across all output frames, filter by `score_threshold`
-- **Classes**: 521 AudioSet ontology classes (speech, music, vehicle sounds, alarms, animals, etc.)
-
-### Threshold-Based Filtering
-
-Instead of selecting a fixed top-K, the module uses **threshold-based filtering**:
-- All classes with `score >= score_threshold` are detected (up to 32 max per window)
-- Provides flexible detection: can find 0, 1, or many dangerous sounds simultaneously
-- More accurate for multi-class scenarios (e.g., car horn + siren simultaneously)
-- Threshold is configurable per deployment scenario (default 0.3)
-- Eliminates false negatives from arbitrary top-K cutoff in multi-sound environments
-
-### Inference Pipeline
-
-1. Accumulate samples in ring buffer (sliding window with configurable overlap)
-2. If audio window matches model input length, pass directly; otherwise zero-pad tail
-3. Run single-pass RKNN inference
-4. Average per-class scores across all time frames
-5. Filter classes by score threshold, collect up to 32 classes
-6. Check detected classes against dangerous sound labels
-
-### Event-Driven Subscription
-
-The module uses iceoryx2 `Node::wait()` for event-driven audio frame reception:
-- No periodic polling when idle
-- Zero CPU usage while waiting for frames
-- 5ms timeout for responsive shutdown
-- Replaces legacy polling loops for better power efficiency
-
-### State Control (Dangerous Sound Detection)
-
-When the module detects one of the configured horn labels in the filtered classes, it sends a `StateControlRequest` with `EnterSpecial(DangerousSound, timeout_ms=15000)` via the iceoryx2 Request-Response control service.
-
-**Dangerous sound labels (hardcoded):**
-- `Air horn, truck horn` (class ID 312)
-- `Vehicle horn, car horn, honking` (class ID 302)
-- `Train horn` (class ID 325)
-
-The state machine receives this request and transitions to the `DangerousSound` special state, which auto-expires after 15 seconds.
-
-### YAMNet Window Strategy
-
-- **Window Size**: 3 seconds (3000ms) at 16 kHz = 48,000 samples
-- **Overlap**: 20% (0.2) → hop of 38,400 samples (2.4 seconds)
-- **Ring Buffer**: Maintains `window + max(window, hop) + 1s` capacity for continuous streaming
-
-## Architecture
-
-```
-Audio Subscriber (iceoryx2)
-    │ [event-driven via Node::wait()]
-    ▼
-AudioRingBuffer
-(circular buffer)
-    │
-    ▼
-YamnetModel (RKNN NPU)
-    │
-    ├─► Inference (MobileNetV1)
-    │       │
-    │       ▼
-    │   Per-frame Scores [N×521]
-    │       │
-    │       ▼
-    │   Average across frames
-    │       │
-    │       ▼
-    │   Mean Scores [521]
-    │       │
-    └─► Threshold Filter
-            │
-            ▼
-        Detected Classes
-        (score >= 0.3)
-            │
-            ▼
-     Dangerous Sound Check
-            │
-            ▼
-    State Control Client
-     (iceoryx2 request)
+```text
+iceoryx2 音频 → AudioRingBuffer → 滑窗提取 → YAMNet（RKNN / NPU）
+                                                  ↓
+                                          危险标签匹配 → state_control.EnterSpecial(DangerousSound)
 ```
 
-## Dependencies
+## 命令行参数
 
-- **iceoryx2**: Zero-copy IPC
-- **RKNN Runtime**: NPU inference
-- **spdlog**: Logging
+| 参数 | 说明 |
+| --- | --- |
+| `-i, --input-service <name>` | iceoryx2 音频输入服务（必填） |
+| `--state-control-service <name>` | iceoryx2 状态控制服务（必填） |
+| `-m, --model <path>` | YAMNet RKNN 模型路径 |
+| `--class-map <path>` | YAMNet 类别标签文件 |
+| `-w, --window-ms <ms>` | 检测窗口长度（默认 3000 ms） |
+| `--overlap <ratio>` | 窗口重叠比例（默认 0.2） |
+| `--score-threshold <0.0-1.0>` | 检测置信度阈值（默认 0.3） |
+| `--subscriber-buffer <n>` | iceoryx2 订阅者队列大小（默认 2） |
+| `--npu-core <mask>` | NPU 核心掩码 |
+| `--rknn-priority <high|medium|low>` | NPU 优先级 |
 
-## Usage Examples
+## 设计要点
 
-### Basic Usage
+- YAMNet 输入为 16 kHz 单声道音频，系统会检测与 audio_frontend 发布格式的兼容性
+- 双线程架构：接收线程缓冲音频，检测线程执行推理
+- 采样率不匹配时会发出警告，避免缓冲区饥饿
+- 每个窗口独立检测，score_threshold 可调节灵敏度
 
-```bash
-install/bin/env_sound_det \
-    --input-service audio_capture \
-    --state-control-service app_state_control
-```
+## 依赖
 
-### Custom Threshold
-
-```bash
-# More sensitive detection (lower threshold)
-install/bin/env_sound_det \
-    --input-service audio_capture \
-    --state-control-service app_state_control \
-    --score-threshold 0.2
-```
-
-### Longer Window
-
-```bash
-# 5-second detection window
-install/bin/env_sound_det \
-    --input-service audio_capture \
-    --state-control-service app_state_control \
-    --window-ms 5000 \
-    --overlap 0.3
-```
-
-### Specific NPU Core
-
-```bash
-install/bin/env_sound_det \
-    --input-service audio_capture \
-    --state-control-service app_state_control \
-    --npu-core 0 \
-    --score-threshold 0.3
-```
-
-## File Organization
-
-| File | Description |
-|------|-------------|
-| `main.cpp` | Entry point; dual-thread orchestration (receiver + detector) |
-| `program_options.{cpp,hpp}` | CLI argument parsing via cxxopts |
-| `yamnet_model.{cpp,hpp}` | YAMNet RKNN model wrapper with threshold filtering |
-| `iceoryx_gateway.{cpp,hpp}` | iceoryx2 subscriber and state control client |
-
-Shared with other modules:
-| File | Description |
-|------|-------------|
-| `common/audio_ring_buffer.{cpp,hpp}` | Thread-safe circular buffer for audio windows |
-
-## IPC Data Structures
-
-### YamnetInferenceResult (Internal)
-
-```cpp
-struct YamnetInferenceResult {
-    std::uint32_t model_input_sample_count;
-    std::uint32_t score_frame_count;
-    std::uint32_t detected_class_count;  // Number of classes above threshold
-    float inference_time_ms;
-    std::array<EnvSoundClassScore, kMaxDetectedClasses> detected_classes;
-};
-
-struct EnvSoundClassScore {
-    std::uint32_t class_index;
-    float score;
-    std::array<char, kMaxClassLabelLength> label;
-};
-```
-
-## Performance Characteristics
-
-- **Inference time**: ~20-40ms for 3s window on single NPU core (RK3588)
-- **Throughput**: Real-time factor ~0.01-0.02 (processes 3s in 20-40ms)
-- **Memory**: ~8MB model footprint (MobileNetV1 RKNN model)
-- **CPU usage**: <3% on single core (event-driven, no polling; Cortex-A76 @ 2.4GHz)
-- **Latency**: ~3s glass-to-glass (3s window with 20% overlap = 2.4s hop)
-- **Detection flexibility**: 0-32 classes per window (threshold-based, no fixed top-K)
-
-## YAMNet Class Examples
-
-| ID | Label |
-|----|-------|
-| 0 | Speech |
-| 6 | Shout |
-| 292 | Fire |
-| 302 | Vehicle horn, car horn, honking |
-| 304 | Car alarm |
-| 312 | Air horn, truck horn |
-| 316 | Emergency vehicle |
-| 325 | Train horn |
-| 421 | Gunshot, gunfire |
-
-See `models/yamnet/yamnet_class_map.txt` for all 521 classes.
-
-## Threshold Tuning Guidelines
-
-| Threshold | Sensitivity | Use Case |
-|-----------|-------------|----------|
-| 0.1-0.2 | Very high | Noisy environments, need early warning |
-| 0.3 (default) | Balanced | General purpose, good precision/recall |
-| 0.4-0.5 | Conservative | Low false positive tolerance |
-| 0.6+ | Very conservative | Only very confident detections |
-
-## Troubleshooting
-
-### No Audio Received
-
-Check that audio_frontend is running and publishing to the correct service:
-```bash
-# Should show audio_capture service
-iox2-list
-```
-
-### False Positives
-
-Increase the score threshold:
-```bash
-install/bin/env_sound_det \
-    --input-service audio_capture \
-    --state-control-service app_state_control \
-    --score-threshold 0.4
-```
-
-### Missed Detections
-
-Lower the score threshold or increase window size:
-```bash
-install/bin/env_sound_det \
-    --input-service audio_capture \
-    --state-control-service app_state_control \
-    --score-threshold 0.2 \
-    --window-ms 5000
-```
-
-### RKNN Initialization Failed
-
-Ensure RKNN models are present and `librknnrt.so` is in library path:
-```bash
-ls models/yamnet/
-export LD_LIBRARY_PATH=/path/to/lib:$LD_LIBRARY_PATH
-```
+- RKNN API（推理）
+- iceoryx2（Publish-Subscribe、Request-Response）
