@@ -1,387 +1,244 @@
-# signlang-eyes
+# SignLang Eyes
 
-Real-time sign language recognition and environmental awareness system for the hearing-impaired, providing dual-hand sign language translation, speech recognition, and hazardous sound detection with NPU-accelerated inference.
+[![License](https://img.shields.io/badge/license-Apache--2.0-0f766e)](LICENSE)
 
-## System Architecture
+[简体中文](README.md) | [English](README.en.md)
 
-Modular architecture using iceoryx2 zero-copy IPC for high-performance inter-process communication:
+面向听障人士的端侧实时辅助系统：在 RK3588 上融合双手手语识别、语音识别与合成、危险声音提醒、显示交互和位置遥测。
 
+本项目还包含一个开源的手语词库管理工具，用于使用 `Web Bluetooth` 技术连接设备并管理手语词库，详细内容请参见 [https://github.com/syxxzzr/signlang-eyes-configurator]()
+
+> 本项目目前仅支持 `aarch64` / `arm64` / `armv8`，并以 Rockchip RK3588 为实际适配平台。完整运行还需要摄像头、音频设备、RKNN 模型和相应外设；它不是可以直接在普通 x86_64 电脑上运行的桌面应用。
+
+## 项目简介
+
+SignLang Eyes 将摄像头、麦克风、扬声器、显示屏和通信模块组织成一组独立进程，通过 iceoryx2 共享内存 IPC 传递音视频帧和识别结果。计算密集型模型尽量使用 RK3588 NPU，图像转换与缩放使用 RGA，业务流程则由状态机统一控制。
+
+系统围绕四类场景构建：
+
+- **手语交流**：检测双手 21 点关键点，使用 BiLSTM 编码与 DTW 原型匹配识别手语，并通过语音播报结果。
+- **手语 AI**：将连续手语结果组合成提示词，调用 OpenAI 兼容接口，并在屏幕上显示回复。
+- **语音转写**：使用 Whisper 将中文或英文语音转为文字，显示在外接 OLED 上。
+- **环境感知**：使用 YAMNet 识别危险声音，通过状态切换、振动和 MQTT 告警提醒用户。
+
+除此之外，项目还包含 BLE 手势库管理、串口按键与显示控制、GNSS 定位和 MQTT 遥测等设备侧能力。
+
+## 核心能力
+
+| 领域 | 能力 | 主要实现 |
+| --- | --- | --- |
+| 手语识别 | 双手检测、时序特征编码、可动态扩展词库 | MediaPipe 手部模型、BiLSTM、DTW、SQLite |
+| 语音交互 | 中英文语音识别、中文语音合成 | Whisper、Piper、cpp-pinyin |
+| 环境安全 | 环境声音分类、危险状态、振动与远程告警 | YAMNet、状态机、MQTT |
+| 端侧推理 | 多 NPU 核选择、模型级核心分配 | RKNN Runtime |
+| 音视频前端 | ALSA 采集与声源定位、V4L2 采集、硬件图像处理 | ALSA、FFTW3、V4L2、RGA、libjpeg-turbo |
+| 设备交互 | OLED 文本显示、串口按键、BLE GATT、GNSS | 串口协议、BlueZ、GLib/GIO、minmea |
+| 进程协作 | 零拷贝数据传输、事件通知、黑板和请求响应 | iceoryx2 |
+
+## 系统架构
+
+`launcher` 读取 TOML 配置，按依赖顺序启动并监督 13 个子进程。任一模块启动失败或意外退出时，launcher 会停止整组进程，并根据 `restart_attempts` 策略重新启动。
+
+```text
+麦克风
+  └─ audio_frontend ─┬─ speech_asr ───────────────┐
+                     └─ env_sound_det ──┐         │
+                                        ▼         ▼
+摄像头                             state_machine  dataflow_dispatcher
+  └─ video_frontend                  ▲  │         ├─ speech_tts ──> 扬声器
+       └─ handpose_det ─┬─ signlang_det ──────────┤
+                        └─ signlang_manager       ├─ llm_client ──> AI 服务
+                              ▲                   └─ peripheral_service ──> OLED / 振动
+                              └──── BLE 手势管理              │
+                                                             ▼
+GNSS ───────────────────────────────> telemetry_service ──> MQTT
 ```
-audio_frontend ─┬─▶ speech_asr ───────────────┐
-                └─▶ env_sound_det ─▶ state_machine
 
-video_frontend ─▶ handpose_det ─┬─▶ signlang_det ─┐
-                                └─▶ signlang_manager
+模块间服务名由 launcher 固定，不能通过 TOML 修改。音视频数据使用发布订阅；状态、控制和业务调用分别使用事件、黑板与请求响应模式。
 
-state_machine ─▶ dataflow_dispatcher
-speech_asr ─────▶ dataflow_dispatcher ─▶ peripheral_service display
-signlang_det ───▶ dataflow_dispatcher ─┬─▶ speech_tts
-                                       ├─▶ llm_client
-                                       └─▶ peripheral_service display
+## 应用状态
 
-peripheral_service ─▶ state_machine
-peripheral_service ─▶ telemetry_service
-```
+系统默认进入 `Normal`。基础状态可以在 `Normal`、`Asr`、`SignLanguageChat` 和 `SignLanguageAi` 之间切换，`DangerousSound` 是带超时恢复的特殊状态。
 
-### Core Modules
+| 状态 | 系统行为 |
+| --- | --- |
+| `Normal` | 保持环境声音检测，语音与手语推理处于空闲状态 |
+| `Asr` | 启用 Whisper 语音识别，并在 OLED 上显示转写结果 |
+| `SignLanguageChat` | 启用手部与手语识别，将识别结果交给 TTS 播报 |
+| `SignLanguageAi` | 累积手语片段，调用 OpenAI 兼容接口并显示回复 |
+| `DangerousSound` | 显示危险提示、启用振动并产生遥测告警，超时后恢复基础状态 |
 
-- **audio_frontend**: ALSA audio capture with TDOA-based sound source localization and adaptive resampling
-- **video_frontend**: V4L2 camera capture with RGA hardware-accelerated format conversion (YUYV/MJPEG→RGB24) and scaling
-- **speech_asr**: Whisper base encoder-decoder speech recognition with 15s sliding window for Chinese/English
-- **speech_tts**: Piper/cpp-pinyin Chinese text-to-speech playback from iceoryx2 request-response requests
-- **env_sound_det**: YAMNet (MobileNetV1) environmental sound classification with threshold-based dangerous sound alerts
-- **handpose_det**: MediaPipe dual-model pipeline (palm detector + hand landmarks) with single-hand or dual-hand output
-- **signlang_det**: Dual-hand sign language recognition using BiLSTM encoder + DTW matching against SQLite prototype database
-- **signlang_manager**: BLE GATT access point for handpose streaming and runtime gesture prototype database management
-- **state_machine**: Global state coordinator managing module lifecycle via Event + Blackboard + Request-Response IPC
-- **dataflow_dispatcher**: State-aware routing from ASR/sign language results to display, TTS, and LLM services
-- **peripheral_service**: Serial-button input, OLED display rendering, alert notification, and state-control integration
-- **telemetry_service**: GNSS position and alert telemetry ingestion with MQTT uplink
-- **llm_client**: OpenAI-compatible request-response client for SignLanguageAi prompts
-- **launcher**: Unified process orchestrator loading all modules from TOML configuration with health monitoring
+## 运行要求
 
-## Application States
+### 目标硬件
 
-Default state is `Normal`. ASR and sign language modules remain disabled in this state:
-- **Normal**: Base state, only environmental sound detection active
-- **Asr**: Speech recognition enabled
-- **SignLanguageChat**: Sign language chat mode
-- **SignLanguageAi**: Sign language AI interaction mode
-- **DangerousSound**: Hazardous sound alert (auto-expires back to base state)
+- Rockchip RK3588 或兼容的 aarch64 Linux 设备
+- 支持 V4L2 的摄像头
+- 支持 ALSA 的麦克风和播放设备
+- 可用的 RKNN Runtime 与 RGA 驱动
+- 完整系统默认还会使用 BlueZ BLE 适配器、OLED/按键外设串口和 GNSS 串口
+- 使用手语 AI 或遥测时，需要可访问的 OpenAI 兼容服务或 MQTT Broker
 
-## Technical Features
+开发阶段可以单独启动模块，但通过 `launcher` 运行完整系统时，配置中涉及的设备和运行资产必须可用，否则失败模块会触发整组进程重启。
 
-- **Zero-copy IPC**: iceoryx2 shared memory eliminates serialization overhead for audio/video streams
-- **Event-driven architecture**: `Node::wait()` replaces polling for zero CPU usage when idle
-- **NPU acceleration**: RKNN inference engine with RK3588 multi-core parallelism and configurable core affinity
-- **Hardware acceleration**: RGA (Raster Graphic Acceleration) unit provides ~50× speedup for YUYV→RGB24 conversion
-- **Sliding window processing**: Overlapping temporal analysis for audio (15s/3s) and video (30 frames) streams
-- **Threshold-based detection**: env_sound_det uses flexible score filtering (0-32 classes) instead of fixed top-K
-- **BiLSTM + DTW hybrid**: Sign language recognition combines neural encoding with dynamic time warping for speed invariance
-- **SQLite prototype storage**: Runtime vocabulary boundary decoupled from BiLSTM encoder model
-- **BLE management API**: Runtime handpose streaming and gesture add/list/delete over a custom GATT service
-
-## Build
-
-### Dependencies
+### 构建环境
 
 - CMake 3.20+
-- GCC 11+ with C++17 support
-- Target platform: aarch64/arm64 (RK3588 or compatible)
-- iceoryx2 (zero-copy IPC framework)
-- RKNN Runtime 2.0+ (Rockchip NPU inference)
-- ALSA (libasound, audio capture)
-- V4L2 (Video4Linux2, camera capture)
-- spdlog 1.17+ (logging with rotation)
-- FFTW3f (FFT for audio spectrogram and cross-correlation)
-- libjpeg-turbo (MJPEG decode, provided by Conan and linked statically)
-- librga 2.0+ (Rockchip RGA hardware acceleration)
-- SQLiteCpp (sign language prototype database)
-- Boost JSON/Container and minmea (LLM JSON handling and GNSS parsing)
-- cxxopts, toml++ (CLI and config parsing, header-only)
-- GLib/GIO + BlueZ runtime (BLE GATT service for signlang_manager)
+- Conan 2.x
+- GCC 11+ 与 C++17
+- `aarch64-linux-gnu-gcc`、`aarch64-linux-gnu-g++`
+- 目标系统 sysroot，默认位置为 `/root/sysroot`
 
-### Cross-compilation
+系统库还包括 ALSA、OpenSSL、GLib/GIO；其余主要 C++ 依赖通过 Conan 管理。
 
-Requires a system cross-compilation toolchain targeting aarch64, such as `aarch64-linux-gnu-gcc` and
-`aarch64-linux-gnu-g++` on `PATH`. The Conan profile defaults to `/root/sysroot`; override it with
-`SIGNLANG_AARCH64_SYSROOT` when needed. For non-Debian toolchain names, set
-`SIGNLANG_AARCH64_TARGET_TRIPLE` or `SIGNLANG_AARCH64_TOOLCHAIN_PREFIX`.
+## 快速开始
+
+完整的开发环境准备、Conan 配置和交叉编译说明见 [docs/quick_start.md](docs/quick_start.md)。以下命令只展示主流程，均在仓库根目录执行。
+
+### 1. 准备 Conan
 
 ```bash
-SIGNLANG_AARCH64_SYSROOT=/home/sysroot \
-conan install . -pr:h conan/profiles/linux-aarch64-gcc -pr:b default \
-      -of build-aarch64 --build=missing
+export CONAN_HOME="$PWD/.conan"                   # 可选：Conan缓存隔离
+export SIGNLANG_AARCH64_SYSROOT=/path/to/sysroot
+
+conan profile detect --force
+conan export conan/recipes/cpp-pinyin
+conan export conan/recipes/iceoryx2
+conan export conan/recipes/librga
+conan export conan/recipes/rknn-runtime
+```
+
+### 2. 安装依赖并交叉编译
+
+```bash
+conan install . \
+  -of build-aarch64 \
+  -pr:h conan/profiles/linux-aarch64-gcc \
+  -pr:b default \
+  --build=missing
 
 cmake -S . -B build-aarch64 \
-      -DCMAKE_TOOLCHAIN_FILE=build-aarch64/conan_toolchain.cmake \
-      -DCMAKE_BUILD_TYPE=Release
-cmake --build build-aarch64 -j$(nproc)
-cmake --install build-aarch64 --prefix install
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE=build-aarch64/conan_toolchain.cmake \
+  -DCMAKE_INSTALL_PREFIX=install
+
+cmake --build build-aarch64 --target install -j"$(nproc)"
 ```
 
-Runtime model/config assets are optional at configure time by default. Use
-`-DSIGNLANG_RUNTIME_ASSETS_REQUIRED=ON` when creating a release image that must fail if any expected asset is missing.
+在 aarch64 设备上原生构建时，同样需要先通过 Conan 准备依赖，再使用生成的 `conan_toolchain.cmake` 配置 CMake。
 
-### Native build (on aarch64 device)
+### 3. 准备运行资产
 
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc)
-cmake --install build --prefix install
+为避免提交大型或部署相关文件，`models/`、`*.sqlite` 和 `*.hex` 已被 `.gitignore` 排除，不随干净克隆提供。启动前至少需要按配置准备：
+
+```text
+models/
+├── whisper/      Whisper 编码器、解码器、词表和 Mel 滤波器
+├── piper/        Piper 编码器、解码器和声音配置
+├── yamnet/       YAMNet RKNN 模型与类别表
+├── mediapipe/    手掌检测与手部关键点 RKNN 模型
+└── bilstm/       手语 BiLSTM RKNN 编码器
+
+conf/
+├── conf.toml
+├── system_prompt.txt
+├── unifont-17.0.05.hex
+└── prototypes.sqlite
 ```
 
-The installed binaries resolve relative runtime paths from the installation root, not from the shell's current working
-directory. `launcher` is installed at the root, and module executables installed under `bin/` automatically use the
-parent directory as their runtime root. Defaults such as `conf/conf.toml`, `models/...`, and `log/...` therefore work
-when launching from any directory.
+发布镜像可以在 CMake 配置时加入 `-DSIGNLANG_RUNTIME_ASSETS_REQUIRED=ON`，让缺失资产直接导致配置失败，而不是仅输出警告。
 
-### Installation Directory Layout
+手语识别还需要已经录入样本的 `prototypes.sqlite`。词汇通过 BLE 管理接口上传后，由 `signlang_det` 编码并写入数据库；BiLSTM 模型本身不包含可直接使用的手语词表。
 
-```
-install/
-├── launcher          # Main launcher
-├── bin/              # Module executables
-│   ├── state_machine
-│   ├── audio_frontend
-│   ├── video_frontend
-│   ├── speech_asr
-│   ├── speech_tts
-│   ├── env_sound_det
-│   ├── handpose_det
-│   ├── signlang_manager
-│   ├── signlang_det
-│   ├── dataflow_dispatcher
-│   ├── peripheral_service
-│   ├── telemetry_service
-│   └── llm_client
-├── lib/              # Shared libraries
-│   ├── libiceoryx2_cxx.so
-│   ├── libiceoryx2_ffi_c.so
-│   ├── librknnrt.so
-│   ├── libspdlog.so
-│   └── librga.so
-├── log/              # Runtime logs, created on first launcher run
-├── conf/             # Configuration files
-│   ├── conf.toml
-│   └── prototypes.sqlite
-└── models/           # AI model files
-    ├── whisper/
-    ├── yamnet/
-    ├── mediapipe/
-    ├── bilstm/
-    └── piper/
-```
+### 4. 配置并启动
 
-## Configuration
-
-Main configuration file `conf/conf.toml` (all keys optional, fallback to module defaults):
-
-```toml
-[logging]
-rotate_size = 1048576      # Log file size (1MB)
-retain_files = 100         # Number of retained log files
-
-[state_machine]
-initial_state = "normal"   # normal, asr, sign_language_chat, sign_language_ai
-
-[audio_frontend]
-device = "hw:2,0"          # ALSA device name
-capture_rate = 16000       # Sample rate in Hz
-capture_channels = 2       # Channel count
-
-[video_frontend]
-device = "/dev/video21"    # V4L2 device path
-output_width = 640         # Output width in pixels
-output_height = 480        # Output height in pixels
-# mirror_output = false    # Horizontally mirror published video
-# rotation = 0             # Clockwise rotation: 0, 90, 180, or 270; width/height stay final output size
-
-[speech_asr]
-language = "zh"            # Recognition language: "zh" or "en"
-npu_core = "1"             # NPU core: "0", "1", "2", "0_1", "0_1_2", "auto", "all"
-
-[speech_tts]
-device = "default"         # ALSA playback device
-
-[env_sound_det]
-npu_core = "0"
-score_threshold = 0.3      # Detection threshold (0.0-1.0)
-
-[handpose_det]
-npu_core = "2"
-confidence = 0.5           # Detection confidence threshold (0.0-1.0)
-single_hand = false        # true for one hand, false for two hands
-
-[signlang_det]
-npu_core = "0"
-model = "models/bilstm/biltsm.rknn"
-prototypes = "conf/prototypes.sqlite"
-sequence_length = 30       # Sliding window frame count
-confidence_threshold = 0.6 # Recognition confidence threshold (0.0-1.0)
-upload_window_overlap = 0.5
-max_representative_samples = 3
-consecutive_hit_windows = 2
-
-[signlang_manager]
-bluetooth_name = "SignLang Eyes"
-stream_fps = 30
-```
-
-IPC service names are **hardcoded** in the launcher and cannot be configured via TOML.
-
-Relative paths in the TOML are resolved from the installation root when launched through `launcher`.
-
-## Running
-
-### Launch all modules
-
-```bash
-install/launcher --config conf/conf.toml
-```
-
-Or use default configuration:
+先根据目标设备修改 [conf/conf.toml](conf/conf.toml) 中的摄像头、音频、串口、NPU 核心、MQTT 和 LLM 参数，然后将安装目录部署到 RK3588 设备：
 
 ```bash
 install/launcher
 ```
 
-The launcher spawns all modules in dependency order, monitors their health, and performs coordinated shutdown on SIGINT/SIGTERM or child failure.
-
-### Run individual modules
+也可以指定配置文件：
 
 ```bash
-# State machine
-install/bin/state_machine \
-    --state-event-service app_state_event \
-    --state-blackboard-service app_state_blackboard \
-    --state-control-service app_state_control \
-    --initial-state normal
-
-# Audio capture
-install/bin/audio_frontend \
-    --device hw:2,0 \
-    --service audio_capture \
-    --capture-rate 16000
-
-# Video capture
-install/bin/video_frontend \
-    --device /dev/video21 \
-    --service video_capture \
-    --output-width 640 \
-    --output-height 480
-
-# Speech recognition
-install/bin/speech_asr \
-    --input-service audio_capture \
-    --output-service speech_asr_result \
-    --language zh \
-    --npu-core 1
-
-# State-aware routing
-install/bin/dataflow_dispatcher \
-    --state-event-service app_state_event \
-    --state-blackboard-service app_state_blackboard \
-    --signlang-result-service signlang_result \
-    --speech-asr-result-service speech_asr_result \
-    --speech-tts-service speech_tts \
-    --llm-client-service llm_client \
-    --peripheral-display-service peripheral_display
-
-# Environmental sound detection
-install/bin/env_sound_det \
-    --input-service audio_capture \
-    --state-control-service app_state_control \
-    --npu-core 0 \
-    --score-threshold 0.3
-
-# Hand pose detection
-install/bin/handpose_det \
-    --input-service video_capture \
-    --output-service handpose_result \
-    --npu-core 2 \
-    --confidence 0.5
-
-# BLE sign language manager
-install/bin/signlang_manager \
-    --input-service handpose_result \
-    --signlang-result-service signlang_result \
-    --gesture-management-service signlang_gesture_management
-
-# Sign language recognition
-install/bin/signlang_det \
-    --input-service handpose_result \
-    --output-service signlang_result \
-    --prototype-control-service signlang_prototype_control \
-    --gesture-management-service signlang_gesture_management \
-    --npu-core 0 \
-    --sequence-length 30
-
-# Text-to-speech playback
-install/bin/speech_tts \
-    --service speech_tts \
-    --device default
-
-# Peripheral display/buttons
-install/bin/peripheral_service \
-    --display-service peripheral_display \
-    --state-control-service app_state_control \
-    --alert-event-service telemetry_alert
-
-# LLM request service
-install/bin/llm_client \
-    --service llm_client
+install/launcher --config /path/to/conf.toml
 ```
 
-## Logging
+launcher 会切换到安装根目录，因此 `conf/`、`models/` 和 `log/` 等相对路径不依赖启动命令所在目录。
 
-When launched through `launcher`, logs are automatically saved to the installation root's `log/` directory:
-- Single file size: 1MB (configurable)
-- Retained file count: 100 (configurable)
-- Format: `[timestamp] [level] [thread] message`
-- Auto-rotation prevents disk overflow
+## 配置说明
 
-## Repository Structure
+[conf/conf.toml](conf/conf.toml) 列出了当前支持的配置项和默认值。常用配置包括：
 
+- `[launcher]`：整组进程失败后的重启次数，`-1` 表示无限重试。
+- `[logging]`：全局日志级别、单文件大小和保留数量；各模块可覆盖日志级别。
+- `[audio_frontend]`/`[video_frontend]`：设备节点、采样格式、分辨率、镜像和旋转。
+- `[speech_asr]`/`[speech_tts]`：模型路径、语言、播放设备和 NPU 核心。
+- `[handpose_det]`/`[signlang_det]`：检测、跟踪、时序窗口、DTW 和置信度参数。
+- `[signlang_manager]`：BLE 名称、适配器、流帧率和上传限制。
+- `[telemetry_service]`：GNSS 串口与 MQTT 连接参数。
+- `[peripheral_service]`：串口、字体、OLED 尺寸和滚动显示参数。
+- `[llm_client]`：OpenAI 兼容接口地址、密钥、模型和超时。
+
+## 模块说明
+
+| 模块                    | 功能                               |
+|-----------------------|----------------------------------|
+| `launcher`            | 读取配置、启动 13 个子进程、监控与整组重启          |
+| `state_machine`       | 管理基础状态、危险声音特殊状态和状态控制             |
+| `audio_frontend`      | ALSA 音频采集、重采样、混音和声源定位            | 
+| `video_frontend`      | V4L2 采集、MJPEG 解码和 RGA 图像处理       | 
+| `speech_asr`          | Whisper 滑动窗口语音识别                 | 
+| `speech_tts`          | Piper 中文语音合成与 ALSA 播放            | 
+| `env_sound_det`       | YAMNet 环境声音识别与危险状态触发             |
+| `handpose_det`        | 手掌检测、双手关键点、跟踪与平滑                 | 
+| `signlang_det`        | 168 维特征、BiLSTM 编码、DTW 匹配和原型存储    |
+| `signlang_manager`    | BLE 手部数据流和手势词库管理入口               |
+| `dataflow_dispatcher` | 按状态路由 ASR、手语、TTS、LLM 和显示数据       | 
+| `peripheral_service`  | 串口按键、OLED 文本、振动和告警事件             |
+| `telemetry_service`   | NMEA 定位解析和 MQTT 位置/告警上报          | 
+| `llm_client`          | OpenAI 兼容的 Chat Completions 请求服务 | 
+
+模块 README 中的命令行参数适合单模块调试；日常完整系统启动建议统一使用 `launcher` 和 TOML 配置。
+
+## 项目结构
+
+```text
+signlang-eyes/
+├── CMakeLists.txt             根构建配置和安装规则
+├── conanfile.txt              Conan 依赖清单
+├── conan/
+│   ├── profiles/              aarch64 交叉编译 profile
+│   └── recipes/               项目维护的 Conan recipes
+├── conf/                      TOML 配置和系统提示词
+├── docs/                      快速开始等项目文档
+├── models/                    本地运行模型，不纳入版本控制
+└── src/
+    ├── common/                共享运行时、日志和 IPC 工具
+    ├── launcher/              进程编排
+    ├── state_machine/         状态管理
+    ├── audio_frontend/        音频采集
+    ├── video_frontend/        视频采集
+    ├── speech_asr/            语音识别
+    ├── speech_tts/            语音合成
+    ├── env_sound_det/         环境声音识别
+    ├── handpose_det/          手部关键点检测
+    ├── signlang_det/          手语识别
+    ├── signlang_manager/      BLE 与手势库管理
+    ├── dataflow_dispatcher/   业务数据路由
+    ├── peripheral_service/    显示与外设控制
+    ├── telemetry_service/     定位与遥测
+    └── llm_client/            LLM 接口
 ```
-conf/                 Default configuration files
-models/               RKNN models and label maps
-src/
-├── common/           Shared utility libraries
-├── audio_frontend/   Audio capture module
-├── video_frontend/   Video capture module
-├── speech_asr/       Speech recognition module
-├── speech_tts/       Piper text-to-speech playback module
-├── env_sound_det/    Environmental sound detection module
-├── handpose_det/     Hand pose detection module
-├── signlang_det/     Sign language recognition module
-├── signlang_manager/ BLE handpose stream and gesture DB manager
-├── dataflow_dispatcher/ State-aware ASR/sign language result routing
-├── peripheral_service/ OLED display, serial buttons, and alert output
-├── telemetry_service/  GNSS/alert telemetry uplink
-├── llm_client/        OpenAI-compatible LLM request service
-├── state_machine/    State machine module
-└── launcher/         Launcher module
-third_party/          Third-party dependencies
-cmake/                CMake toolchains and modules
-```
 
-## Module Documentation
+## 特别鸣谢
 
-Detailed documentation for each module:
-- [audio_frontend](src/audio_frontend/README.md) - Audio capture and source localization
-- [video_frontend](src/video_frontend/README.md) - Video capture and hardware acceleration
-- [speech_asr](src/speech_asr/README.md) - Whisper speech recognition
-- [speech_tts](src/speech_tts/README.md) - Piper text-to-speech playback
-- [env_sound_det](src/env_sound_det/README.md) - YAMNet environmental sound detection
-- [handpose_det](src/handpose_det/README.md) - MediaPipe hand pose detection
-- [signlang_det](src/signlang_det/README.md) - DTW sign language recognition
-- [state_machine](src/state_machine/README.md) - Global state management
-- [launcher](src/launcher/README.md) - Process launch and monitoring
-- [dataflow_dispatcher](src/dataflow_dispatcher) - State-aware result routing
-- [peripheral_service](src/peripheral_service) - OLED display and button peripheral service
-- [telemetry_service](src/telemetry_service) - Telemetry uplink service
-- [llm_client](src/llm_client) - LLM request service
+感谢以下开源项目及其维护者。本项目能够在端侧完成音视频采集、模型推理、进程通信和设备交互，离不开这些基础工作：
 
-## IPC Services
+- **进程通信与异步基础设施**：[iceoryx2](https://github.com/eclipse-iceoryx/iceoryx2)、[Boost](https://www.boost.org/)（JSON、Container、Asio、Beast、MQTT5）、[OpenSSL](https://www.openssl.org/)。
+- **AI 推理与硬件加速**：[ONNX Runtime](https://onnxruntime.ai/)、[RKNN Runtime](https://github.com/airockchip/rknn-toolkit2)、[Rockchip RGA](https://github.com/airockchip/librga)、[libjpeg-turbo](https://libjpeg-turbo.org/)。
+- **音频、数据与设备支持**：[ALSA](https://www.alsa-project.org/)、[FFTW](https://www.fftw.org/)、[SQLite](https://www.sqlite.org/)、[SQLiteCpp](https://github.com/SRombauts/SQLiteCpp)、[GLib](https://docs.gtk.org/glib/) / [GIO](https://docs.gtk.org/gio/)、[BlueZ](https://www.bluez.org/)、[minmea](https://github.com/kosma/minmea)。
+- **工程与通用组件**：[CMake](https://cmake.org/)、[Conan](https://conan.io/)、[spdlog](https://github.com/gabime/spdlog)、[fmt](https://github.com/fmtlib/fmt)、[toml++](https://github.com/marzer/tomlplusplus)、[cxxopts](https://github.com/jarro2783/cxxopts)、[cpp-pinyin](https://github.com/wolfgitpr/cpp-pinyin)。
+- **模型与算法生态**：[OpenAI Whisper](https://github.com/openai/whisper)、[Google YAMNet](https://github.com/tensorflow/models/tree/master/research/audioset/yamnet)、[Google MediaPipe](https://github.com/google-ai-edge/mediapipe)、[Piper](https://github.com/rhasspy/piper)。
 
-Inter-module communication via iceoryx2 services (hardcoded names):
-- `audio_capture`: Audio frame data stream (PCM 16-bit, publish-subscribe)
-- `video_capture`: Video frame data stream (RGB24, publish-subscribe with user header)
-- `handpose_result`: Hand keypoint data stream (21 landmarks for one or two hands, publish-subscribe with user header)
-- `speech_asr_result`: Speech recognition transcription results consumed by dataflow_dispatcher in `Asr` state (publish-subscribe)
-- `speech_tts`: Text-to-speech requests (request-response)
-- `signlang_result`: Sign language recognition results (publish-subscribe)
-- `signlang_prototype_control`: Prototype reload/status control between signlang_manager and signlang_det (request-response)
-- `signlang_gesture_management`: Gesture database management between signlang_manager and signlang_det (request-response)
-- `llm_client`: SignLanguageAi prompt request service (request-response)
-- `peripheral_display`: OLED title/content display updates (request-response)
-- `telemetry_alert`: Alert event notifications consumed by telemetry_service (event notifier)
-- `app_state_event`: State change event notifications (event notifier)
-- `app_state_blackboard`: Current application state storage (blackboard, single-entry)
-- `app_state_control`: State control requests (request-response)
-- `audio_source_localization`: Sound source channel proximity scores (blackboard, single-entry)
-
-## License
-
-See LICENSE file.
+各第三方库、模型和相关数据仍遵循其各自的许可证、版权与使用条款。感谢所有贡献者持续维护这些项目并开放成果。
