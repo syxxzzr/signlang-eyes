@@ -1,415 +1,76 @@
-# signlang_det — Sign Language Recognition (BiLSTM + DTW)
+# Sign Language Detection
 
-## Overview
+[简体中文](README.md) | [English](README.en.md)
 
-The **signlang_det** module performs real-time dual-hand sign language recognition using a hybrid BiLSTM + DTW (Dynamic Time Warping) architecture. It subscribes to hand pose detection results, extracts 168-dimensional spatial-temporal features, encodes them with a BiLSTM on the RKNN NPU, and matches the resulting embeddings against pre-recorded gesture prototypes stored in an SQLite database using DTW for speed-invariant recognition.
+手语识别核心模块。从手部关键点提取时序特征，通过 BiLSTM 编码器（RKNN NPU）与 DTW 原型匹配实现手语词汇识别，同时提供手势库管理功能。
 
-- **Executable**: `signlang_det` (installed under `bin/`)
-- **IPC Pattern**: Publish-Subscribe (handpose subscriber + result publisher)
-- **Input**: `iox2::bb::Slice<signlang::handpose_det::HandPoseDetection>` with `HandPoseFrameMetadata` user header from iceoryx2
-- **Output**: `signlang::signlang_det::SignlangResult` on iceoryx2
-- **Model**: BiLSTM encoder (128-dim embeddings, RKNN NPU) + DTW matching (CPU) against SQLite prototype database
+## 功能
 
-## Command-Line Parameters
+- 从 iceoryx2 订阅手部关键点检测结果
+- 特征提取：归一化关键点坐标，计算双手相对位置和运动特征，生成 168 维（单手）或 336 维（双手）特征向量
+- BiLSTM 编码：通过 RKNN NPU 运行双向 LSTM 编码器，将时序特征序列映射为嵌入向量
+- DTW 匹配：在原型库中搜索最匹配的手势原型，输出识别结果
+- 原型数据库管理：SQLite 持久化存储手势原型，支持运行时增删改查
+- 通过 iceoryx2 Request-Response 提供原型重载和手势库管理接口
+- 重复检测抑制和连续命中过滤降低误识别率
 
-Relative paths are resolved from the installation root. For installed module executables under `bin/`, the runtime root is the parent directory, so defaults like `models/…`, `conf/…`, and `log/…` do not depend on the shell current working directory.
+## 处理管线
 
-All module executables also accept `--log-file <path>` and `--log-rotate-size <bytes>`; the launcher supplies these automatically when it starts modules.
-
-### IPC (Required)
-
-| Parameter | Description |
-|-----------|-------------|
-| `--input-service` / `-i` | iceoryx2 handpose detection input service name |
-| `--output-service` / `-o` | iceoryx2 sign language recognition result output service name |
-
-### Model Paths
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--model` / `-m` | `models/bilstm/biltsm.rknn` | BiLSTM encoder RKNN model path |
-| `--prototypes` | `conf/prototypes.sqlite` | SQLite gesture vocabulary and encoded prototype database |
-
-### Feature & Window
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--sequence-length` | `30` | Sliding window size in frames (must be > 0) |
-| `--overlap-ratio` | `0.2` | Overlap ratio between adjacent sliding windows (0.0-1.0) |
-| `--min-confidence` | `0.3` | Minimum hand keypoint detection confidence (0.0-1.0) |
-| `--upload-window-overlap` | `0.5` | Overlap ratio when long gesture uploads are split into prototype samples |
-| `--max-representative-samples` | `3` | Maximum retained representative prototype samples per gesture |
-| `--consecutive-hit-windows` | `2` | Same recognized gesture windows required before publishing |
-
-### Feature Weighting
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--motion-weight` | `0.0` | Velocity (motion) feature weight: 0.0 = position-only, 1.0 = full motion (0.0-1.0) |
-
-### DTW Matching
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--dtw-window-ratio` | `0.5` | Sakoe-Chiba DTW window ratio: larger = more speed-variation tolerance (0.0-1.0) |
-| `--confidence-threshold` | `0.6` | Minimum recognition confidence for valid results (0.0-1.0) |
-| `--confidence-margin` | `0.1` | Minimum gap between top-1 and top-2 confidence (0.0-1.0) |
-| `--duplicate-suppression-ms` | `1000` | Suppress publishing the same recognized gesture again within this many milliseconds (`0` disables) |
-
-### Performance
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `--npu-core` | `auto` | NPU core mask: `auto`, `0`, `1`, `2`, `0_1`, `0_1_2`, `all` |
-| `--subscriber-buffer` | `2` | iceoryx2 subscriber queue size (must be > 0) |
-
-## Technical Details
-
-### Feature Extraction (168-Dimensional)
-
-Each frame produces a 168-dim feature vector (2 hands × 21 keypoints × 4 channels):
-
-| Channel | Formula | Description |
-|---------|---------|-------------|
-| `normalized_x` | `(x_norm − wrist.x_norm) / scale` | X-coordinate first normalized as `x_px / image_width`, then made wrist-relative |
-| `normalized_y` | `(y_norm − wrist.y_norm) / scale` | Y-coordinate first normalized as `y_px / image_height`, then made wrist-relative |
-| `normalized_z` | `(z_norm − wrist.z_norm) / scale` | Relative depth first normalized as `z / image_width`, then made wrist-relative |
-| `velocity_magnitude` | `‖(x_t, y_t, z_t) − (x_{t−1}, y_{t−1}, z_{t−1})‖ × motion_weight` | Frame-to-frame 3D motion speed, weighted by `--motion-weight` |
-
-**Normalization invariants:**
-- MediaPipe-style input normalization: `x_norm = x_px / W`, `y_norm = y_px / H`, `z_norm = z / W`
-- Translation: All coordinates relative to wrist (landmark 0)
-- Scale: Normalized by max distance from wrist to any other landmark
-- Position-only by default: `motion_weight = 0.0` (velocity disabled)
-
-### Hand Tracking
-
-- **Upstream Handedness Ordering**: `handpose_det` assigns `is_left_hand`; `hands[0]` is left and `hands[1]` is right
-- **No Local Left/Right Reassignment**: Sign recognition does not sort hands by x-coordinate or reclassify handedness
-- **Occlusion Handling**: Zero-padding for missing hand slots (`present = false`)
-- **Confidence Filtering**: Hands below `min_confidence` are zero-padded
-
-### BiLSTM Encoder
-
-- **Input**: `[1, 30, 168]` — batch × sequence_length × feature_dim
-- **Output**: `[1, 30, 128]` — batch × sequence_length × frame_embedding_dim
-- **Runtime**: RKNN NPU (single forward pass, ~10-20ms)
-- **Architecture**: Bidirectional LSTM with 128 hidden units
-
-### DTW Matching
-
-1. **Distance Metric**: Normalized Euclidean distance per frame pair: `√(∑(q_i − s_j)² / embedding_dim)`
-2. **Sakoe-Chiba Window**: `max(|Q|−|S|, round(max_len × window_ratio), 1)` — constrains alignment path to prevent pathological warping
-3. **Path Normalization**: Accumulated DTW cost ÷ number of alignment steps (prevents length bias)
-4. **Confidence**: `1 / (1 + normalized_dtw_distance)` — distance-to-confidence conversion
-5. **Multi-Sample Matching**: Each gesture can have multiple prototype samples; the matcher scores a gesture by its **best sample** (minimum DTW distance)
-
-**Vocabulary boundary:** SQLite database `prototypes.sqlite` stores all gesture labels and their encoded prototype samples. Adding/removing signs updates only this database, not the BiLSTM encoder model.
-
-### Result Filtering
-
-1. **Confidence Threshold**: Reject if `top1_confidence < confidence_threshold` (default 0.6)
-2. **Margin Filter**: Reject if `top1_confidence − top2_confidence < confidence_margin` (default 0.1)
-3. **Duplicate Suppression**: Do not publish the same recognized gesture again within `duplicate_suppression_ms` (default 1000 ms)
-
-**Rationale:** Prevents ambiguous gestures where multiple classes have similar scores. Both thresholds must pass for a valid recognition.
-
-### Event-Driven Subscription
-
-The module uses iceoryx2 `Node::wait()` for event-driven handpose frame reception:
-- No periodic polling when idle
-- Zero CPU usage while waiting for frames
-- 5ms timeout for responsive shutdown when empty
-- Replaces legacy polling loops for better power efficiency
-
-### Thread Architecture
-
-- **Receiver Thread**: Event-driven subscription → feature extraction → ring buffer push
-- **Inference Thread**: Waits for full window → flatten features → BiLSTM encode → DTW match → filter → publish
-
-### Sliding Window Strategy
-
-- **Window Size**: 30 frames (1 second at 30 fps)
-- **Overlap**: 20% (0.2) → hop of 24 frames (0.8 seconds)
-- **Ring Buffer**: Maintains `sequence_length + max(sequence_length, hop_length)` capacity
-
-## Architecture
-
-```
-Handpose Subscriber (iceoryx2)
-    │ [event-driven via Node::wait()]
-    ▼
-FeatureExtractor
-    │
-    ├─► Hand Tracking (L→R ordering)
-    │       │
-    │       ▼
-    │   Coordinate Normalization
-    │       │
-    │       ▼
-    │   Velocity Computation
-    │       │
-    └─► 168-dim Feature Vector
-            │
-            ▼
-    KeypointRingBuffer
-    (sliding window)
-            │
-            ▼
-    SignlangModel
-            │
-            ├─► BiLSTM Encoder (RKNN NPU)
-            │       │
-            │       ▼
-            │   Frame Embeddings [30×128]
-            │       │
-            └─► DTW Matcher (CPU)
-                    │
-                    ├─► Prototype Database
-                    │   (pre-recorded gestures)
-                    │
-                    ▼
-                DTW Distances
-                    │
-                    ▼
-                Confidence Ranking
-                    │
-                    ▼
-                Dual-Threshold Filter
-                    │
-                    ▼
-            Result Publisher (iceoryx2)
+```text
+HandPoseDetection[] → FeatureExtractor（归一化/168维） → KeypointRingBuffer（时序窗口）
+                                                                ↓
+                                                         BiLSTM Encoder（RKNN / NPU）
+                                                                ↓
+                                                         DTW Matcher → PrototypeStore（SQLite）
+                                                                ↓
+                                                         SignlangResult → iceoryx2
 ```
 
-## Dependencies
+## 命令行参数
 
-- **RKNN Runtime**: NPU inference for BiLSTM encoder
-- **iceoryx2**: Zero-copy IPC
-- **spdlog**: Logging
+| 参数 | 说明 |
+| --- | --- |
+| `-i, --input-service <name>` | iceoryx2 手部数据输入服务（必填） |
+| `-o, --output-service <name>` | iceoryx2 识别结果输出服务（必填） |
+| `--prototype-control-service <name>` | 原型控制服务名 |
+| `--gesture-management-service <name>` | 手势管理服务名 |
+| `-m, --model <path>` | BiLSTM 编码器 RKNN 模型路径 |
+| `--prototypes <path>` | 手势原型 SQLite 数据库路径 |
+| `--sequence-length <frames>` | 滑窗帧数（默认 30） |
+| `--overlap-ratio <0.0-0.9>` | 窗口重叠比例（默认 0.2） |
+| `--min-confidence <0.0-1.0>` | 关键点最低置信度（默认 0.3） |
+| `--motion-weight <0.0-1.0>` | 运动特征权重（默认 0.0） |
+| `--dtw-window-ratio <0.0-1.0>` | DTW 窗口限制比例（默认 0.5） |
+| `--confidence-threshold <0.0-1.0>` | 识别阈值（默认 0.6） |
+| `--confidence-margin <0.0-1.0>` | 首位与次位置信度差值要求（默认 0.1） |
+| `--duplicate-suppression-ms <ms>` | 重复结果抑制时长（默认 1000） |
+| `--upload-window-overlap <ratio>` | 上传序列切分重叠（默认 0.5） |
+| `--max-representative-samples <n>` | 每手势最大原型样本数（默认 3） |
+| `--consecutive-hit-windows <n>` | 连续命中窗口数要求（默认 2） |
+| `--subscriber-buffer <n>` | iceoryx2 订阅者队列大小 |
+| `--npu-core <mask>` | NPU 核心掩码 |
 
-## Usage Examples
+## IPC 接口
 
-### Basic Usage
+| 接口 | 模式 | 说明 |
+| --- | --- | --- |
+| 识别结果输出 | Publish-Subscribe | 向 dataflow_dispatcher 发布 SignlangResult |
+| 原型控制 | Request-Response | 支持 ReloadPrototypes 和 GetStatus 命令 |
+| 手势管理 | Request-Response | 支持手势增删改查（8 种命令） |
 
-```bash
-install/bin/signlang_det \
-    --input-service handpose_result \
-    --output-service signlang_result
-```
+## 手势管理
 
-### Custom Recognition Parameters
+通过 `GestureManagementService` 处理来自 `signlang_manager`（BLE 入口）的请求：
 
-```bash
-# Longer window, stricter confidence
-install/bin/signlang_det \
-    --input-service handpose_result \
-    --output-service signlang_result \
-    --sequence-length 45 \
-    --overlap-ratio 0.3 \
-    --confidence-threshold 0.7 \
-    --confidence-margin 0.15 \
-    --duplicate-suppression-ms 1500
-```
+- `ListGestures` — 列出所有已注册手势
+- `AddGestureBegin/Chunk/Commit/Abort` — 分块上传新手势样本
+- `DeleteGestureById/DeleteGestureByName` — 删除指定手势
+- `GetStatus` — 查询当前词库状态
 
-### With Motion Features
+新样本上传后自动编码并写入 SQLite 原型库。
 
-```bash
-# Include velocity in recognition (0.3 = 30% motion weight)
-install/bin/signlang_det \
-    --input-service handpose_result \
-    --output-service signlang_result \
-    --motion-weight 0.3 \
-    --dtw-window-ratio 0.6
-```
+## 依赖
 
-### Specific NPU Core
-
-```bash
-install/bin/signlang_det \
-    --input-service handpose_result \
-    --output-service signlang_result \
-    --npu-core 0
-```
-
-## File Organization
-
-| File | Description |
-|------|-------------|
-| `main.cpp` | Entry point; dual-thread orchestration (receiver + inference) |
-| `program_options.{cpp,hpp}` | CLI argument parsing via cxxopts |
-| `signlang_model.{cpp,hpp}` | BiLSTM RKNN model + DTW matching engine |
-| `feature_extractor.{cpp,hpp}` | Hand tracking and 168-dim feature extraction |
-| `keypoint_ring_buffer.{cpp,hpp}` | Thread-safe circular buffer for sliding windows |
-| `iceoryx_gateway.{cpp,hpp}` | iceoryx2 subscriber and publishers |
-| `signlang_result.{cpp,hpp}` | IPC message definitions |
-
-## IPC Data Structures
-
-### SignlangResult (Published)
-
-```cpp
-struct GestureCandidate {
-    std::uint32_t gesture_id;
-    float confidence;
-    float distance;
-    std::array<char, kMaxGestureNameLength> gesture_name;
-};
-
-struct SignlangResult {
-    std::uint64_t sequence_number;
-    std::uint64_t timestamp_ns;
-    std::uint64_t window_start_sequence;
-    std::uint64_t window_end_sequence;
-    std::uint32_t sequence_length;
-    float overlap_ratio;
-    float inference_time_ms;
-    bool recognized;
-    std::uint32_t gesture_id;
-    float confidence;
-    float second_confidence;
-    float confidence_margin;
-    float distance;
-    std::array<char, kMaxGestureNameLength> gesture_name;
-    std::uint32_t candidate_count;
-    std::array<GestureCandidate, kMaxGestureCandidates> candidates;
-};
-```
-
-### Prototype Database Format
-
-`prototypes.sqlite` is the runtime vocabulary boundary. It stores gesture labels and encoded prototype samples in a single file, so adding or removing signs updates only this database, not the BiLSTM encoder model.
-
-**Required schema:**
-
-```sql
-CREATE TABLE meta (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL
-);
-
-CREATE TABLE gestures (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL,
-  enabled INTEGER NOT NULL DEFAULT 1
-);
-
-CREATE TABLE samples (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  gesture_id INTEGER NOT NULL,
-  frame_count INTEGER NOT NULL,
-  embedding_dim INTEGER NOT NULL,
-  dtype TEXT NOT NULL DEFAULT 'f32',
-  data BLOB NOT NULL,
-  weight REAL NOT NULL DEFAULT 1.0,
-  FOREIGN KEY (gesture_id) REFERENCES gestures(id)
-);
-
-CREATE INDEX idx_samples_gesture_id ON samples(gesture_id);
-```
-
-**Required metadata:**
-
-```sql
-INSERT INTO meta(key, value) VALUES
-  ('schema_version', '1'),
-  ('embedding_dim', '128');
-```
-
-**Sample storage format:**
-- Each sample `data` BLOB stores contiguous `float32` values with shape `[frame_count, embedding_dim]`
-- Row-major layout: `[frame0_emb0, frame0_emb1, ..., frame0_emb127, frame1_emb0, ...]`
-- The loader reads all enabled gestures and samples into memory at startup
-- DTW matching does not query SQLite during recognition (all-in-memory operation)
-
-## Performance Characteristics
-
-- **BiLSTM inference time**: ~10-20ms for 30-frame window on single NPU core (RK3588)
-- **DTW matching time**: ~5-15ms per prototype (CPU, depends on prototype count and sequence length)
-- **Total latency**: ~50-100ms per recognition (30-frame window @ 30 fps = 1s)
-- **Memory**: ~12MB model footprint + SQLite prototype database (~1-5MB depending on vocabulary size)
-- **CPU usage**: <5% on single core (event-driven, no polling; Cortex-A76 @ 2.4GHz)
-- **Recognition rate**: ~10-12 recognitions per second with 20% overlap (0.8s hop)
-
-## Recognition Tuning Guidelines
-
-### Sequence Length
-
-| Length | Window Duration (30fps) | Use Case |
-|--------|-------------------------|----------|
-| 15-20 | 0.5-0.7s | Fast, simple gestures |
-| 30 (default) | 1.0s | Balanced, most gestures |
-| 45-60 | 1.5-2.0s | Complex, slow gestures |
-
-### Confidence Threshold
-
-| Threshold | Behavior | Use Case |
-|-----------|----------|----------|
-| 0.4-0.5 | Sensitive | More recognitions, higher false positive rate |
-| 0.6 (default) | Balanced | Good precision/recall tradeoff |
-| 0.7-0.8 | Conservative | Fewer false positives, may miss some gestures |
-
-### Confidence Margin
-
-| Margin | Behavior | Use Case |
-|--------|----------|----------|
-| 0.05-0.1 | Permissive | Allow similar gestures to be recognized |
-| 0.1 (default) | Balanced | Good disambiguation |
-| 0.15-0.2 | Strict | Only recognize when top-1 is clearly dominant |
-
-### DTW Window Ratio
-
-| Ratio | Behavior | Use Case |
-|-------|----------|----------|
-| 0.0-0.3 | Strict alignment | Speed-sensitive gestures |
-| 0.5 (default) | Moderate tolerance | General purpose, allows some speed variation |
-| 0.7-1.0 | Loose alignment | Very speed-invariant, slower matching |
-
-### Motion Weight
-
-| Weight | Behavior | Use Case |
-|--------|----------|----------|
-| 0.0 (default) | Position-only | Static pose-based gestures |
-| 0.2-0.5 | Mixed | Gestures with some motion component |
-| 0.6-1.0 | Motion-heavy | Dynamic, speed-based gestures |
-
-## Troubleshooting
-
-### No Handpose Data Received
-
-Check that handpose_det is running and publishing to the correct service:
-```bash
-# Should show handpose_result service
-iox2-list
-```
-
-### Low Recognition Rate
-
-- Lower confidence threshold: `--confidence-threshold 0.5`
-- Increase DTW window ratio: `--dtw-window-ratio 0.7`
-- Check keypoint confidence in handpose_det output
-
-### Too Many False Positives
-
-- Increase confidence threshold: `--confidence-threshold 0.7`
-- Increase confidence margin: `--confidence-margin 0.15`
-- Reduce DTW window ratio: `--dtw-window-ratio 0.3`
-
-### Gesture Not Recognized
-
-- Check if the gesture is enabled in `conf/prototypes.sqlite`
-- Verify at least one sample exists for that gesture
-- Try longer sequence length: `--sequence-length 45`
-
-### RKNN Initialization Failed
-
-Ensure RKNN model is present and `librknnrt.so` is in library path:
-```bash
-ls models/bilstm/
-export LD_LIBRARY_PATH=/path/to/lib:$LD_LIBRARY_PATH
-```
-
-### Module Not Processing Frames
-
-Check if state machine is in the correct state:
-- Sign language recognition only runs in SignLanguageChat or SignLanguageAi states
-- Check state machine logs or trigger state change
+- RKNN API（BiLSTM 编码器推理）
+- SQLite / SQLiteCpp（原型库持久化）
+- iceoryx2（Publish-Subscribe、Request-Response）
