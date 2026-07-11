@@ -282,6 +282,7 @@ namespace signlang::signlang_manager {
       append_u32(payload, gesture.id);
       append_u8(payload, gesture.enabled ? 1U : 0U);
       append_u32(payload, gesture.sample_count);
+      append_u8(payload, gesture.calibrated ? 1U : 0U);
       append_string(payload, common::fixed_string_to_string(gesture.name));
     }
     return make_response(request, kStatusOk, payload);

@@ -16,7 +16,7 @@ SignLang Eyes 将摄像头、麦克风、扬声器、显示屏和通信模块组
 
 系统围绕四类场景构建：
 
-- **手语交流**：检测双手 21 点关键点，使用 BiLSTM 编码与 DTW 原型匹配识别手语，并通过语音播报结果。
+- **手语交流**：检测双手 21 点关键点，通过动作分段、时序编码和两级原型匹配识别手语，并通过语音播报结果。
 - **手语 AI**：将连续手语结果组合成提示词，调用 OpenAI 兼容接口，并在屏幕上显示回复。
 - **语音转写**：使用 Whisper 将中文或英文语音转为文字，显示在外接 OLED 上。
 - **环境感知**：使用 YAMNet 识别危险声音，通过状态切换、振动和 MQTT 告警提醒用户。
@@ -27,7 +27,7 @@ SignLang Eyes 将摄像头、麦克风、扬声器、显示屏和通信模块组
 
 | 领域 | 能力 | 主要实现 |
 | --- | --- | --- |
-| 手语识别 | 双手检测、时序特征编码、可动态扩展词库 | MediaPipe 手部模型、BiLSTM、DTW、SQLite |
+| 手语识别 | 双手检测、动作分段、时序特征编码、可动态扩展词库 | MediaPipe 手部模型、Temporal Encoder、DTW、SQLite |
 | 语音交互 | 中英文语音识别、中文语音合成 | Whisper、Piper、cpp-pinyin |
 | 环境安全 | 环境声音分类、危险状态、振动与远程告警 | YAMNet、状态机、MQTT |
 | 端侧推理 | 多 NPU 核选择、模型级核心分配 | RKNN Runtime |
@@ -137,7 +137,7 @@ models/
 ├── piper/        Piper 编码器、解码器和声音配置
 ├── yamnet/       YAMNet RKNN 模型与类别表
 ├── mediapipe/    手掌检测与手部关键点 RKNN 模型
-└── bilstm/       手语 BiLSTM RKNN 编码器
+└── signlang/     手语时序 RKNN 编码器
 
 conf/
 ├── conf.toml
@@ -148,7 +148,7 @@ conf/
 
 发布镜像可以在 CMake 配置时加入 `-DSIGNLANG_RUNTIME_ASSETS_REQUIRED=ON`，让缺失资产直接导致配置失败，而不是仅输出警告。
 
-手语识别还需要已经录入样本的 `prototypes.sqlite`。词汇通过 BLE 管理接口上传后，由 `signlang_det` 编码并写入数据库；BiLSTM 模型本身不包含可直接使用的手语词表。
+手语识别还需要已经录入样本的 `prototypes.sqlite`。词汇通过 BLE 管理接口上传后，由 `signlang_det` 使用与实时识别相同的处理管线编码并写入数据库；时序编码器本身不包含固定词表。
 
 ### 4. 配置并启动
 
@@ -192,7 +192,7 @@ launcher 会切换到安装根目录，因此 `conf/`、`models/` 和 `log/` 等
 | `speech_tts`          | Piper 中文语音合成与 ALSA 播放            | 
 | `env_sound_det`       | YAMNet 环境声音识别与危险状态触发             |
 | `handpose_det`        | 手掌检测、双手关键点、跟踪与平滑                 | 
-| `signlang_det`        | 168 维特征、BiLSTM 编码、DTW 匹配和原型存储    |
+| `signlang_det`        | 动作分段、168 维特征、时序编码、两级匹配和原型存储 |
 | `signlang_manager`    | BLE 手部数据流和手势词库管理入口               |
 | `dataflow_dispatcher` | 按状态路由 ASR、手语、TTS、LLM 和显示数据       | 
 | `peripheral_service`  | 串口按键、OLED 文本、振动和告警事件             |

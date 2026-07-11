@@ -1,5 +1,6 @@
 #include "signlang_model.hpp"
 
+#include "feature_extractor.hpp"
 #include "prototype_database.hpp"
 #include "spdlog/spdlog.h"
 
@@ -14,373 +15,351 @@
 #include <utility>
 
 namespace signlang::signlang_det {
+
+  auto PrototypeStore::gestures() const -> const std::vector<GesturePrototypeSet>& { return gestures_; }
+  auto PrototypeStore::gesture_count() const -> std::size_t { return gestures_.size(); }
+  auto PrototypeStore::sample_count() const -> std::size_t { return sample_count_; }
+
+  auto PrototypeStore::gesture_name(std::uint32_t gesture_id) const -> const char* {
+    const auto found = names_.find(gesture_id);
+    return found == names_.end() ? "unknown" : found->second.c_str();
+  }
+
+  void PrototypeStore::replace(std::vector<GesturePrototypeSet> gestures) {
+    gestures_ = std::move(gestures);
+    names_.clear();
+    sample_count_ = 0;
+    for (const auto& gesture : gestures_) {
+      names_.emplace(gesture.gesture_id, gesture.name);
+      sample_count_ += gesture.samples.size();
+    }
+  }
+
   namespace {
 
-    class RknnOutputReleaseGuard {
+    class OutputGuard {
     public:
-      RknnOutputReleaseGuard(rknn_context context, std::uint32_t output_count, rknn_output* outputs) :
-          context_{context}, output_count_{output_count}, outputs_{outputs} {}
-
-      RknnOutputReleaseGuard(const RknnOutputReleaseGuard&) = delete;
-      auto operator=(const RknnOutputReleaseGuard&) -> RknnOutputReleaseGuard& = delete;
-      RknnOutputReleaseGuard(RknnOutputReleaseGuard&&) = delete;
-      auto operator=(RknnOutputReleaseGuard&&) -> RknnOutputReleaseGuard& = delete;
-
-      ~RknnOutputReleaseGuard() { static_cast<void>(rknn_outputs_release(context_, output_count_, outputs_)); }
-
+      OutputGuard(rknn_context context, rknn_output* output) : context_{context}, output_{output} {}
+      ~OutputGuard() { static_cast<void>(rknn_outputs_release(context_, 1, output_)); }
     private:
       rknn_context context_;
-      std::uint32_t output_count_;
-      rknn_output* outputs_;
+      rknn_output* output_;
     };
 
-    auto load_prototypes_or_empty(const std::string& prototypes_path, std::uint32_t embedding_dim) -> PrototypeStore {
-      auto database = PrototypeDatabase{prototypes_path, embedding_dim};
-      database.ensure_valid_empty_or_existing();
-      return PrototypeStore::load(prototypes_path);
+    auto load_model_file(const std::string& path) -> std::vector<unsigned char> {
+      auto file = std::ifstream{path, std::ios::binary | std::ios::ate};
+      if (!file) throw std::runtime_error("failed to open temporal encoder: " + path);
+      const auto size = file.tellg();
+      if (size <= 0) throw std::runtime_error("temporal encoder file is empty: " + path);
+      file.seekg(0);
+      auto bytes = std::vector<unsigned char>(static_cast<std::size_t>(size));
+      if (!file.read(reinterpret_cast<char*>(bytes.data()), size)) {
+        throw std::runtime_error("failed to read temporal encoder: " + path);
+      }
+      return bytes;
     }
+
+    auto embedding_norm(const FrameEmbedding& value) -> float {
+      auto sum = 0.0F;
+      for (const auto item : value) {
+        if (!std::isfinite(item)) throw std::runtime_error("temporal encoder produced a non-finite value");
+        sum += item * item;
+      }
+      return std::sqrt(sum);
+    }
+
+    void normalize(FrameEmbedding& value) {
+      const auto length = embedding_norm(value);
+      if (length <= 1e-8F) throw std::runtime_error("temporal encoder produced a zero embedding");
+      for (auto& item : value) item /= length;
+    }
+
+    class TemporalEncoder {
+    public:
+      TemporalEncoder(const std::string& path, rknn_core_mask core) {
+        const auto model = load_model_file(path);
+        auto result = rknn_init(&context_, const_cast<unsigned char*>(model.data()),
+                                static_cast<std::uint32_t>(model.size()), 0, nullptr);
+        if (result != RKNN_SUCC) throw std::runtime_error("rknn_init failed, ret=" + std::to_string(result));
+        try {
+          result = rknn_set_core_mask(context_, core);
+          if (result != RKNN_SUCC) spdlog::warn("rknn_set_core_mask failed, ret={}", result);
+          validate_contract();
+        } catch (...) {
+          static_cast<void>(rknn_destroy(context_));
+          context_ = 0;
+          throw;
+        }
+      }
+
+      ~TemporalEncoder() { if (context_ != 0) static_cast<void>(rknn_destroy(context_)); }
+      auto encode(const PackedSegment& segment) -> EncodedGesture {
+        if (segment.valid_length == 0 || segment.valid_length > kMaxSequenceLength) {
+          throw std::runtime_error("invalid packed segment length");
+        }
+        auto input = rknn_input{};
+        input.index = 0;
+        input.type = RKNN_TENSOR_FLOAT32;
+        input.fmt = RKNN_TENSOR_NCHW;
+        input.size = static_cast<std::uint32_t>(segment.landmarks.size() * sizeof(float));
+        input.buf = const_cast<float*>(segment.landmarks.data());
+        auto result = rknn_inputs_set(context_, 1, &input);
+        if (result != RKNN_SUCC || (result = rknn_run(context_, nullptr)) != RKNN_SUCC) {
+          throw std::runtime_error("temporal encoder execution failed, ret=" + std::to_string(result));
+        }
+        auto output = rknn_output{};
+        output.want_float = 1;
+        result = rknn_outputs_get(context_, 1, &output, nullptr);
+        if (result != RKNN_SUCC) {
+          throw std::runtime_error("failed to retrieve temporal encoder output, ret=" + std::to_string(result));
+        }
+        const auto guard = OutputGuard{context_, &output};
+        if (output.size != kMaxSequenceLength * kEmbeddingDim * sizeof(float)) {
+          throw std::runtime_error("temporal encoder output byte size mismatch");
+        }
+        const auto* data = static_cast<const float*>(output.buf);
+        auto encoded = EncodedGesture{};
+        encoded.segment = segment;
+        encoded.frames.resize(segment.valid_length);
+        for (std::uint32_t frame = 0; frame < segment.valid_length; ++frame) {
+          std::copy_n(data + static_cast<std::size_t>(frame) * kEmbeddingDim, kEmbeddingDim,
+                      encoded.frames[frame].begin());
+          if (std::abs(embedding_norm(encoded.frames[frame]) - 1.0F) > 0.05F) {
+            throw std::runtime_error("temporal encoder frame embedding is not L2-normalized");
+          }
+          for (std::size_t dimension = 0; dimension < kEmbeddingDim; ++dimension) {
+            encoded.pooled[dimension] += encoded.frames[frame][dimension];
+          }
+        }
+        for (auto& value : encoded.pooled) value /= static_cast<float>(segment.valid_length);
+        normalize(encoded.pooled);
+        return encoded;
+      }
+
+    private:
+      void validate_contract() {
+        auto counts = rknn_input_output_num{};
+        if (rknn_query(context_, RKNN_QUERY_IN_OUT_NUM, &counts, sizeof(counts)) != RKNN_SUCC ||
+            counts.n_input != 1 || counts.n_output != 1) {
+          throw std::runtime_error("temporal encoder must expose one input and one output");
+        }
+        auto input = rknn_tensor_attr{};
+        auto output = rknn_tensor_attr{};
+        if (rknn_query(context_, RKNN_QUERY_INPUT_ATTR, &input, sizeof(input)) != RKNN_SUCC ||
+            rknn_query(context_, RKNN_QUERY_OUTPUT_ATTR, &output, sizeof(output)) != RKNN_SUCC) {
+          throw std::runtime_error("failed to query temporal encoder tensor attributes");
+        }
+        const auto input_ok = std::strcmp(input.name, "landmarks") == 0 && input.type == RKNN_TENSOR_FLOAT32 &&
+            input.fmt == RKNN_TENSOR_NCHW && input.n_dims == 3 && input.dims[0] == 1 &&
+            input.dims[1] == kMaxSequenceLength && input.dims[2] == kFeatureDim;
+        const auto output_ok = std::strcmp(output.name, "frame_embeddings") == 0 &&
+            output.type == RKNN_TENSOR_FLOAT32 && output.fmt == RKNN_TENSOR_NCHW && output.n_dims == 3 &&
+            output.dims[0] == 1 && output.dims[1] == kMaxSequenceLength && output.dims[2] == kEmbeddingDim;
+        if (!input_ok || !output_ok) throw std::runtime_error("temporal encoder tensor contract mismatch");
+      }
+
+      rknn_context context_{0};
+    };
+
+    class PrototypeMatcher {
+    public:
+      explicit PrototypeMatcher(MatcherOptions options) : options_{options} {
+        if (options_.top_k == 0 || !std::isfinite(options_.dtw_window_ratio) ||
+            options_.dtw_window_ratio < 0.0F || options_.dtw_window_ratio > 1.0F ||
+            !std::isfinite(options_.global_dtw_threshold) || options_.global_dtw_threshold < 0.0F ||
+            !std::isfinite(options_.global_coarse_threshold) || options_.global_coarse_threshold < 0.0F ||
+            !std::isfinite(options_.margin_threshold) || options_.margin_threshold < 0.0F ||
+            !std::isfinite(options_.confidence_slope) || !std::isfinite(options_.confidence_intercept)) {
+          throw std::invalid_argument("invalid prototype matcher options");
+        }
+      }
+
+      auto dtw(const std::vector<FrameEmbedding>& left, const std::vector<FrameEmbedding>& right) const -> float {
+        if (left.empty() || right.empty()) return std::numeric_limits<float>::infinity();
+        const auto difference = left.size() > right.size() ? left.size() - right.size() : right.size() - left.size();
+        const auto band = std::max<std::size_t>(difference, std::max<std::size_t>(1,
+            static_cast<std::size_t>(std::lround(options_.dtw_window_ratio * std::max(left.size(), right.size())))));
+        auto previous_cost = std::vector<float>(right.size() + 1U, std::numeric_limits<float>::infinity());
+        auto previous_steps = std::vector<std::uint32_t>(right.size() + 1U, 0);
+        previous_cost[0] = 0.0F;
+        for (std::size_t row = 1; row <= left.size(); ++row) {
+          auto current_cost = std::vector<float>(right.size() + 1U, std::numeric_limits<float>::infinity());
+          auto current_steps = std::vector<std::uint32_t>(right.size() + 1U, 0);
+          const auto first = row > band ? row - band : 1U;
+          const auto last = std::min(right.size(), row + band);
+          for (auto column = first; column <= last; ++column) {
+            const auto alternatives = std::array<std::pair<float, std::uint32_t>, 3>{{
+                {previous_cost[column], previous_steps[column]},
+                {current_cost[column - 1U], current_steps[column - 1U]},
+                {previous_cost[column - 1U], previous_steps[column - 1U]}}};
+            const auto best = *std::min_element(alternatives.begin(), alternatives.end(),
+                [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+            current_cost[column] = best.first + frame_distance(left[row - 1U], right[column - 1U]);
+            current_steps[column] = best.second + 1U;
+          }
+          previous_cost = std::move(current_cost);
+          previous_steps = std::move(current_steps);
+        }
+        return previous_steps[right.size()] == 0 ? std::numeric_limits<float>::infinity()
+            : previous_cost[right.size()] / static_cast<float>(previous_steps[right.size()]);
+      }
+
+      auto match(const EncodedGesture& query, const PrototypeStore& store) const -> MatchResult {
+        auto result = MatchResult{};
+        if (store.gestures().empty()) return result;
+        struct Coarse { const GesturePrototypeSet* gesture; float distance; };
+        auto coarse = std::vector<Coarse>{};
+        for (const auto& gesture : store.gestures()) {
+          auto best = std::numeric_limits<float>::infinity();
+          for (const auto& sample : gesture.samples) best = std::min(best, cosine(query.pooled, sample.pooled));
+          coarse.push_back({&gesture, best});
+        }
+        std::sort(coarse.begin(), coarse.end(), [](const auto& lhs, const auto& rhs) {
+          return lhs.distance == rhs.distance ? lhs.gesture->gesture_id < rhs.gesture->gesture_id
+                                              : lhs.distance < rhs.distance;
+        });
+        coarse.resize(std::min<std::size_t>(coarse.size(), options_.top_k));
+        for (const auto& coarse_candidate : coarse) {
+          auto best = MatchCandidate{coarse_candidate.gesture->gesture_id, 0, coarse_candidate.distance,
+                                     std::numeric_limits<float>::infinity(), 0.0F};
+          for (const auto& sample : coarse_candidate.gesture->samples) {
+            const auto distance = dtw(query.frames, sample.frames);
+            if (distance < best.dtw_distance) {
+              best.sample_id = sample.sample_id;
+              best.dtw_distance = distance;
+            }
+          }
+          if (options_.confidence_mapping_enabled && std::isfinite(best.dtw_distance)) {
+            best.confidence = 1.0F / (1.0F + std::exp(-(options_.confidence_slope * best.dtw_distance +
+                                                       options_.confidence_intercept)));
+          }
+          result.candidates.push_back(best);
+        }
+        std::sort(result.candidates.begin(), result.candidates.end(), [](const auto& lhs, const auto& rhs) {
+          return lhs.dtw_distance == rhs.dtw_distance ? lhs.gesture_id < rhs.gesture_id
+                                                      : lhs.dtw_distance < rhs.dtw_distance;
+        });
+        const auto& top = result.candidates.front();
+        const auto* gesture = coarse.front().gesture;
+        for (const auto& item : store.gestures()) if (item.gesture_id == top.gesture_id) { gesture = &item; break; }
+        result.gesture_id = top.gesture_id;
+        result.top1_dtw_distance = top.dtw_distance;
+        result.top2_dtw_distance = result.candidates.size() > 1U ? result.candidates[1].dtw_distance
+                                                                 : std::numeric_limits<float>::infinity();
+        result.distance_margin = result.candidates.size() > 1U ? result.top2_dtw_distance - result.top1_dtw_distance
+                                                                : std::numeric_limits<float>::infinity();
+        result.coarse_distance = top.coarse_distance;
+        result.applied_dtw_threshold = gesture->calibration == CalibrationStatus::Calibrated
+            ? gesture->dtw_threshold : options_.global_dtw_threshold;
+        result.applied_coarse_threshold = gesture->calibration == CalibrationStatus::Calibrated
+            ? gesture->coarse_threshold : options_.global_coarse_threshold;
+        if (result.top1_dtw_distance > result.applied_dtw_threshold) {
+          result.rejection_reason = RejectionReason::DtwDistance;
+        } else if (result.candidates.size() > 1U && result.distance_margin < options_.margin_threshold) {
+          result.rejection_reason = RejectionReason::DistanceMargin;
+        } else if (options_.use_coarse_threshold && result.coarse_distance > result.applied_coarse_threshold) {
+          result.rejection_reason = RejectionReason::CoarseDistance;
+        } else {
+          result.recognized = true;
+          result.rejection_reason = RejectionReason::None;
+        }
+        return result;
+      }
+
+    private:
+      static auto frame_distance(const FrameEmbedding& lhs, const FrameEmbedding& rhs) -> float {
+        auto sum = 0.0F;
+        for (std::size_t index = 0; index < lhs.size(); ++index) {
+          const auto difference = lhs[index] - rhs[index];
+          sum += difference * difference;
+        }
+        return std::sqrt(sum);
+      }
+
+      static auto cosine(const FrameEmbedding& lhs, const FrameEmbedding& rhs) -> float {
+        auto dot = 0.0F;
+        for (std::size_t index = 0; index < lhs.size(); ++index) dot += lhs[index] * rhs[index];
+        return 1.0F - std::clamp(dot, -1.0F, 1.0F);
+      }
+
+      MatcherOptions options_;
+    };
 
   } // namespace
 
-  auto PrototypeStore::gestures() const -> const std::vector<GesturePrototypeSet>& { return gestures_; }
+  class SignlangModel::Impl {
+  public:
+    Impl(const std::string& model_path, rknn_core_mask core, PreprocessingOptions preprocessing,
+         MatcherOptions matcher, float confidence) :
+        preprocessor{preprocessing}, encoder{model_path, core}, prototype_matcher{matcher},
+        min_keypoint_confidence{confidence} {}
 
-  auto PrototypeStore::gesture_count() const -> std::size_t { return gestures_.size(); }
-
-  auto PrototypeStore::sample_count() const -> std::size_t { return sample_count_; }
-
-  auto PrototypeStore::embedding_dim() const -> std::uint32_t { return embedding_dim_; }
-
-  auto PrototypeStore::gesture_name(std::uint32_t gesture_id) const -> const char* {
-    if (const auto found = names_by_id_.find(gesture_id); found != names_by_id_.end()) {
-      return found->second.c_str();
+    auto process(const GestureSegment& segment) -> EncodedGesture {
+      return encoder.encode(preprocessor.prepare(preprocessor.evaluate(segment.frames, segment.forced_max_length)));
     }
-    return "unknown";
-  }
 
-  DtwMatcher::DtwMatcher(float window_ratio) : window_ratio_{window_ratio} {}
-
-  auto DtwMatcher::match(const EncodedSequence& query, const PrototypeStore& store) const -> std::vector<Candidate> {
-    auto candidates = std::vector<Candidate>{};
-    candidates.reserve(store.gesture_count());
-
-    for (const auto& gesture : store.gestures()) {
-      auto best = Candidate{gesture.gesture_id, 0, std::numeric_limits<float>::infinity(), 0.0F};
-
-      for (const auto& sample : gesture.samples) {
-        const auto distance = compute_distance(query, sample.frames);
-        if (distance < best.distance) {
-          best.sample_id = sample.sample_id;
-          best.distance = distance;
-        }
+    auto process_recording(const std::vector<RecordedHandposeFrame>& frames) -> EncodedGesture {
+      auto extractor = FeatureExtractor{min_keypoint_confidence};
+      auto features = std::vector<FeatureVector>{};
+      features.reserve(frames.size());
+      for (const auto& frame : frames) {
+        features.push_back(extractor.extract(frame.metadata, frame.detections.data(), frame.detection_count));
       }
-
-      best.confidence = std::isfinite(best.distance) ? (1.0F / (1.0F + best.distance)) : 0.0F;
-      candidates.push_back(best);
+      return process(preprocessor.evaluate(std::move(features), false));
     }
 
-    std::sort(candidates.begin(), candidates.end(), [](const auto& lhs, const auto& rhs) {
-      if (lhs.confidence == rhs.confidence) {
-        return lhs.gesture_id < rhs.gesture_id;
-      }
-      return lhs.confidence > rhs.confidence;
-    });
-
-    return candidates;
-  }
-
-  auto DtwMatcher::compute_frame_distance(const std::vector<float>& query_frame, const std::vector<float>& sample_frame)
-      -> float {
-    if (query_frame.size() != sample_frame.size() || query_frame.empty()) {
-      return std::numeric_limits<float>::infinity();
-    }
-
-    auto sum_sq_diff = 0.0F;
-    for (std::size_t i = 0; i < query_frame.size(); ++i) {
-      const auto diff = query_frame[i] - sample_frame[i];
-      sum_sq_diff += diff * diff;
-    }
-
-    return std::sqrt(sum_sq_diff / static_cast<float>(query_frame.size()));
-  }
-
-  auto DtwMatcher::compute_window(std::uint32_t query_length, std::uint32_t sample_length) const -> std::uint32_t {
-    const auto max_length = std::max(query_length, sample_length);
-    if (window_ratio_ >= 1.0F) {
-      return max_length;
-    }
-
-    const auto ratio_window = static_cast<std::uint32_t>(std::round(static_cast<float>(max_length) * window_ratio_));
-    const auto length_diff = query_length > sample_length ? query_length - sample_length : sample_length - query_length;
-
-    return std::max({length_diff, ratio_window, 1U});
-  }
-
-  auto DtwMatcher::compute_distance(const EncodedSequence& query, const EncodedSequence& sample) const -> float {
-    const auto query_length = static_cast<std::uint32_t>(query.size());
-    const auto sample_length = static_cast<std::uint32_t>(sample.size());
-    if (query_length == 0 || sample_length == 0) {
-      return std::numeric_limits<float>::infinity();
-    }
-
-    const auto window = compute_window(query_length, sample_length);
-    auto prev_cost = std::vector<float>(sample_length + 1, std::numeric_limits<float>::infinity());
-    auto prev_steps = std::vector<std::uint32_t>(sample_length + 1, 0);
-    prev_cost[0] = 0.0F;
-
-    for (std::uint32_t i = 1; i <= query_length; ++i) {
-      auto curr_cost = std::vector<float>(sample_length + 1, std::numeric_limits<float>::infinity());
-      auto curr_steps = std::vector<std::uint32_t>(sample_length + 1, 0);
-
-      const auto j_start = (i > window) ? (i - window) : 1U;
-      const auto j_end = std::min(sample_length, i + window);
-
-      for (auto j = j_start; j <= j_end; ++j) {
-        const auto candidates = std::array<std::pair<float, std::uint32_t>, 3>{{
-            {prev_cost[j], prev_steps[j]},
-            {curr_cost[j - 1], curr_steps[j - 1]},
-            {prev_cost[j - 1], prev_steps[j - 1]},
-        }};
-
-        const auto best = *std::min_element(candidates.begin(), candidates.end(),
-                                            [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
-
-        const auto frame_cost = compute_frame_distance(query[i - 1], sample[j - 1]);
-        curr_cost[j] = best.first + frame_cost;
-        curr_steps[j] = best.second + 1;
-      }
-
-      prev_cost = std::move(curr_cost);
-      prev_steps = std::move(curr_steps);
-    }
-
-    if (!std::isfinite(prev_cost[sample_length]) || prev_steps[sample_length] == 0) {
-      return std::numeric_limits<float>::infinity();
-    }
-
-    return prev_cost[sample_length] / static_cast<float>(prev_steps[sample_length]);
-  }
-
-  BilstmEncoder::BilstmEncoder(const std::string& model_path, rknn_core_mask npu_core, float motion_weight) :
-      motion_weight_{motion_weight} {
-    load_model(model_path, npu_core);
-    query_io_info();
-  }
-
-  BilstmEncoder::~BilstmEncoder() {
-    if (ctx_ != 0) {
-      rknn_destroy(ctx_);
-    }
-  }
-
-  auto BilstmEncoder::sequence_length() const -> std::uint32_t { return expected_sequence_length_; }
-
-  auto BilstmEncoder::embedding_dim() const -> std::uint32_t { return frame_embedding_dim_; }
-
-  void BilstmEncoder::load_model(const std::string& model_path, rknn_core_mask npu_core) {
-    auto model_file = std::ifstream{model_path, std::ios::binary | std::ios::ate};
-    if (!model_file.is_open()) {
-      throw std::runtime_error("Failed to open RKNN model file: " + model_path);
-    }
-
-    const auto model_size = model_file.tellg();
-    if (model_size <= 0) {
-      throw std::runtime_error("RKNN model file is empty: " + model_path);
-    }
-    model_file.seekg(0, std::ios::beg);
-
-    auto model_data = std::vector<char>(static_cast<std::size_t>(model_size));
-    if (!model_file.read(model_data.data(), model_size)) {
-      throw std::runtime_error("Failed to read RKNN model file: " + model_path);
-    }
-
-    auto ret = rknn_init(&ctx_, model_data.data(), static_cast<std::uint32_t>(model_data.size()), 0, nullptr);
-    if (ret != RKNN_SUCC) {
-      throw std::runtime_error("rknn_init failed, ret=" + std::to_string(ret));
-    }
-
-    ret = rknn_set_core_mask(ctx_, npu_core);
-    if (ret != RKNN_SUCC) {
-      spdlog::warn("rknn_set_core_mask failed, ret={}", ret);
-    }
-  }
-
-  void BilstmEncoder::query_io_info() {
-    auto ret = rknn_query(ctx_, RKNN_QUERY_IN_OUT_NUM, &io_num_, sizeof(io_num_));
-    if (ret != RKNN_SUCC) {
-      throw std::runtime_error("rknn_query IN_OUT_NUM failed, ret=" + std::to_string(ret));
-    }
-    if (io_num_.n_input != 1 || io_num_.n_output != 1) {
-      throw std::runtime_error("Expected 1 input and 1 output, got " + std::to_string(io_num_.n_input) +
-                               " inputs and " + std::to_string(io_num_.n_output) + " outputs");
-    }
-
-    std::memset(&input_attr_, 0, sizeof(input_attr_));
-    input_attr_.index = 0;
-    ret = rknn_query(ctx_, RKNN_QUERY_INPUT_ATTR, &input_attr_, sizeof(input_attr_));
-    if (ret != RKNN_SUCC) {
-      throw std::runtime_error("rknn_query INPUT_ATTR failed, ret=" + std::to_string(ret));
-    }
-    if (input_attr_.n_dims != 3) {
-      throw std::runtime_error("Expected 3D input tensor [batch, seq_len, features], got " +
-                               std::to_string(input_attr_.n_dims) + " dimensions");
-    }
-
-    expected_sequence_length_ = input_attr_.dims[1];
-    const auto expected_feature_dim = input_attr_.dims[2];
-    if (expected_feature_dim != kFeatureDim) {
-      throw std::runtime_error("Feature dimension mismatch: model expects " + std::to_string(expected_feature_dim) +
-                               ", but kFeatureDim=" + std::to_string(kFeatureDim));
-    }
-
-    std::memset(&output_attr_, 0, sizeof(output_attr_));
-    output_attr_.index = 0;
-    ret = rknn_query(ctx_, RKNN_QUERY_OUTPUT_ATTR, &output_attr_, sizeof(output_attr_));
-    if (ret != RKNN_SUCC) {
-      throw std::runtime_error("rknn_query OUTPUT_ATTR failed, ret=" + std::to_string(ret));
-    }
-    if (output_attr_.n_dims != 3) {
-      throw std::runtime_error("Expected 3D output tensor [batch, seq_len, embedding], got " +
-                               std::to_string(output_attr_.n_dims) + " dimensions");
-    }
-
-    frame_embedding_dim_ = output_attr_.dims[2];
-    input_buffer_.resize(static_cast<std::size_t>(expected_sequence_length_) * kFeatureDim);
-  }
-
-  void BilstmEncoder::flatten_features(const std::vector<FeatureVector>& sequence) {
-    if (sequence.size() != expected_sequence_length_) {
-      throw std::runtime_error("Sequence length mismatch: expected " + std::to_string(expected_sequence_length_) +
-                               ", got " + std::to_string(sequence.size()));
-    }
-
-    auto offset = std::size_t{0};
-    for (const auto& frame : sequence) {
-      for (const auto& hand : frame.hands) {
-        for (const auto& kp : hand.features) {
-          input_buffer_[offset++] = kp.normalized_x;
-          input_buffer_[offset++] = kp.normalized_y;
-          input_buffer_[offset++] = kp.normalized_z;
-          input_buffer_[offset++] = kp.velocity_magnitude * motion_weight_;
-        }
-      }
-    }
-  }
-
-  auto BilstmEncoder::encode(const std::vector<FeatureVector>& sequence) -> EncodedSequence {
-    flatten_features(sequence);
-
-    auto inputs = std::array<rknn_input, 1>{};
-    std::memset(inputs.data(), 0, sizeof(inputs));
-    inputs[0].index = 0;
-    inputs[0].type = RKNN_TENSOR_FLOAT32;
-    inputs[0].size = input_buffer_.size() * sizeof(float);
-    inputs[0].fmt = RKNN_TENSOR_NCHW;
-    inputs[0].buf = input_buffer_.data();
-
-    auto ret = rknn_inputs_set(ctx_, 1, inputs.data());
-    if (ret != RKNN_SUCC) {
-      throw std::runtime_error("rknn_inputs_set failed, ret=" + std::to_string(ret));
-    }
-
-    ret = rknn_run(ctx_, nullptr);
-    if (ret != RKNN_SUCC) {
-      throw std::runtime_error("rknn_run failed, ret=" + std::to_string(ret));
-    }
-
-    auto outputs = std::array<rknn_output, 1>{};
-    std::memset(outputs.data(), 0, sizeof(outputs));
-    outputs[0].want_float = 1;
-
-    ret = rknn_outputs_get(ctx_, 1, outputs.data(), nullptr);
-    if (ret != RKNN_SUCC) {
-      throw std::runtime_error("rknn_outputs_get failed, ret=" + std::to_string(ret));
-    }
-    const auto guard = RknnOutputReleaseGuard{ctx_, 1, outputs.data()};
-
-    const auto* output_data = static_cast<const float*>(outputs[0].buf);
-    const auto output_size = outputs[0].size / sizeof(float);
-    const auto expected_output_size = expected_sequence_length_ * frame_embedding_dim_;
-    if (output_size != expected_output_size) {
-      throw std::runtime_error("Output size mismatch: expected " + std::to_string(expected_output_size) + ", got " +
-                               std::to_string(output_size));
-    }
-
-    auto encoded_frames = EncodedSequence(expected_sequence_length_);
-    for (std::uint32_t frame_index = 0; frame_index < expected_sequence_length_; ++frame_index) {
-      encoded_frames[frame_index].assign(output_data + frame_index * frame_embedding_dim_,
-                                         output_data + (frame_index + 1) * frame_embedding_dim_);
-    }
-
-    return encoded_frames;
-  }
+    SegmentPreprocessor preprocessor;
+    TemporalEncoder encoder;
+    PrototypeMatcher prototype_matcher;
+    PrototypeStore prototypes;
+    float min_keypoint_confidence;
+  };
 
   SignlangModel::SignlangModel(const std::string& model_path, const std::string& prototypes_path,
-                               rknn_core_mask npu_core, float motion_weight, float dtw_window_ratio) :
-      encoder_{std::make_unique<BilstmEncoder>(model_path, npu_core, motion_weight)},
-      prototypes_{load_prototypes_or_empty(prototypes_path, encoder_->embedding_dim())}, matcher_{dtw_window_ratio} {
-    if (prototypes_.embedding_dim() != encoder_->embedding_dim()) {
-      throw std::runtime_error("Prototype embedding dimension mismatch: encoder outputs " +
-                               std::to_string(encoder_->embedding_dim()) + ", prototypes contain " +
-                               std::to_string(prototypes_.embedding_dim()));
-    }
-
-    spdlog::info("Loaded {} prototype samples across {} enabled gestures", prototypes_.sample_count(),
-                 prototypes_.gesture_count());
+      rknn_core_mask core, PreprocessingOptions preprocessing, MatcherOptions matcher, float confidence) :
+      impl_{std::make_unique<Impl>(model_path, core, preprocessing, matcher, confidence)} {
+    auto database = PrototypeDatabase{prototypes_path};
+    database.ensure_valid_empty_or_existing();
+    impl_->prototypes = database.load_store();
+    spdlog::info("Loaded {} prototype samples across {} gestures", impl_->prototypes.sample_count(),
+                 impl_->prototypes.gesture_count());
   }
 
   SignlangModel::~SignlangModel() = default;
 
-  auto SignlangModel::expected_sequence_length() const -> std::uint32_t { return encoder_->sequence_length(); }
-
-  auto SignlangModel::embedding_dim() const -> std::uint32_t { return encoder_->embedding_dim(); }
-
-  auto SignlangModel::encode_features(const std::vector<FeatureVector>& sequence) -> EncodedSequence {
-    return encoder_->encode(sequence);
-  }
-
-  auto SignlangModel::dtw_distance(const EncodedSequence& lhs, const EncodedSequence& rhs) const -> float {
-    return matcher_.compute_distance(lhs, rhs);
-  }
-
-  void SignlangModel::reload_prototypes(const std::string& prototypes_path) {
-    auto next_store = load_prototypes_or_empty(prototypes_path, encoder_->embedding_dim());
-    if (next_store.embedding_dim() != encoder_->embedding_dim()) {
-      throw std::runtime_error("Reloaded prototype embedding dimension mismatch: encoder outputs " +
-                               std::to_string(encoder_->embedding_dim()) + ", prototypes contain " +
-                               std::to_string(next_store.embedding_dim()));
-    }
-
-    prototypes_ = std::move(next_store);
-    spdlog::info("Reloaded {} prototype samples across {} enabled gestures", prototypes_.sample_count(),
-                 prototypes_.gesture_count());
-  }
-
-  auto SignlangModel::loaded_gesture_count() const -> std::size_t { return prototypes_.gesture_count(); }
-
-  auto SignlangModel::loaded_sample_count() const -> std::size_t { return prototypes_.sample_count(); }
-
-  auto SignlangModel::get_gesture_name(std::uint32_t gesture_id) const -> const char* {
-    return prototypes_.gesture_name(gesture_id);
-  }
-
-  auto SignlangModel::infer(const std::vector<FeatureVector>& sequence) -> InferenceResult {
-    const auto start_time = std::chrono::steady_clock::now();
-
-    const auto encoded_frames = encode_features(sequence);
-    auto candidates = matcher_.match(encoded_frames, prototypes_);
-
-    auto result =
-        InferenceResult{!candidates.empty(),
-                        candidates.empty() ? 0U : candidates.front().gesture_id,
-                        0.0F,
-                        candidates.empty() ? 0.0F : candidates.front().confidence,
-                        candidates.size() > 1 ? candidates[1].confidence : 0.0F,
-                        candidates.empty() ? std::numeric_limits<float>::infinity() : candidates.front().distance,
-                        std::move(candidates)};
-
-    const auto end_time = std::chrono::steady_clock::now();
-    result.inference_time_ms = std::chrono::duration<float, std::milli>(end_time - start_time).count();
+  auto SignlangModel::infer(const GestureSegment& segment) -> InferenceResult {
+    const auto started = std::chrono::steady_clock::now();
+    auto encoded = impl_->process(segment);
+    auto result = InferenceResult{impl_->prototype_matcher.match(encoded, impl_->prototypes), encoded.segment, 0.0F};
+    result.inference_time_ms = std::chrono::duration<float, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
     return result;
+  }
+
+  auto SignlangModel::encode_recording(const std::vector<RecordedHandposeFrame>& frames) -> EncodedGesture {
+    return impl_->process_recording(frames);
+  }
+
+  auto SignlangModel::dtw_distance(const std::vector<FrameEmbedding>& lhs,
+                                   const std::vector<FrameEmbedding>& rhs) const -> float {
+    return impl_->prototype_matcher.dtw(lhs, rhs);
+  }
+
+  auto SignlangModel::get_gesture_name(std::uint32_t id) const -> const char* {
+    return impl_->prototypes.gesture_name(id);
+  }
+
+  auto SignlangModel::expected_sequence_length() const -> std::uint32_t { return kMaxSequenceLength; }
+  auto SignlangModel::embedding_dim() const -> std::uint32_t { return kEmbeddingDim; }
+  auto SignlangModel::loaded_gesture_count() const -> std::size_t { return impl_->prototypes.gesture_count(); }
+  auto SignlangModel::loaded_sample_count() const -> std::size_t { return impl_->prototypes.sample_count(); }
+
+  void SignlangModel::reload_prototypes(const std::string& path) {
+    auto database = PrototypeDatabase{path};
+    database.ensure_valid_empty_or_existing();
+    impl_->prototypes = database.load_store();
+    spdlog::info("Reloaded {} prototype samples across {} gestures", impl_->prototypes.sample_count(),
+                 impl_->prototypes.gesture_count());
   }
 
 } // namespace signlang::signlang_det

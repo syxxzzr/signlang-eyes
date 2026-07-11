@@ -6,13 +6,13 @@
 
 #include <array>
 #include <cstdint>
-#include <optional>
 #include <vector>
 
 namespace signlang::signlang_det {
 
   struct HandSlot {
-    std::array<handpose_det::HandPoseKeypoint, handpose_det::kHandPoseKeypointCount> keypoints;
+    std::array<std::array<float, 3>, handpose_det::kHandPoseKeypointCount> positions;
+    std::array<float, 3> wrist;
     bool occupied;
   };
 
@@ -22,7 +22,7 @@ namespace signlang::signlang_det {
 
     [[nodiscard]] auto extract(const handpose_det::HandPoseFrameMetadata& metadata,
                                const handpose_det::HandPoseDetection* detections, std::uint32_t detection_count)
-        -> std::optional<FeatureVector>;
+        -> FeatureVector;
 
     void reset();
 
@@ -37,7 +37,7 @@ namespace signlang::signlang_det {
                              const handpose_det::HandPoseDetection& hand, std::uint32_t hand_index,
                              bool sequence_continuous) -> HandFeatures;
 
-    [[nodiscard]] static auto compute_bounding_box_scale(
+    [[nodiscard]] static auto compute_hand_scale(
         const std::array<handpose_det::HandPoseKeypoint, handpose_det::kHandPoseKeypointCount>& keypoints) -> float;
 
     [[nodiscard]] static auto normalize_keypoints(

@@ -43,8 +43,8 @@ if(SIGNLANG_ENABLE_NO_PIE)
 endif()
 
 set(SIGNLANG_MODEL_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/models CACHE PATH "Local root directory for model assets")
-set(SIGNLANG_BILSTM_MODEL_FILE ${SIGNLANG_MODEL_ROOT}/bilstm/biltsm.rknn CACHE FILEPATH
-    "Shared BiLSTM gesture encoder RKNN model")
+set(SIGNLANG_TEMPORAL_ENCODER_FILE ${SIGNLANG_MODEL_ROOT}/signlang/temporal_encoder.rknn CACHE FILEPATH
+    "Shared temporal gesture encoder RKNN model")
 set(SIGNLANG_PROTOTYPES_FILE ${CMAKE_CURRENT_SOURCE_DIR}/conf/prototypes.sqlite CACHE FILEPATH
     "Shared sign language prototype SQLite database")
 
@@ -252,8 +252,8 @@ signlang_install_runtime_files(conf
     ${CMAKE_CURRENT_SOURCE_DIR}/conf/unifont-17.0.05.hex)
 
 # Install shared sign language assets used by signlang_det and signlang_manager
-signlang_install_runtime_files(models/bilstm
-    ${SIGNLANG_BILSTM_MODEL_FILE})
+signlang_install_runtime_files(models/signlang
+    ${SIGNLANG_TEMPORAL_ENCODER_FILE})
 
 signlang_install_runtime_files(conf
     ${SIGNLANG_PROTOTYPES_FILE})

@@ -16,7 +16,7 @@ SignLang Eyes organizes a camera, microphone, speaker, display, and communicatio
 
 The system is built around four usage scenarios:
 
-- **Sign Language Communication** — Detects 21 hand landmarks on both hands, recognizes sign language via BiLSTM encoding and DTW prototype matching, and speaks the result aloud.
+- **Sign Language Communication** — Detects 21 landmarks on both hands and recognizes complete actions using temporal encoding and two-stage prototype matching.
 - **Sign Language AI** — Accumulates consecutive sign language results into a prompt, calls an OpenAI-compatible API, and displays the response on screen.
 - **Speech Transcription** — Transcribes Chinese or English speech to text using Whisper and shows the result on an external OLED display.
 - **Environmental Awareness** — Detects dangerous sounds with YAMNet and alerts the user through state transitions, vibration, and MQTT notifications.
@@ -27,7 +27,7 @@ Beyond these core scenarios, the project also provides device-side capabilities 
 
 | Domain | Capability | Implementation |
 | --- | --- | --- |
-| Sign Language Recognition | Dual-hand detection, temporal feature encoding, dynamically expandable vocabulary | MediaPipe hand model, BiLSTM, DTW, SQLite |
+| Sign Language Recognition | Dual-hand detection, action segmentation, temporal encoding, dynamically expandable vocabulary | MediaPipe hand model, Temporal Encoder, DTW, SQLite |
 | Speech Interaction | Chinese/English speech recognition, Chinese speech synthesis | Whisper, Piper, cpp-pinyin |
 | Environmental Safety | Environmental sound classification, danger states, vibration and remote alerts | YAMNet, state machine, MQTT |
 | On-Device Inference | Multi-NPU core selection, per-model core assignment | RKNN Runtime |
@@ -137,7 +137,7 @@ models/
 ├── piper/        Piper encoder, decoder, and voice configuration
 ├── yamnet/       YAMNet RKNN model and class labels
 ├── mediapipe/    Palm detection and hand landmark RKNN models
-└── bilstm/       Sign language BiLSTM RKNN encoder
+└── signlang/     Sign language temporal RKNN encoder
 
 conf/
 ├── conf.toml
@@ -148,7 +148,7 @@ conf/
 
 For release images, pass `-DSIGNLANG_RUNTIME_ASSETS_REQUIRED=ON` at CMake configure time to make missing assets a hard error rather than a warning.
 
-Sign language recognition also requires a `prototypes.sqlite` database pre-populated with samples. Vocabulary entries are uploaded through the BLE management interface, encoded by `signlang_det`, and written to the database. The BiLSTM model itself does not contain a ready-to-use sign language vocabulary.
+Sign language recognition also requires a `prototypes.sqlite` database populated with samples. BLE uploads use the same processing pipeline as live recognition before `signlang_det` writes them to the database; the temporal encoder does not contain a fixed vocabulary.
 
 ### 4. Configure and Launch
 
@@ -192,7 +192,7 @@ The launcher changes its working directory to the install root, so relative path
 | `speech_tts`           | Piper Chinese speech synthesis with ALSA playback |
 | `env_sound_det`        | YAMNet environmental sound recognition and danger-state triggering |
 | `handpose_det`         | Palm detection, dual-hand landmarks, tracking, and smoothing |
-| `signlang_det`         | 168-dimensional feature vector, BiLSTM encoding, DTW matching, and prototype storage |
+| `signlang_det`         | Action segmentation, 168-dimensional features, temporal encoding, two-stage matching, and prototype storage |
 | `signlang_manager`     | BLE hand data streaming and gesture vocabulary management endpoint |
 | `dataflow_dispatcher`  | Routes ASR, sign language, TTS, LLM, and display data based on the current state |
 | `peripheral_service`   | Serial-port buttons, OLED text display, vibration, and alert events |

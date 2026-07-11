@@ -2,6 +2,8 @@
 #define SIGNLANG_EYES_SIGNLANG_DET_PROGRAM_OPTIONS_HPP
 
 #include "common/logging.hpp"
+#include "gesture_pipeline.hpp"
+#include "signlang_model.hpp"
 #include "rknn_api.h"
 
 #include <optional>
@@ -10,20 +12,8 @@
 
 namespace signlang::signlang_det {
 
-  constexpr const char* kDefaultModelPath = "models/bilstm/biltsm.rknn";
+  constexpr const char* kDefaultModelPath = "models/signlang/temporal_encoder.rknn";
   constexpr const char* kDefaultPrototypesPath = "conf/prototypes.sqlite";
-  constexpr auto kDefaultSequenceLength = std::uint32_t{30};
-  constexpr auto kDefaultOverlapRatio = float{0.2F};
-  constexpr auto kDefaultMinConfidence = float{0.3F};
-  constexpr auto kDefaultSubscriberBufferSize = std::uint64_t{2};
-  constexpr auto kDefaultMotionWeight = float{0.0F};
-  constexpr auto kDefaultDtwWindowRatio = float{0.5F};
-  constexpr auto kDefaultConfidenceThreshold = float{0.6F};
-  constexpr auto kDefaultConfidenceMargin = float{0.1F};
-  constexpr auto kDefaultDuplicateSuppressionMs = std::uint32_t{1000};
-  constexpr auto kDefaultUploadWindowOverlap = float{0.5F};
-  constexpr auto kDefaultMaxRepresentativeSamples = std::uint32_t{3};
-  constexpr auto kDefaultConsecutiveHitWindows = std::uint32_t{2};
 
   struct ProgramOptions {
     std::string input_service_name;
@@ -32,26 +22,20 @@ namespace signlang::signlang_det {
     std::optional<std::string> gesture_management_service_name;
     std::string model_path;
     std::string prototypes_path;
-    std::uint32_t sequence_length;
-    float overlap_ratio;
     float min_keypoint_confidence;
     std::uint64_t subscriber_buffer_size;
     rknn_core_mask npu_core_mask;
-    float motion_weight;
-    float dtw_window_ratio;
-    float confidence_threshold;
-    float confidence_margin;
+    SegmenterOptions segmenter;
+    PreprocessingOptions preprocessing;
+    MatcherOptions matcher;
+    std::uint32_t segment_queue_capacity;
     std::uint32_t duplicate_suppression_ms;
-    float upload_window_overlap;
     std::uint32_t max_representative_samples;
-    std::uint32_t consecutive_hit_windows;
+    bool publish_rejections;
     signlang::logging::Options logging;
   };
 
-  struct ProgramUsage {
-    std::string text;
-  };
-
+  struct ProgramUsage { std::string text; };
   using ProgramOptionsParseResult = std::variant<ProgramOptions, ProgramUsage>;
 
   auto parse_program_options(int argc, char** argv) -> ProgramOptionsParseResult;
@@ -59,4 +43,4 @@ namespace signlang::signlang_det {
 
 } // namespace signlang::signlang_det
 
-#endif // SIGNLANG_EYES_SIGNLANG_DET_PROGRAM_OPTIONS_HPP
+#endif

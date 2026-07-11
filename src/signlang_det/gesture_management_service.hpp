@@ -25,9 +25,7 @@ namespace signlang::signlang_det {
       std::string gesture_name;
       bool replace_existing;
       std::uint32_t frame_count;
-      std::vector<handpose_det::HandPoseFrameMetadata> metadata;
-      std::vector<std::array<handpose_det::HandPoseDetection, kMaxHandCount>> detections;
-      std::vector<std::uint32_t> detection_counts;
+      std::vector<RecordedHandposeFrame> frames;
       std::vector<std::uint8_t> received;
     };
 
