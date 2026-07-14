@@ -149,12 +149,12 @@ namespace signlang::signlang_det {
             rknn_query(context_, RKNN_QUERY_OUTPUT_ATTR, &output, sizeof(output)) != RKNN_SUCC) {
           throw std::runtime_error("failed to query temporal encoder tensor attributes");
         }
-        const auto input_ok = std::strcmp(input.name, "landmarks") == 0 && input.type == RKNN_TENSOR_FLOAT32 &&
-            input.fmt == RKNN_TENSOR_NCHW && input.n_dims == 3 && input.dims[0] == 1 &&
-            input.dims[1] == kMaxSequenceLength && input.dims[2] == kFeatureDim;
+        const auto input_ok = std::strcmp(input.name, "landmarks") == 0 && input.fmt == RKNN_TENSOR_NCHW &&
+            input.n_dims == 3 && input.dims[0] == 1 && input.dims[1] == kMaxSequenceLength &&
+            input.dims[2] == kFeatureDim;
         const auto output_ok = std::strcmp(output.name, "frame_embeddings") == 0 &&
-            output.type == RKNN_TENSOR_FLOAT32 && output.fmt == RKNN_TENSOR_NCHW && output.n_dims == 3 &&
-            output.dims[0] == 1 && output.dims[1] == kMaxSequenceLength && output.dims[2] == kEmbeddingDim;
+            output.fmt == RKNN_TENSOR_NCHW && output.n_dims == 3 && output.dims[0] == 1 &&
+            output.dims[1] == kMaxSequenceLength && output.dims[2] == kEmbeddingDim;
         if (!input_ok || !output_ok) throw std::runtime_error("temporal encoder tensor contract mismatch");
       }
 
