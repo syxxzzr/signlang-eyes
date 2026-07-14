@@ -14,37 +14,31 @@ namespace signlang::signlang_det {
     std::string name;
     bool enabled;
     std::uint32_t sample_count;
+    CalibrationStatus calibration;
   };
 
   class PrototypeDatabase {
   public:
-    PrototypeDatabase(std::string path, std::uint32_t embedding_dim);
-
-    PrototypeDatabase(const PrototypeDatabase&) = delete;
-    auto operator=(const PrototypeDatabase&) -> PrototypeDatabase& = delete;
-    PrototypeDatabase(PrototypeDatabase&&) = default;
-    auto operator=(PrototypeDatabase&&) -> PrototypeDatabase& = default;
-
+    explicit PrototypeDatabase(std::string path);
     void ensure_valid_empty_or_existing();
-
+    [[nodiscard]] auto load_store() const -> PrototypeStore;
     [[nodiscard]] auto list_gestures() const -> std::vector<GestureInfo>;
-    [[nodiscard]] auto load_gesture_samples(const std::string& gesture_name) const -> std::vector<EncodedSequence>;
+    [[nodiscard]] auto load_gesture_samples(const std::string& gesture_name) const -> std::vector<GesturePrototype>;
     [[nodiscard]] auto replace_gesture_samples(const std::string& gesture_name,
-                                               const std::vector<EncodedSequence>& samples) -> std::uint32_t;
+                                               const std::vector<GesturePrototype>& samples,
+                                               float dtw_threshold, float coarse_threshold,
+                                               CalibrationStatus calibration) -> std::uint32_t;
     [[nodiscard]] auto delete_gesture(std::uint32_t gesture_id) -> bool;
     [[nodiscard]] auto delete_gesture(const std::string& gesture_name) -> bool;
-
     [[nodiscard]] auto path() const -> const std::string&;
-    [[nodiscard]] auto embedding_dim() const -> std::uint32_t;
 
   private:
-    [[nodiscard]] auto is_valid_schema() const -> bool;
-    void recreate_empty_schema() const;
+    void create_empty_schema() const;
+    void backup_incompatible_schema() const;
 
     std::string path_;
-    std::uint32_t embedding_dim_;
   };
 
 } // namespace signlang::signlang_det
 
-#endif // SIGNLANG_EYES_SIGNLANG_DET_PROTOTYPE_DATABASE_HPP
+#endif

@@ -3,447 +3,341 @@
 #include "SQLiteCpp/SQLiteCpp.h"
 #include "spdlog/spdlog.h"
 
+#include <algorithm>
 #include <array>
 #include <charconv>
+#include <cmath>
 #include <ctime>
 #include <filesystem>
-#include <limits>
+#include <initializer_list>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 namespace signlang::signlang_det {
   namespace {
 
-    constexpr auto kSchemaVersion = int{1};
-    constexpr const char* kFloat32Dtype = "f32";
+    constexpr auto kSchemaVersion = int{2};
+    constexpr const char* kPreprocessing = "hand168-temporal";
+
+    auto read_meta(SQLite::Database& database, const char* key) -> std::string {
+      auto statement = SQLite::Statement{database, "SELECT value FROM meta WHERE key = ?"};
+      statement.bind(1, key);
+      if (!statement.executeStep()) {
+        throw std::runtime_error(std::string{"prototype database is missing metadata: "} + key);
+      }
+      return statement.getColumn(0).getString();
+    }
 
     auto read_meta_int(SQLite::Database& database, const char* key) -> int {
-      auto query = SQLite::Statement{database, "SELECT value FROM meta WHERE key = ?"};
-      query.bind(1, key);
-      if (!query.executeStep()) {
-        throw std::runtime_error("missing prototype DB meta key");
-      }
-
-      const auto value = query.getColumn(0).getString();
-      auto parsed = int{0};
-      const auto* begin = value.data();
-      const auto* end = begin + value.size();
-      const auto [parse_end, parse_error] = std::from_chars(begin, end, parsed);
-      if (parse_error != std::errc{} || parse_end != end) {
-        throw std::runtime_error("prototype DB meta value must be an integer");
+      const auto value = read_meta(database, key);
+      auto parsed = int{};
+      const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), parsed);
+      if (error != std::errc{} || end != value.data() + value.size()) {
+        throw std::runtime_error(std::string{"prototype database metadata is not an integer: "} + key);
       }
       return parsed;
     }
 
-    auto find_gesture_id(SQLite::Database& database, const std::string& gesture_name) -> std::optional<std::uint32_t> {
-      auto query = SQLite::Statement{database, "SELECT id FROM gestures WHERE name = ?"};
-      query.bind(1, gesture_name);
-      if (!query.executeStep()) {
-        return std::nullopt;
+    auto read_meta_float(SQLite::Database& database, const char* key) -> float {
+      const auto value = read_meta(database, key);
+      std::size_t consumed = 0;
+      const auto parsed = std::stof(value, &consumed);
+      if (consumed != value.size() || !std::isfinite(parsed)) {
+        throw std::runtime_error(std::string{"prototype database metadata is not a finite number: "} + key);
       }
-      return query.getColumn(0).getUInt();
+      return parsed;
     }
 
-    auto encoded_sample_to_blob(const EncodedSequence& encoded_sample, std::uint32_t embedding_dim)
-        -> std::vector<float> {
-      if (encoded_sample.empty()) {
-        throw std::runtime_error("Encoded gesture sample must contain at least one frame");
+    auto has_columns(SQLite::Database& database, const char* table,
+                     std::initializer_list<const char*> required) -> bool {
+      auto available = std::unordered_set<std::string>{};
+      auto query = SQLite::Statement{database, std::string{"PRAGMA table_info("} + table + ")"};
+      while (query.executeStep()) {
+        available.emplace(query.getColumn(1).getString());
       }
+      return std::all_of(required.begin(), required.end(),
+                         [&](const auto* name) { return available.find(name) != available.end(); });
+    }
 
+    auto find_gesture_id(SQLite::Database& database, const std::string& name) -> std::optional<std::uint32_t> {
+      auto statement = SQLite::Statement{database, "SELECT id FROM gestures WHERE name = ?"};
+      statement.bind(1, name);
+      return statement.executeStep() ? std::optional<std::uint32_t>{statement.getColumn(0).getUInt()} : std::nullopt;
+    }
+
+    auto timestamp() -> std::string {
+      const auto now = std::time(nullptr);
+      auto utc = std::tm{};
+      gmtime_r(&now, &utc);
+      auto buffer = std::array<char, 32>{};
+      return std::strftime(buffer.data(), buffer.size(), "%Y%m%dT%H%M%SZ", &utc) == 0 ? "unknown" : buffer.data();
+    }
+
+    auto finite(const FrameEmbedding& embedding) -> bool {
+      for (const auto value : embedding) {
+        if (!std::isfinite(value)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    auto frame_blob(const GesturePrototype& sample) -> std::vector<float> {
+      if (sample.frames.empty() || sample.frames.size() != sample.valid_length || !finite(sample.pooled)) {
+        throw std::runtime_error("invalid prototype sample");
+      }
       auto blob = std::vector<float>{};
-      blob.reserve(encoded_sample.size() * embedding_dim);
-      for (const auto& frame : encoded_sample) {
-        if (frame.size() != embedding_dim) {
-          throw std::runtime_error("Encoded gesture sample embedding dimension mismatch");
+      blob.reserve(sample.frames.size() * kEmbeddingDim);
+      for (const auto& frame : sample.frames) {
+        if (!finite(frame)) {
+          throw std::runtime_error("prototype sample contains non-finite values");
         }
         blob.insert(blob.end(), frame.begin(), frame.end());
       }
       return blob;
     }
 
-    auto blob_to_encoded_sample(const float* blob, int blob_bytes, std::uint32_t frame_count,
-                                std::uint32_t embedding_dim) -> EncodedSequence {
-      if (frame_count == 0 || embedding_dim == 0) {
-        throw std::runtime_error("Prototype sample has invalid dimensions");
+    auto read_sample(SQLite::Statement& statement) -> GesturePrototype {
+      const auto id = statement.getColumn(0).getUInt();
+      const auto valid_length = statement.getColumn(1).getUInt();
+      const auto* frames = static_cast<const float*>(statement.getColumn(2).getBlob());
+      const auto frame_bytes = statement.getColumn(2).getBytes();
+      const auto* pooled = static_cast<const float*>(statement.getColumn(3).getBlob());
+      const auto pooled_bytes = statement.getColumn(3).getBytes();
+      if (valid_length == 0 || valid_length > kMaxSequenceLength || frames == nullptr || pooled == nullptr ||
+          frame_bytes != static_cast<int>(valid_length * kEmbeddingDim * sizeof(float)) ||
+          pooled_bytes != static_cast<int>(kEmbeddingDim * sizeof(float))) {
+        throw std::runtime_error("prototype sample blob dimensions are invalid");
       }
-
-      const auto expected_bytes = static_cast<std::size_t>(frame_count) * embedding_dim * sizeof(float);
-      if (blob == nullptr || blob_bytes < 0 || static_cast<std::size_t>(blob_bytes) != expected_bytes) {
-        throw std::runtime_error("Prototype sample blob size mismatch");
+      auto sample = GesturePrototype{id, std::vector<FrameEmbedding>(valid_length), {}, valid_length,
+                                     static_cast<float>(statement.getColumn(4).getDouble()),
+                                     static_cast<std::uint64_t>(statement.getColumn(5).getInt64())};
+      for (std::uint32_t frame = 0; frame < valid_length; ++frame) {
+        std::copy_n(frames + static_cast<std::size_t>(frame) * kEmbeddingDim, kEmbeddingDim,
+                    sample.frames[frame].begin());
+        if (!finite(sample.frames[frame])) {
+          throw std::runtime_error("prototype frame contains non-finite values");
+        }
       }
-
-      auto sample = EncodedSequence(frame_count);
-      for (std::uint32_t frame_index = 0; frame_index < frame_count; ++frame_index) {
-        const auto* frame_begin = blob + (static_cast<std::size_t>(frame_index) * embedding_dim);
-        sample[frame_index].assign(frame_begin, frame_begin + embedding_dim);
+      std::copy_n(pooled, kEmbeddingDim, sample.pooled.begin());
+      if (!finite(sample.pooled) || !std::isfinite(sample.quality)) {
+        throw std::runtime_error("prototype metadata contains non-finite values");
       }
       return sample;
     }
 
-    auto utc_backup_timestamp() -> std::string {
-      const auto now = std::time(nullptr);
-      auto utc_time = std::tm{};
-      gmtime_r(&now, &utc_time);
-
-      auto buffer = std::array<char, 32>{};
-      if (std::strftime(buffer.data(), buffer.size(), "%Y%m%dT%H%M%SZ", &utc_time) == 0) {
-        return "unknown-time";
-      }
-      return buffer.data();
-    }
-
-    auto backup_path_for(const std::filesystem::path& database_path) -> std::filesystem::path {
-      namespace fs = std::filesystem;
-
-      const auto base_path = fs::path{database_path.string() + ".invalid-" + utc_backup_timestamp() + ".bak"};
-      auto candidate = base_path;
-      auto error = std::error_code{};
-      for (auto suffix = 1U; fs::exists(candidate, error) && !error; ++suffix) {
-        candidate = fs::path{base_path.string() + "." + std::to_string(suffix)};
-      }
-
-      return candidate;
-    }
-
   } // namespace
 
-  auto PrototypeStore::load(const std::string& path) -> PrototypeStore {
-    auto database = SQLite::Database{path, SQLite::OPEN_READONLY};
-    auto store = PrototypeStore{};
-
-    if (!database.tableExists("meta") || !database.tableExists("gestures") || !database.tableExists("samples")) {
-      throw std::runtime_error("Prototype SQLite database is missing required tables: " + path);
-    }
-
-    const auto schema_version = read_meta_int(database, "schema_version");
-    if (schema_version != kSchemaVersion) {
-      throw std::runtime_error("Unsupported prototype SQLite schema version: " + std::to_string(schema_version));
-    }
-
-    const auto meta_embedding_dim = read_meta_int(database, "embedding_dim");
-    if (meta_embedding_dim <= 0) {
-      throw std::runtime_error("Prototype SQLite database has invalid embedding_dim metadata");
-    }
-    store.embedding_dim_ = static_cast<std::uint32_t>(meta_embedding_dim);
-
-    auto gesture_query = SQLite::Statement{database,
-                                           "SELECT id, name "
-                                           "FROM gestures "
-                                           "WHERE enabled != 0 "
-                                           "ORDER BY id"};
-
-    while (gesture_query.executeStep()) {
-      auto gesture = GesturePrototypeSet{static_cast<std::uint32_t>(gesture_query.getColumn(0).getUInt()),
-                                         gesture_query.getColumn(1).getString(), {}};
-      if (gesture.name.empty()) {
-        throw std::runtime_error("Enabled gesture has an empty name: " + std::to_string(gesture.gesture_id));
-      }
-
-      auto sample_query = SQLite::Statement{database,
-                                            "SELECT id, frame_count, embedding_dim, dtype, data "
-                                            "FROM samples "
-                                            "WHERE gesture_id = ? "
-                                            "ORDER BY id"};
-      sample_query.bind(1, gesture.gesture_id);
-
-      while (sample_query.executeStep()) {
-        const auto sample_id = static_cast<std::uint32_t>(sample_query.getColumn(0).getUInt());
-        const auto frame_count = static_cast<std::uint32_t>(sample_query.getColumn(1).getUInt());
-        const auto embedding_dim = static_cast<std::uint32_t>(sample_query.getColumn(2).getUInt());
-        const auto dtype = sample_query.getColumn(3).getString();
-        const auto* blob = static_cast<const float*>(sample_query.getColumn(4).getBlob());
-        const auto blob_bytes = sample_query.getColumn(4).getBytes();
-
-        if (frame_count == 0 || embedding_dim == 0) {
-          throw std::runtime_error("Prototype sample has invalid dimensions");
-        }
-        if (embedding_dim != store.embedding_dim_) {
-          throw std::runtime_error("Prototype sample embedding dimension mismatch: expected " +
-                                   std::to_string(store.embedding_dim_) + ", got " + std::to_string(embedding_dim));
-        }
-        if (dtype != kFloat32Dtype) {
-          throw std::runtime_error("Unsupported prototype sample dtype: " + dtype);
-        }
-
-        const auto expected_bytes = static_cast<std::size_t>(frame_count) * embedding_dim * sizeof(float);
-        if (blob == nullptr || blob_bytes < 0 || static_cast<std::size_t>(blob_bytes) != expected_bytes) {
-          throw std::runtime_error("Prototype sample blob size mismatch for sample " + std::to_string(sample_id));
-        }
-
-        auto sample = GesturePrototype{sample_id, EncodedSequence(frame_count)};
-        for (std::uint32_t frame_index = 0; frame_index < frame_count; ++frame_index) {
-          const auto* frame_begin = blob + (static_cast<std::size_t>(frame_index) * embedding_dim);
-          sample.frames[frame_index].assign(frame_begin, frame_begin + embedding_dim);
-        }
-
-        gesture.samples.push_back(std::move(sample));
-        ++store.sample_count_;
-      }
-
-      if (gesture.samples.empty()) {
-        throw std::runtime_error("Enabled gesture has no prototype samples: " + std::to_string(gesture.gesture_id));
-      }
-      store.names_by_id_.emplace(gesture.gesture_id, gesture.name);
-      store.gestures_.push_back(std::move(gesture));
-    }
-
-    return store;
-  }
-
-  PrototypeDatabase::PrototypeDatabase(std::string path, std::uint32_t embedding_dim) :
-      path_{std::move(path)}, embedding_dim_{embedding_dim} {
-    if (path_.empty()) {
-      throw std::runtime_error("Prototype database path must not be empty");
-    }
-    if (embedding_dim_ == 0) {
-      throw std::runtime_error("Prototype database embedding dimension must be greater than zero");
-    }
+  PrototypeDatabase::PrototypeDatabase(std::string path) : path_{std::move(path)} {
+    if (path_.empty()) throw std::invalid_argument("prototype database path must not be empty");
   }
 
   auto PrototypeDatabase::path() const -> const std::string& { return path_; }
 
-  auto PrototypeDatabase::embedding_dim() const -> std::uint32_t { return embedding_dim_; }
-
-  void PrototypeDatabase::ensure_valid_empty_or_existing() {
-    if (!is_valid_schema()) {
-      recreate_empty_schema();
-    }
-  }
-
-  auto PrototypeDatabase::is_valid_schema() const -> bool {
-    try {
-      if (!std::filesystem::exists(path_)) {
-        return false;
-      }
-
-      auto database = SQLite::Database{path_, SQLite::OPEN_READONLY};
-      if (!database.tableExists("meta") || !database.tableExists("gestures") || !database.tableExists("samples")) {
-        return false;
-      }
-
-      const auto schema_version = read_meta_int(database, "schema_version");
-      const auto db_embedding_dim = read_meta_int(database, "embedding_dim");
-      return schema_version == kSchemaVersion && db_embedding_dim == static_cast<int>(embedding_dim_);
-    } catch (const std::exception&) {
-      return false;
-    }
-  }
-
-  void PrototypeDatabase::recreate_empty_schema() const {
+  void PrototypeDatabase::backup_incompatible_schema() const {
     namespace fs = std::filesystem;
+    auto backup = fs::path{path_ + "." + timestamp() + ".backup"};
+    auto suffix = 1U;
+    while (fs::exists(backup)) {
+      backup = fs::path{path_ + "." + timestamp() + ".backup." + std::to_string(suffix++)};
+    }
+    fs::rename(path_, backup);
+    spdlog::warn("Backed up incompatible prototype database '{}' to '{}'", path_, backup.string());
+  }
 
-    const auto db_path = fs::path{path_};
-    if (const auto parent = db_path.parent_path(); !parent.empty()) {
+  void PrototypeDatabase::create_empty_schema() const {
+    namespace fs = std::filesystem;
+    const auto parent = fs::path{path_}.parent_path();
+    if (!parent.empty()) {
       fs::create_directories(parent);
     }
-
-    auto error = std::error_code{};
-    const auto database_exists = fs::exists(db_path, error) && !error;
-    if (database_exists) {
-      const auto backup_path = backup_path_for(db_path);
-      fs::copy_file(db_path, backup_path, fs::copy_options::none, error);
-      if (error) {
-        throw std::runtime_error("Failed to backup invalid prototype database '" + db_path.string() + "' to '" +
-                                 backup_path.string() + "': " + error.message());
-      }
-      spdlog::warn("Prototype database schema is invalid; backed up '{}' to '{}' before recreating it",
-                   db_path.string(), backup_path.string());
-    } else {
-      spdlog::warn("Prototype database file does not exist; creating an empty gesture library at '{}'",
-                   db_path.string());
-    }
-
-    error.clear();
-    fs::remove(db_path, error);
-    if (error) {
-      throw std::runtime_error("Failed to remove invalid prototype database '" + db_path.string() +
-                               "': " + error.message());
-    }
-
     auto database = SQLite::Database{path_, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE};
+    database.exec("PRAGMA foreign_keys = ON;");
     auto transaction = SQLite::Transaction{database};
-
-    database.exec("CREATE TABLE meta ("
-                  "  key TEXT PRIMARY KEY,"
-                  "  value TEXT NOT NULL"
-                  ");"
-                  "CREATE TABLE gestures ("
-                  "  id INTEGER PRIMARY KEY,"
-                  "  name TEXT NOT NULL,"
-                  "  enabled INTEGER NOT NULL DEFAULT 1"
-                  ");"
-                  "CREATE TABLE samples ("
-                  "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                  "  gesture_id INTEGER NOT NULL,"
-                  "  frame_count INTEGER NOT NULL,"
-                  "  embedding_dim INTEGER NOT NULL,"
-                  "  dtype TEXT NOT NULL DEFAULT 'f32',"
-                  "  data BLOB NOT NULL,"
-                  "  weight REAL NOT NULL DEFAULT 1.0,"
-                  "  FOREIGN KEY (gesture_id) REFERENCES gestures(id)"
-                  ");"
+    database.exec("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);"
+                  "CREATE TABLE gestures("
+                  " id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, enabled INTEGER NOT NULL DEFAULT 1,"
+                  " dtw_threshold REAL NOT NULL, coarse_threshold REAL NOT NULL, calibration_status INTEGER NOT NULL,"
+                  " sample_count INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);"
+                  "CREATE TABLE samples("
+                  " id INTEGER PRIMARY KEY AUTOINCREMENT, gesture_id INTEGER NOT NULL REFERENCES gestures(id) ON DELETE CASCADE,"
+                  " valid_length INTEGER NOT NULL, frame_embeddings BLOB NOT NULL, pooled_embedding BLOB NOT NULL,"
+                  " quality REAL NOT NULL, captured_at INTEGER NOT NULL);"
                   "CREATE INDEX idx_samples_gesture_id ON samples(gesture_id);");
-
-    auto meta_insert = SQLite::Statement{database, "INSERT INTO meta(key, value) VALUES (?, ?)"};
-    meta_insert.bind(1, "schema_version");
-    meta_insert.bind(2, std::to_string(kSchemaVersion));
-    meta_insert.exec();
-
-    meta_insert.reset();
-    meta_insert.clearBindings();
-    meta_insert.bind(1, "embedding_dim");
-    meta_insert.bind(2, std::to_string(embedding_dim_));
-    meta_insert.exec();
-
+    auto insert = SQLite::Statement{database, "INSERT INTO meta(key, value) VALUES (?, ?)"};
+    const auto values = std::array<std::pair<const char*, std::string>, 5>{{
+        {"schema_version", std::to_string(kSchemaVersion)},
+        {"preprocessing", kPreprocessing}, {"max_sequence_length", std::to_string(kMaxSequenceLength)},
+        {"embedding_dim", std::to_string(kEmbeddingDim)}, {"padding_value", std::to_string(kPaddingValue)}}};
+    for (const auto& [key, value] : values) {
+      insert.bind(1, key);
+      insert.bind(2, value);
+      insert.exec();
+      insert.reset();
+      insert.clearBindings();
+    }
     transaction.commit();
+  }
+
+  void PrototypeDatabase::ensure_valid_empty_or_existing() {
+    namespace fs = std::filesystem;
+    if (!fs::exists(path_)) {
+      create_empty_schema();
+      return;
+    }
+    auto incompatible = false;
+    try {
+      auto database = SQLite::Database{path_, SQLite::OPEN_READONLY};
+      incompatible = !database.tableExists("meta") || !database.tableExists("gestures") ||
+                     !database.tableExists("samples") || read_meta_int(database, "schema_version") != kSchemaVersion ||
+                     !has_columns(database, "gestures", {"id", "name", "enabled", "dtw_threshold",
+                         "coarse_threshold", "calibration_status", "sample_count", "created_at", "updated_at"}) ||
+                     !has_columns(database, "samples", {"id", "gesture_id", "valid_length", "frame_embeddings",
+                         "pooled_embedding", "quality", "captured_at"});
+    } catch (const std::exception&) {
+      incompatible = true;
+    }
+    if (incompatible) {
+      backup_incompatible_schema();
+      create_empty_schema();
+      return;
+    }
+
+    {
+      auto database = SQLite::Database{path_, SQLite::OPEN_READONLY};
+      if (read_meta(database, "preprocessing") != kPreprocessing ||
+          read_meta_int(database, "max_sequence_length") != static_cast<int>(kMaxSequenceLength) ||
+          read_meta_int(database, "embedding_dim") != static_cast<int>(kEmbeddingDim) ||
+          read_meta_float(database, "padding_value") != kPaddingValue) {
+        throw std::runtime_error("prototype database does not match the temporal encoder; record gestures again");
+      }
+    }
+  }
+
+  auto PrototypeDatabase::load_store() const -> PrototypeStore {
+    auto database = SQLite::Database{path_, SQLite::OPEN_READONLY};
+    auto gestures = std::vector<GesturePrototypeSet>{};
+    auto query = SQLite::Statement{database,
+        "SELECT id, name, dtw_threshold, coarse_threshold, calibration_status FROM gestures WHERE enabled != 0 ORDER BY id"};
+    while (query.executeStep()) {
+      const auto dtw_threshold = static_cast<float>(query.getColumn(2).getDouble());
+      const auto coarse_threshold = static_cast<float>(query.getColumn(3).getDouble());
+      const auto calibration_value = query.getColumn(4).getUInt();
+      if (!std::isfinite(dtw_threshold) || dtw_threshold < 0.0F || !std::isfinite(coarse_threshold) ||
+          coarse_threshold < 0.0F || calibration_value > static_cast<std::uint32_t>(CalibrationStatus::Calibrated)) {
+        throw std::runtime_error("gesture thresholds or calibration status are invalid");
+      }
+      auto gesture = GesturePrototypeSet{query.getColumn(0).getUInt(), query.getColumn(1).getString(),
+          dtw_threshold, coarse_threshold, static_cast<CalibrationStatus>(calibration_value), {}};
+      auto samples = SQLite::Statement{database,
+          "SELECT id, valid_length, frame_embeddings, pooled_embedding, quality, captured_at FROM samples WHERE gesture_id = ? ORDER BY id"};
+      samples.bind(1, gesture.gesture_id);
+      while (samples.executeStep()) {
+        gesture.samples.push_back(read_sample(samples));
+      }
+      if (!gesture.samples.empty()) {
+        gestures.push_back(std::move(gesture));
+      }
+    }
+    auto store = PrototypeStore{};
+    store.replace(std::move(gestures));
+    return store;
   }
 
   auto PrototypeDatabase::list_gestures() const -> std::vector<GestureInfo> {
-    auto database = SQLite::Database{path_, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE};
+    auto database = SQLite::Database{path_, SQLite::OPEN_READONLY};
     auto query = SQLite::Statement{database,
-                                   "SELECT g.id, g.name, g.enabled, COUNT(s.id) "
-                                   "FROM gestures g "
-                                   "LEFT JOIN samples s ON s.gesture_id = g.id "
-                                   "GROUP BY g.id, g.name, g.enabled "
-                                   "ORDER BY g.id"};
-
-    auto gestures = std::vector<GestureInfo>{};
+        "SELECT id, name, enabled, sample_count, calibration_status FROM gestures ORDER BY id"};
+    auto result = std::vector<GestureInfo>{};
     while (query.executeStep()) {
-      gestures.push_back(GestureInfo{query.getColumn(0).getUInt(), query.getColumn(1).getString(),
-                                     query.getColumn(2).getInt() != 0, query.getColumn(3).getUInt()});
+      result.push_back(GestureInfo{query.getColumn(0).getUInt(), query.getColumn(1).getString(),
+          query.getColumn(2).getInt() != 0, query.getColumn(3).getUInt(),
+          static_cast<CalibrationStatus>(query.getColumn(4).getUInt())});
     }
-
-    return gestures;
+    return result;
   }
 
-  auto PrototypeDatabase::load_gesture_samples(const std::string& gesture_name) const -> std::vector<EncodedSequence> {
-    if (gesture_name.empty()) {
-      throw std::runtime_error("Gesture name must not be empty");
-    }
-
+  auto PrototypeDatabase::load_gesture_samples(const std::string& name) const -> std::vector<GesturePrototype> {
     auto database = SQLite::Database{path_, SQLite::OPEN_READONLY};
-    const auto gesture_id = find_gesture_id(database, gesture_name);
-    if (!gesture_id.has_value()) {
+    const auto id = find_gesture_id(database, name);
+    if (!id) {
       return {};
     }
-
     auto query = SQLite::Statement{database,
-                                   "SELECT frame_count, embedding_dim, dtype, data "
-                                   "FROM samples "
-                                   "WHERE gesture_id = ? "
-                                   "ORDER BY id"};
-    query.bind(1, gesture_id.value());
-
-    auto samples = std::vector<EncodedSequence>{};
+        "SELECT id, valid_length, frame_embeddings, pooled_embedding, quality, captured_at FROM samples WHERE gesture_id = ? ORDER BY id"};
+    query.bind(1, *id);
+    auto result = std::vector<GesturePrototype>{};
     while (query.executeStep()) {
-      const auto frame_count = static_cast<std::uint32_t>(query.getColumn(0).getUInt());
-      const auto embedding_dim = static_cast<std::uint32_t>(query.getColumn(1).getUInt());
-      const auto dtype = query.getColumn(2).getString();
-      const auto* blob = static_cast<const float*>(query.getColumn(3).getBlob());
-      const auto blob_bytes = query.getColumn(3).getBytes();
-
-      if (embedding_dim != embedding_dim_) {
-        throw std::runtime_error("Prototype sample embedding dimension mismatch");
-      }
-      if (dtype != kFloat32Dtype) {
-        throw std::runtime_error("Unsupported prototype sample dtype: " + dtype);
-      }
-
-      samples.push_back(blob_to_encoded_sample(blob, blob_bytes, frame_count, embedding_dim));
+      result.push_back(read_sample(query));
     }
-
-    return samples;
+    return result;
   }
 
-  auto PrototypeDatabase::replace_gesture_samples(const std::string& gesture_name,
-                                                  const std::vector<EncodedSequence>& samples) -> std::uint32_t {
-    if (gesture_name.empty()) {
-      throw std::runtime_error("Gesture name must not be empty");
+  auto PrototypeDatabase::replace_gesture_samples(const std::string& name,
+      const std::vector<GesturePrototype>& samples, float dtw_threshold, float coarse_threshold,
+      CalibrationStatus calibration) -> std::uint32_t {
+    if (name.empty() || samples.empty()) {
+      throw std::invalid_argument("gesture name and samples must not be empty");
     }
-    if (samples.empty()) {
-      throw std::runtime_error("Gesture must contain at least one prototype sample");
+    if (!std::isfinite(dtw_threshold) || dtw_threshold < 0.0F || !std::isfinite(coarse_threshold) ||
+        coarse_threshold < 0.0F || static_cast<std::uint32_t>(calibration) >
+            static_cast<std::uint32_t>(CalibrationStatus::Calibrated)) {
+      throw std::invalid_argument("gesture thresholds or calibration status are invalid");
     }
-
     auto blobs = std::vector<std::vector<float>>{};
-    blobs.reserve(samples.size());
     for (const auto& sample : samples) {
-      auto blob = encoded_sample_to_blob(sample, embedding_dim_);
-      if (blob.size() > static_cast<std::size_t>(std::numeric_limits<int>::max() / sizeof(float))) {
-        throw std::runtime_error("Encoded gesture sample is too large to store in SQLite");
-      }
-      blobs.push_back(std::move(blob));
+      blobs.push_back(frame_blob(sample));
     }
-
-    auto database = SQLite::Database{path_, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE};
+    auto database = SQLite::Database{path_, SQLite::OPEN_READWRITE};
+    database.exec("PRAGMA foreign_keys = ON;");
     auto transaction = SQLite::Transaction{database, SQLite::TransactionBehavior::IMMEDIATE};
-
-    auto gesture_id = find_gesture_id(database, gesture_name);
-    if (!gesture_id.has_value()) {
-      auto insert_gesture = SQLite::Statement{database, "INSERT INTO gestures(name, enabled) VALUES (?, 1)"};
-      insert_gesture.bind(1, gesture_name);
-      insert_gesture.exec();
-      gesture_id = static_cast<std::uint32_t>(database.getLastInsertRowid());
+    auto id = find_gesture_id(database, name);
+    const auto now = static_cast<std::int64_t>(std::time(nullptr));
+    if (!id) {
+      auto insert = SQLite::Statement{database,
+          "INSERT INTO gestures(name, enabled, dtw_threshold, coarse_threshold, calibration_status, sample_count, created_at, updated_at) VALUES (?, 1, ?, ?, ?, ?, ?, ?)"};
+      insert.bind(1, name); insert.bind(2, dtw_threshold); insert.bind(3, coarse_threshold);
+      insert.bind(4, static_cast<std::uint32_t>(calibration)); insert.bind(5, static_cast<std::uint32_t>(samples.size()));
+      insert.bind(6, now); insert.bind(7, now); insert.exec();
+      id = static_cast<std::uint32_t>(database.getLastInsertRowid());
     } else {
-      auto enable_gesture = SQLite::Statement{database, "UPDATE gestures SET enabled = 1 WHERE id = ?"};
-      enable_gesture.bind(1, gesture_id.value());
-      enable_gesture.exec();
+      auto update = SQLite::Statement{database,
+          "UPDATE gestures SET enabled=1, dtw_threshold=?, coarse_threshold=?, calibration_status=?, sample_count=?, updated_at=? WHERE id=?"};
+      update.bind(1, dtw_threshold); update.bind(2, coarse_threshold);
+      update.bind(3, static_cast<std::uint32_t>(calibration)); update.bind(4, static_cast<std::uint32_t>(samples.size()));
+      update.bind(5, now); update.bind(6, *id); update.exec();
+      auto remove = SQLite::Statement{database, "DELETE FROM samples WHERE gesture_id=?"};
+      remove.bind(1, *id); remove.exec();
     }
-
-    auto delete_samples = SQLite::Statement{database, "DELETE FROM samples WHERE gesture_id = ?"};
-    delete_samples.bind(1, gesture_id.value());
-    delete_samples.exec();
-
-    auto insert_sample =
-        SQLite::Statement{database,
-                          "INSERT INTO samples(gesture_id, frame_count, embedding_dim, dtype, data, weight) "
-                          "VALUES (?, ?, ?, ?, ?, 1.0)"};
-    for (std::size_t i = 0; i < samples.size(); ++i) {
-      insert_sample.bind(1, gesture_id.value());
-      insert_sample.bind(2, static_cast<std::uint32_t>(samples[i].size()));
-      insert_sample.bind(3, embedding_dim_);
-      insert_sample.bind(4, kFloat32Dtype);
-      insert_sample.bind(5, blobs[i].data(), static_cast<int>(blobs[i].size() * sizeof(float)));
-      insert_sample.exec();
-      insert_sample.reset();
-      insert_sample.clearBindings();
+    auto insert_sample = SQLite::Statement{database,
+        "INSERT INTO samples(gesture_id, valid_length, frame_embeddings, pooled_embedding, quality, captured_at) VALUES (?, ?, ?, ?, ?, ?)"};
+    for (std::size_t index = 0; index < samples.size(); ++index) {
+      insert_sample.bind(1, *id); insert_sample.bind(2, samples[index].valid_length);
+      insert_sample.bind(3, blobs[index].data(), static_cast<int>(blobs[index].size() * sizeof(float)));
+      insert_sample.bind(4, samples[index].pooled.data(), static_cast<int>(samples[index].pooled.size() * sizeof(float)));
+      insert_sample.bind(5, samples[index].quality); insert_sample.bind(6, static_cast<std::int64_t>(samples[index].captured_at));
+      insert_sample.exec(); insert_sample.reset(); insert_sample.clearBindings();
     }
-
     transaction.commit();
-    return gesture_id.value();
+    return *id;
   }
 
-  auto PrototypeDatabase::delete_gesture(std::uint32_t gesture_id) -> bool {
-    auto database = SQLite::Database{path_, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE};
-    auto transaction = SQLite::Transaction{database, SQLite::TransactionBehavior::IMMEDIATE};
-
-    auto exists = SQLite::Statement{database, "SELECT id FROM gestures WHERE id = ?"};
-    exists.bind(1, gesture_id);
-    if (!exists.executeStep()) {
-      return false;
-    }
-
-    auto delete_samples = SQLite::Statement{database, "DELETE FROM samples WHERE gesture_id = ?"};
-    delete_samples.bind(1, gesture_id);
-    delete_samples.exec();
-
-    auto delete_gesture = SQLite::Statement{database, "DELETE FROM gestures WHERE id = ?"};
-    delete_gesture.bind(1, gesture_id);
-    delete_gesture.exec();
-
-    transaction.commit();
-    return true;
+  auto PrototypeDatabase::delete_gesture(std::uint32_t id) -> bool {
+    auto database = SQLite::Database{path_, SQLite::OPEN_READWRITE};
+    database.exec("PRAGMA foreign_keys = ON;");
+    auto statement = SQLite::Statement{database, "DELETE FROM gestures WHERE id=?"};
+    statement.bind(1, id);
+    return statement.exec() != 0;
   }
 
-  auto PrototypeDatabase::delete_gesture(const std::string& gesture_name) -> bool {
-    auto database = SQLite::Database{path_, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE};
-    auto gesture_id = find_gesture_id(database, gesture_name);
-    if (!gesture_id.has_value()) {
-      return false;
-    }
-    return delete_gesture(gesture_id.value());
+  auto PrototypeDatabase::delete_gesture(const std::string& name) -> bool {
+    auto database = SQLite::Database{path_, SQLite::OPEN_READONLY};
+    const auto id = find_gesture_id(database, name);
+    return id ? delete_gesture(*id) : false;
   }
 
 } // namespace signlang::signlang_det

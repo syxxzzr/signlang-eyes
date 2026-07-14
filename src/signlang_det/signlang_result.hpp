@@ -26,12 +26,29 @@ namespace signlang::signlang_det {
   struct HandFeatures {
     std::array<KeypointFeature, signlang::handpose_det::kHandPoseKeypointCount> features;
     bool present; // Whether this hand slot has valid data
+    float confidence;
+    float motion_score;
   };
 
   struct FeatureVector {
     std::array<HandFeatures, kMaxHandCount> hands; // hands[0]=left, hands[1]=right
     std::uint64_t source_sequence_number;
     std::uint64_t timestamp_ns;
+    float mean_confidence;
+    float motion_score;
+    bool sequence_continuous;
+  };
+
+  enum class RecognitionStatus : std::uint32_t { Recognized = 0, Rejected = 1 };
+
+  enum class RejectionReason : std::uint32_t {
+    None = 0,
+    NoPrototypes = 1,
+    SegmentQuality = 2,
+    CoarseDistance = 3,
+    DtwDistance = 4,
+    DistanceMargin = 5,
+    NonFiniteOutput = 6,
   };
 
   struct GestureCandidate {
@@ -60,6 +77,20 @@ namespace signlang::signlang_det {
     std::array<char, kMaxGestureNameLength> gesture_name;
     std::uint32_t candidate_count;
     std::array<GestureCandidate, kMaxGestureCandidates> candidates;
+    RecognitionStatus status;
+    RejectionReason rejection_reason;
+    std::uint64_t segment_start_timestamp_ns;
+    std::uint64_t segment_end_timestamp_ns;
+    std::uint32_t original_length;
+    std::uint32_t valid_length;
+    float segment_quality;
+    float coarse_distance;
+    float top1_dtw_distance;
+    float top2_dtw_distance;
+    float distance_margin;
+    float applied_dtw_threshold;
+    float applied_coarse_threshold;
+    bool forced_max_length;
   };
 
   static_assert(std::is_trivially_copyable_v<KeypointFeature>);

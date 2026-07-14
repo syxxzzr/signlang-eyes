@@ -22,7 +22,7 @@ namespace signlang::signlang_det {
     auto operator=(IpcHandposeSubscriber&&) -> IpcHandposeSubscriber& = delete;
 
     template <typename Handler>
-    auto receive_latest(Handler&& handler) -> bool;
+    auto receive_all(Handler&& handler) -> std::uint32_t;
 
     [[nodiscard]] auto wait_for_work() -> bool;
 
@@ -123,33 +123,23 @@ namespace signlang::signlang_det {
   };
 
   template <typename Handler>
-  auto IpcHandposeSubscriber::receive_latest(Handler&& handler) -> bool {
-    auto latest_sample = subscriber_.receive();
-    if (!latest_sample.has_value()) {
-      throw std::runtime_error("Failed to receive handpose sample through iceoryx2");
-    }
-
-    if (!latest_sample.value().has_value()) {
-      return false;
-    }
-
+  auto IpcHandposeSubscriber::receive_all(Handler&& handler) -> std::uint32_t {
+    auto received = std::uint32_t{0};
     while (true) {
-      auto next_sample = subscriber_.receive();
-      if (!next_sample.has_value()) {
+      auto sample = subscriber_.receive();
+      if (!sample.has_value()) {
         throw std::runtime_error("Failed to receive handpose sample through iceoryx2");
       }
-      if (!next_sample.value().has_value()) {
+      if (!sample.value().has_value()) {
         break;
       }
-      latest_sample = std::move(next_sample);
+      const auto& current = sample.value().value();
+      const auto payload = current.payload();
+      const auto& metadata = current.user_header();
+      handler(metadata, payload.data(), metadata.detection_count);
+      ++received;
     }
-
-    const auto& current_sample = latest_sample.value().value();
-    const auto payload = current_sample.payload();
-    const auto& metadata = current_sample.user_header();
-
-    handler(metadata, payload.data(), metadata.detection_count);
-    return true;
+    return received;
   }
 
   template <typename Handler>

@@ -36,6 +36,7 @@ namespace signlang::signlang_det {
     std::uint32_t id;
     std::uint32_t sample_count;
     bool enabled;
+    bool calibrated;
     std::array<char, kMaxGestureNameLength> name;
   };
 
