@@ -8,7 +8,7 @@ libjpeg-turbo/3.1.4.1
 librga/1.0.0
 minmea/0.3.0.cci.20230620
 onnxruntime/1.23.2
-rknn-runtime/1.0.0
+rknn-runtime/2.3.2
 spdlog/1.17.0
 sqlitecpp/3.3.3
 tomlplusplus/3.4.0

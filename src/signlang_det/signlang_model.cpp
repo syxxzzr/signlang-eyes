@@ -82,6 +82,14 @@ namespace signlang::signlang_det {
                                 static_cast<std::uint32_t>(model.size()), 0, nullptr);
         if (result != RKNN_SUCC) throw std::runtime_error("rknn_init failed, ret=" + std::to_string(result));
         try {
+          auto sdk_version = rknn_sdk_version{};
+          result = rknn_query(context_, RKNN_QUERY_SDK_VERSION, &sdk_version, sizeof(sdk_version));
+          if (result == RKNN_SUCC) {
+            spdlog::info("Temporal encoder RKNN runtime: API={}, driver={}",
+                         sdk_version.api_version, sdk_version.drv_version);
+          } else {
+            spdlog::warn("Failed to query temporal encoder RKNN runtime version, ret={}", result);
+          }
           result = rknn_set_core_mask(context_, core);
           if (result != RKNN_SUCC) spdlog::warn("rknn_set_core_mask failed, ret={}", result);
           validate_contract();
@@ -225,8 +233,9 @@ namespace signlang::signlang_det {
           return lhs.distance == rhs.distance ? lhs.gesture->gesture_id < rhs.gesture->gesture_id
                                               : lhs.distance < rhs.distance;
         });
-        coarse.resize(std::min<std::size_t>(coarse.size(), options_.top_k));
-        for (const auto& coarse_candidate : coarse) {
+        const auto candidate_count = std::min<std::size_t>(coarse.size(), options_.top_k);
+        for (std::size_t coarse_index = 0; coarse_index < coarse.size(); ++coarse_index) {
+          const auto& coarse_candidate = coarse[coarse_index];
           auto best = MatchCandidate{coarse_candidate.gesture->gesture_id, 0, coarse_candidate.distance,
                                      std::numeric_limits<float>::infinity(), 0.0F};
           for (const auto& sample : coarse_candidate.gesture->samples) {
@@ -236,6 +245,12 @@ namespace signlang::signlang_det {
               best.dtw_distance = distance;
             }
           }
+          const auto in_top_k = coarse_index < candidate_count;
+          spdlog::debug(
+              "Gesture database distance: id={} name={} samples={} min_dtw={} pooled_cosine={} in_top_k={}",
+              coarse_candidate.gesture->gesture_id, coarse_candidate.gesture->name,
+              coarse_candidate.gesture->samples.size(), best.dtw_distance, coarse_candidate.distance, in_top_k);
+          if (!in_top_k) continue;
           if (options_.confidence_mapping_enabled && std::isfinite(best.dtw_distance)) {
             best.confidence = 1.0F / (1.0F + std::exp(-(options_.confidence_slope * best.dtw_distance +
                                                        options_.confidence_intercept)));

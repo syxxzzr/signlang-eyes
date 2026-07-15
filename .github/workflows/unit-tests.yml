@@ -1,0 +1,54 @@
+name: Unit tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unit-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-tests:
+    name: ${{ matrix.compiler }} / C++17
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: GCC
+            cc: gcc
+            cxx: g++
+          - compiler: Clang
+            cc: clang
+            cxx: clang++
+
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Cache test dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/host-tests/_deps
+          key: ${{ runner.os }}-${{ matrix.compiler }}-host-tests-${{ hashFiles('tests/CMakeLists.txt') }}
+
+      - name: Configure host tests
+        run: >-
+          cmake -S tests -B build/host-tests
+          -DCMAKE_BUILD_TYPE=Debug
+          -DSIGNLANG_TEST_WARNINGS_AS_ERRORS=ON
+
+      - name: Build host tests
+        run: cmake --build build/host-tests --parallel 2
+
+      - name: Run host tests
+        run: ctest --test-dir build/host-tests --output-on-failure

@@ -1,0 +1,46 @@
+name: Code quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sanitizers:
+    name: AddressSanitizer and UBSan
+    runs-on: ubuntu-24.04
+    env:
+      CC: clang
+      CXX: clang++
+      ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Cache test dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/sanitizers/_deps
+          key: ${{ runner.os }}-sanitizers-host-tests-${{ hashFiles('tests/CMakeLists.txt') }}
+
+      - name: Configure sanitizer tests
+        run: >-
+          cmake -S tests -B build/sanitizers
+          -DCMAKE_BUILD_TYPE=Debug
+          -DSIGNLANG_TEST_WARNINGS_AS_ERRORS=ON
+          -DSIGNLANG_TEST_SANITIZERS=ON
+
+      - name: Build with strict warnings
+        run: cmake --build build/sanitizers --parallel 2
+
+      - name: Run with sanitizers
+        run: ctest --test-dir build/sanitizers --output-on-failure
