@@ -82,6 +82,14 @@ namespace signlang::signlang_det {
                                 static_cast<std::uint32_t>(model.size()), 0, nullptr);
         if (result != RKNN_SUCC) throw std::runtime_error("rknn_init failed, ret=" + std::to_string(result));
         try {
+          auto sdk_version = rknn_sdk_version{};
+          result = rknn_query(context_, RKNN_QUERY_SDK_VERSION, &sdk_version, sizeof(sdk_version));
+          if (result == RKNN_SUCC) {
+            spdlog::info("Temporal encoder RKNN runtime: API={}, driver={}",
+                         sdk_version.api_version, sdk_version.drv_version);
+          } else {
+            spdlog::warn("Failed to query temporal encoder RKNN runtime version, ret={}", result);
+          }
           result = rknn_set_core_mask(context_, core);
           if (result != RKNN_SUCC) spdlog::warn("rknn_set_core_mask failed, ret={}", result);
           validate_contract();

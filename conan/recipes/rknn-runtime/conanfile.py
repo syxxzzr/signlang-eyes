@@ -6,7 +6,7 @@ from pathlib import Path
 
 class RknnRuntimeConan(ConanFile):
     name = "rknn-runtime"
-    version = "1.0.0"
+    version = "2.3.2"
     package_type = "shared-library"
     settings = "os", "arch"
     exports_sources = "vendor/*"
