@@ -63,8 +63,8 @@ auto main(int argc, char** argv) -> int {
       signlang_subscriber->receive_latest([&](const auto& result) {
         if (result.recognized) {
           pending_signlang_result = result;
-          spdlog::info("Sign language manager queued recognized result seq={} gesture={} confidence={:.2f}",
-                       result.sequence_number, result.gesture_name.data(), result.confidence);
+          spdlog::info("Sign language manager queued recognized result seq={} gesture={}", result.sequence_number,
+                       result.gesture_name.data());
         }
       });
 

@@ -53,7 +53,6 @@ namespace signlang::signlang_det {
 
   struct GestureCandidate {
     std::uint32_t gesture_id;
-    float confidence;
     float distance;
     std::array<char, kMaxGestureNameLength> gesture_name;
   };
@@ -70,9 +69,6 @@ namespace signlang::signlang_det {
     float inference_time_ms;
     bool recognized;
     std::uint32_t gesture_id;
-    float confidence;
-    float second_confidence;
-    float confidence_margin;
     float distance;
     std::array<char, kMaxGestureNameLength> gesture_name;
     std::uint32_t candidate_count;

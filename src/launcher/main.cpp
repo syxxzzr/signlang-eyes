@@ -722,9 +722,6 @@ static auto build_signlang_det_args(const toml::table& cfg) -> std::vector<std::
     add_opt_double(args, "--coarse-threshold", opt_double(*tbl, "coarse_threshold"));
     add_opt_double(args, "--distance-margin", opt_double(*tbl, "distance_margin"));
     add_opt_bool_assignment(args, "--use-coarse-threshold", opt_bool(*tbl, "use_coarse_threshold"));
-    add_opt_bool_assignment(args, "--confidence-mapping", opt_bool(*tbl, "confidence_mapping"));
-    add_opt_double(args, "--confidence-slope", opt_double(*tbl, "confidence_slope"));
-    add_opt_double(args, "--confidence-intercept", opt_double(*tbl, "confidence_intercept"));
     add_opt_bool_assignment(args, "--publish-rejections", opt_bool(*tbl, "publish_rejections"));
     add_opt_int(args, "--duplicate-suppression-ms", opt_int(*tbl, "duplicate_suppression_ms"));
     add_opt_int(args, "--max-representative-samples", opt_int(*tbl, "max_representative_samples"));

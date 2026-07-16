@@ -183,8 +183,7 @@ namespace signlang::signlang_det {
             options_.dtw_window_ratio < 0.0F || options_.dtw_window_ratio > 1.0F ||
             !std::isfinite(options_.global_dtw_threshold) || options_.global_dtw_threshold < 0.0F ||
             !std::isfinite(options_.global_coarse_threshold) || options_.global_coarse_threshold < 0.0F ||
-            !std::isfinite(options_.margin_threshold) || options_.margin_threshold < 0.0F ||
-            !std::isfinite(options_.confidence_slope) || !std::isfinite(options_.confidence_intercept)) {
+            !std::isfinite(options_.margin_threshold) || options_.margin_threshold < 0.0F) {
           throw std::invalid_argument("invalid prototype matcher options");
         }
       }
@@ -237,7 +236,7 @@ namespace signlang::signlang_det {
         for (std::size_t coarse_index = 0; coarse_index < coarse.size(); ++coarse_index) {
           const auto& coarse_candidate = coarse[coarse_index];
           auto best = MatchCandidate{coarse_candidate.gesture->gesture_id, 0, coarse_candidate.distance,
-                                     std::numeric_limits<float>::infinity(), 0.0F};
+                                     std::numeric_limits<float>::infinity()};
           for (const auto& sample : coarse_candidate.gesture->samples) {
             const auto distance = dtw(query.frames, sample.frames);
             if (distance < best.dtw_distance) {
@@ -251,10 +250,6 @@ namespace signlang::signlang_det {
               coarse_candidate.gesture->gesture_id, coarse_candidate.gesture->name,
               coarse_candidate.gesture->samples.size(), best.dtw_distance, coarse_candidate.distance, in_top_k);
           if (!in_top_k) continue;
-          if (options_.confidence_mapping_enabled && std::isfinite(best.dtw_distance)) {
-            best.confidence = 1.0F / (1.0F + std::exp(-(options_.confidence_slope * best.dtw_distance +
-                                                       options_.confidence_intercept)));
-          }
           result.candidates.push_back(best);
         }
         std::sort(result.candidates.begin(), result.candidates.end(), [](const auto& lhs, const auto& rhs) {

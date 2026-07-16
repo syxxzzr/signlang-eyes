@@ -84,9 +84,6 @@ namespace {
     result.status = match.recognized ? RecognitionStatus::Recognized : RecognitionStatus::Rejected;
     result.rejection_reason = match.rejection_reason;
     result.gesture_id = match.gesture_id;
-    result.confidence = match.candidates.empty() ? 0.0F : match.candidates.front().confidence;
-    result.second_confidence = match.candidates.size() > 1U ? match.candidates[1].confidence : 0.0F;
-    result.confidence_margin = result.confidence - result.second_confidence;
     result.distance = match.top1_dtw_distance;
     result.segment_start_timestamp_ns = segment.start_timestamp_ns;
     result.segment_end_timestamp_ns = segment.end_timestamp_ns;
@@ -107,7 +104,6 @@ namespace {
       const auto& source = match.candidates[index];
       auto& destination = result.candidates[index];
       destination.gesture_id = source.gesture_id;
-      destination.confidence = source.confidence;
       destination.distance = source.dtw_distance;
       signlang::common::copy_fixed_string(model.get_gesture_name(source.gesture_id), destination.gesture_name);
     }
