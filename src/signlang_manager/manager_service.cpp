@@ -19,7 +19,7 @@ namespace signlang::signlang_manager {
     constexpr auto kStatusNotFound = std::uint16_t{2};
     constexpr auto kStatusFailed = std::uint16_t{3};
     constexpr auto kStatusUnsupported = std::uint16_t{4};
-    constexpr auto kStreamPayloadVersionWithSignlang = std::uint8_t{2};
+    constexpr auto kCurrentStreamPayloadVersion = std::uint8_t{3};
 
     void append_u8(std::vector<std::uint8_t>& out, std::uint8_t value) { out.push_back(value); }
 
@@ -129,7 +129,7 @@ namespace signlang::signlang_manager {
       auto out = std::vector<std::uint8_t>{};
       out.reserve(handpose_payload.size() + 96U);
 
-      append_u8(out, kStreamPayloadVersionWithSignlang);
+      append_u8(out, kCurrentStreamPayloadVersion);
       append_u8(out, signlang_result != nullptr ? 1U : 0U);
       append_u16(out, 0);
       append_u32(out, static_cast<std::uint32_t>(handpose_payload.size()));
@@ -140,9 +140,6 @@ namespace signlang::signlang_manager {
         append_u64(out, signlang_result->timestamp_ns);
         append_u8(out, signlang_result->recognized ? 1U : 0U);
         append_u32(out, signlang_result->gesture_id);
-        append_f32(out, signlang_result->confidence);
-        append_f32(out, signlang_result->second_confidence);
-        append_f32(out, signlang_result->confidence_margin);
         append_f32(out, signlang_result->distance);
         append_string(out, common::fixed_string_to_string(signlang_result->gesture_name));
       }

@@ -174,7 +174,7 @@ The launcher changes its working directory to the install root, so relative path
 - `[logging]` — Global log level, max file size, and retention count; individual modules can override the log level.
 - `[audio_frontend]` / `[video_frontend]` — Device node, sample format, resolution, mirroring, and rotation.
 - `[speech_asr]` / `[speech_tts]` — Model paths, language, playback device, and NPU core.
-- `[handpose_det]` / `[signlang_det]` — Detection, tracking, temporal window, DTW, and confidence parameters.
+- `[handpose_det]` / `[signlang_det]` — Detection, tracking, temporal window, DTW, and input-quality parameters.
 - `[signlang_manager]` — BLE name, adapter, streaming frame rate, and upload limits.
 - `[telemetry_service]` — GNSS serial port and MQTT connection parameters.
 - `[peripheral_service]` — Serial port, font, OLED dimensions, and scrolling display settings.

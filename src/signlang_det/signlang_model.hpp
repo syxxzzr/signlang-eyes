@@ -55,9 +55,6 @@ namespace signlang::signlang_det {
     float global_coarse_threshold{0.5F};
     float margin_threshold{0.05F};
     bool use_coarse_threshold{true};
-    bool confidence_mapping_enabled{false};
-    float confidence_slope{-8.0F};
-    float confidence_intercept{4.0F};
   };
 
   struct MatchCandidate {
@@ -65,7 +62,6 @@ namespace signlang::signlang_det {
     std::uint32_t sample_id{0};
     float coarse_distance{0.0F};
     float dtw_distance{0.0F};
-    float confidence{0.0F};
   };
 
   struct MatchResult {

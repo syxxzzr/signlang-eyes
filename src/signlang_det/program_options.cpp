@@ -53,9 +53,6 @@ namespace signlang::signlang_det {
         ("coarse-threshold", "Global pooled distance threshold", cxxopts::value<float>()->default_value("0.5"))
         ("distance-margin", "Minimum Top1/Top2 DTW distance margin", cxxopts::value<float>()->default_value("0.05"))
         ("use-coarse-threshold", "Enable pooled distance rejection", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
-        ("confidence-mapping", "Enable calibrated distance mapping", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-        ("confidence-slope", "Distance mapping slope", cxxopts::value<float>()->default_value("-8"))
-        ("confidence-intercept", "Distance mapping intercept", cxxopts::value<float>()->default_value("4"))
         ("publish-rejections", "Publish rejected segments", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
         ("duplicate-suppression-ms", "Duplicate recognition suppression", cxxopts::value<std::uint32_t>()->default_value("1000"))
         ("max-representative-samples", "Maximum samples retained per gesture", cxxopts::value<std::uint32_t>()->default_value("5"))
@@ -95,9 +92,6 @@ namespace signlang::signlang_det {
     matcher.global_coarse_threshold = parsed["coarse-threshold"].as<float>();
     matcher.margin_threshold = parsed["distance-margin"].as<float>();
     matcher.use_coarse_threshold = parsed["use-coarse-threshold"].as<bool>();
-    matcher.confidence_mapping_enabled = parsed["confidence-mapping"].as<bool>();
-    matcher.confidence_slope = parsed["confidence-slope"].as<float>();
-    matcher.confidence_intercept = parsed["confidence-intercept"].as<float>();
 
     const auto in_unit = [](float value) { return value >= 0.0F && value <= 1.0F; };
     if (!std::isfinite(preprocessing.minimum_mean_confidence) ||
@@ -110,7 +104,6 @@ namespace signlang::signlang_det {
         matcher.top_k == 0 || !std::isfinite(matcher.dtw_window_ratio) || matcher.dtw_window_ratio < 0.0F ||
         matcher.dtw_window_ratio > 1.0F || !std::isfinite(matcher.global_dtw_threshold) ||
         !std::isfinite(matcher.global_coarse_threshold) || !std::isfinite(matcher.margin_threshold) ||
-        !std::isfinite(matcher.confidence_slope) || !std::isfinite(matcher.confidence_intercept) ||
         matcher.global_dtw_threshold < 0.0F || matcher.global_coarse_threshold < 0.0F || matcher.margin_threshold < 0.0F ||
         parsed["subscriber-buffer"].as<std::uint64_t>() == 0 || parsed["segment-queue"].as<std::uint32_t>() == 0 ||
         parsed["max-representative-samples"].as<std::uint32_t>() == 0) {

@@ -174,7 +174,7 @@ launcher 会切换到安装根目录，因此 `conf/`、`models/` 和 `log/` 等
 - `[logging]`：全局日志级别、单文件大小和保留数量；各模块可覆盖日志级别。
 - `[audio_frontend]`/`[video_frontend]`：设备节点、采样格式、分辨率、镜像和旋转。
 - `[speech_asr]`/`[speech_tts]`：模型路径、语言、播放设备和 NPU 核心。
-- `[handpose_det]`/`[signlang_det]`：检测、跟踪、时序窗口、DTW 和置信度参数。
+- `[handpose_det]`/`[signlang_det]`：检测、跟踪、时序窗口、DTW 和输入质量参数。
 - `[signlang_manager]`：BLE 名称、适配器、流帧率和上传限制。
 - `[telemetry_service]`：GNSS 串口与 MQTT 连接参数。
 - `[peripheral_service]`：串口、字体、OLED 尺寸和滚动显示参数。
