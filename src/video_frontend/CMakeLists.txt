@@ -16,7 +16,6 @@ target_link_libraries(signlang_eyes_video_frontend PRIVATE
         spdlog::spdlog
         iceoryx2_runtime
         signlang::common
-        turbojpeg_runtime
         librga::rga
         rockchip-mpp::rockchip_mpp)
 

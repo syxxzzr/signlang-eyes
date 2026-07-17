@@ -5,9 +5,8 @@
 #include "video_format.hpp"
 
 #include "iox2/bb/slice.hpp"
-#include "turbojpeg.h"
 
-#include <vector>
+#include <memory>
 
 namespace signlang::video_frontend {
 
@@ -29,8 +28,9 @@ namespace signlang::video_frontend {
     void process(const CapturedVideoFrame& captured_frame, iox2::bb::MutableSlice<std::uint8_t> output_payload) const;
 
   private:
+    class MjpegDecoder;
+
     [[nodiscard]] auto rgb_output_size_bytes() const -> std::uint32_t;
-    [[nodiscard]] auto rgb_capture_size_bytes() const -> std::uint32_t;
     void yuyv_to_resized_rgb(const CapturedVideoFrame& captured_frame,
                              iox2::bb::MutableSlice<std::uint8_t> output_payload) const;
     void mjpeg_to_resized_rgb(const CapturedVideoFrame& captured_frame,
@@ -40,8 +40,7 @@ namespace signlang::video_frontend {
     VideoFormat output_format_;
     bool mirror_output_;
     std::uint32_t rotation_degrees_;
-    mutable std::vector<std::uint8_t> capture_rgb_buffer_;
-    tjhandle jpeg_decompressor_;
+    std::unique_ptr<MjpegDecoder> mjpeg_decoder_;
   };
 
 } // namespace signlang::video_frontend

@@ -124,7 +124,6 @@ find_package(SQLiteCpp REQUIRED CONFIG)
 find_package(spdlog REQUIRED CONFIG)
 find_package(FFTW3 REQUIRED CONFIG)
 find_package(iceoryx2-cxx REQUIRED CONFIG)
-find_package(libjpeg-turbo REQUIRED CONFIG)
 find_package(onnxruntime REQUIRED CONFIG)
 find_package(rknn-runtime REQUIRED CONFIG)
 find_package(librga REQUIRED CONFIG)
@@ -195,9 +194,6 @@ target_link_libraries(signlang_gio INTERFACE
     ${SIGNLANG_GOBJECT_LIBRARY}
     ${SIGNLANG_GLIB_LIBRARY})
 add_library(signlang::gio ALIAS signlang_gio)
-
-add_library(turbojpeg_runtime INTERFACE)
-target_link_libraries(turbojpeg_runtime INTERFACE libjpeg-turbo::turbojpeg-static)
 
 # Modules
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/common)
