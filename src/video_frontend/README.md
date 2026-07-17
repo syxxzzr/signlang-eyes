@@ -48,4 +48,4 @@ MJPEG 路径复用 MPP 输入缓冲和预分配、按硬件要求对齐的输出
 - RGA（`librga`，Rockchip 硬件加速）
 - iceoryx2（Publish-Subscribe）
 
-`rockchip-mpp/1.0.11` 由仓库中的 Conan 2 recipe 从 Rockchip 官方 GitHub 仓库拉取固定版本源码，并仅构建本项目所需的 JPEG 解码能力。目标设备必须提供兼容的 MPP 与 RGA 内核驱动。
+`rockchip-mpp/1.0.12` 由仓库中的 Conan 2 recipe 从 Rockchip 官方 GitHub 仓库拉取固定提交的源码，并按官方 AArch64 CMake 流程构建 MPP 共享库（本项目使用其中的 JPEG 解码能力）。目标设备必须提供兼容的 MPP 与 RGA 内核驱动。

@@ -8,7 +8,7 @@ librga/1.0.0
 minmea/0.3.0.cci.20230620
 onnxruntime/1.23.2
 rknn-runtime/2.3.2
-rockchip-mpp/1.0.11
+rockchip-mpp/1.0.12
 spdlog/1.17.0
 sqlitecpp/3.3.3
 tomlplusplus/3.4.0

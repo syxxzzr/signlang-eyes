@@ -3,7 +3,7 @@ from pathlib import Path
 from conan import ConanFile
 from conan.errors import ConanInvalidConfiguration
 from conan.tools.cmake import CMake, CMakeToolchain, cmake_layout
-from conan.tools.files import apply_conandata_patches, copy, rm
+from conan.tools.files import copy, replace_in_file, rm
 from conan.tools.scm import Git
 
 
@@ -11,12 +11,12 @@ class RockchipMppConan(ConanFile):
     name = "rockchip-mpp"
     package_type = "shared-library"
     license = "Apache-2.0 OR MIT"
-    url = "https://github.com/rockchip-linux/mpp"
     homepage = "https://github.com/rockchip-linux/mpp"
-    description = "Rockchip Media Process Platform JPEG hardware decoder"
-    topics = ("rockchip", "mpp", "mjpeg", "hardware-decoding")
+    url = "https://github.com/rockchip-linux/mpp"
+    description = "Rockchip Media Process Platform"
+    topics = ("rockchip", "media", "video", "codec", "hardware-acceleration")
+
     settings = "os", "arch", "compiler", "build_type"
-    exports_sources = "patches/*"
 
     def set_version(self):
         self.version = self.conan_data["version"]
@@ -26,54 +26,42 @@ class RockchipMppConan(ConanFile):
 
     def validate(self):
         if str(self.settings.os) != "Linux" or str(self.settings.arch) != "armv8":
-            raise ConanInvalidConfiguration("Rockchip MPP is only supported for Linux armv8 in this project")
+            raise ConanInvalidConfiguration(
+                "Rockchip MPP is packaged for Linux armv8 targets only"
+            )
 
     def layout(self):
-        cmake_layout(self, src_folder="upstream")
+        cmake_layout(self)
 
     def source(self):
         source_data = self._source_data()
         git = Git(self, folder=self.source_folder)
-        git.clone(
-            url=source_data["url"],
-            target=".",
-            args=["--depth", "1", "--branch", source_data["tag"]],
-        )
-        git.checkout(source_data["commit"])
-        apply_conandata_patches(self)
+        git.run("init")
+        git.run(f"remote add origin {source_data['url']}")
+        git.run(f"fetch --depth 1 origin {source_data['commit']}")
+        git.run("checkout --detach FETCH_HEAD")
 
     def generate(self):
-        self.conf.define("tools.build:jobs", 4)
         toolchain = CMakeToolchain(self)
+        # MPP intentionally uses GNU extensions such as `typeof` in public
+        # compatibility headers. Keep the requested language level while using
+        # the GNU dialect expected by the upstream AArch64 build.
+        toolchain.blocks["cppstd"].values["cppstd_extensions"] = "ON"
         toolchain.variables["BUILD_TEST"] = False
         toolchain.variables["BUILD_SHARED_LIBS"] = True
+        toolchain.variables["WARNINGS_AS_ERRORS"] = False
+        toolchain.variables["ASAN_CHECK"] = False
+        toolchain.variables["CMAKE_INSTALL_INCLUDEDIR"] = "include"
         toolchain.variables["CMAKE_INSTALL_LIBDIR"] = "lib"
-        disabled_codecs = (
-            "ENABLE_AVSD",
-            "ENABLE_AVS2D",
-            "ENABLE_H263D",
-            "ENABLE_H264D",
-            "ENABLE_H265D",
-            "ENABLE_MPEG2D",
-            "ENABLE_MPEG4D",
-            "ENABLE_VP8D",
-            "ENABLE_VP9D",
-            "ENABLE_AV1D",
-            "ENABLE_H264E",
-            "ENABLE_JPEGE",
-            "ENABLE_H265E",
-            "ENABLE_VP8E",
-        )
-        for codec_option in disabled_codecs:
-            toolchain.variables[codec_option] = False
-        toolchain.variables["ENABLE_JPEGD"] = True
         toolchain.generate()
 
     def build(self):
+        # EmbedFire's build/linux/aarch64/make-Makefiles.bash configures this
+        # same top-level CMake project. Conan supplies the equivalent AArch64
+        # compiler, sysroot, build type, and install prefix through its toolchain.
         cmake = CMake(self)
         cmake.configure()
-        self.output.info("Building Rockchip MPP with 4 parallel jobs")
-        cmake.build(cli_args=["--parallel", "4"])
+        cmake.build()
 
     def package(self):
         cmake = CMake(self)
@@ -82,18 +70,45 @@ class RockchipMppConan(ConanFile):
         package_root = Path(self.package_folder)
         copy(
             self,
-            "*",
+            pattern="*",
             src=Path(self.source_folder) / "LICENSES",
             dst=package_root / "licenses",
         )
-        rm(self, "*.a", package_root / "lib")
-        rm(self, "librockchip_vpu.so*", package_root / "lib")
-        rm(self, "rockchip_vpu.pc", package_root / "lib" / "pkgconfig")
+
+        # Upstream installs shared and static MPP variants unconditionally.
+        # This package exposes the shared ABI, so omit the duplicate archive.
+        rm(self, pattern="*.a", folder=package_root / "lib")
+
+        # Conan may relocate a package after installation. Keep upstream's
+        # pkg-config metadata relative to the final package directory.
+        package_prefix = str(package_root.as_posix())
+        for name in ("rockchip_mpp.pc", "rockchip_vpu.pc"):
+            pc_file = package_root / "lib" / "pkgconfig" / name
+            replace_in_file(
+                self,
+                pc_file,
+                f"prefix={package_prefix}",
+                "prefix=${pcfiledir}/../..",
+            )
 
     def package_info(self):
         self.cpp_info.set_property("cmake_file_name", "rockchip-mpp")
-        self.cpp_info.set_property("cmake_target_name", "rockchip-mpp::rockchip_mpp")
-        self.cpp_info.set_property("pkg_config_name", "rockchip_mpp")
-        self.cpp_info.bindirs = []
-        self.cpp_info.includedirs = ["include/rockchip"]
-        self.cpp_info.libs = ["rockchip_mpp"]
+
+        mpp = self.cpp_info.components["mpp"]
+        mpp.set_property("cmake_target_name", "rockchip-mpp::rockchip_mpp")
+        mpp.set_property("pkg_config_name", "rockchip_mpp")
+        mpp.includedirs = ["include/rockchip"]
+        mpp.libdirs = ["lib"]
+        mpp.bindirs = []
+        mpp.libs = ["rockchip_mpp"]
+        mpp.system_libs = ["pthread", "m"]
+
+        vpu = self.cpp_info.components["vpu"]
+        vpu.set_property("cmake_target_name", "rockchip-mpp::rockchip_vpu")
+        vpu.set_property("pkg_config_name", "rockchip_vpu")
+        vpu.includedirs = ["include/rockchip"]
+        vpu.libdirs = ["lib"]
+        vpu.bindirs = []
+        vpu.libs = ["rockchip_vpu"]
+        vpu.system_libs = ["dl"]
+        vpu.requires = ["mpp"]

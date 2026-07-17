@@ -48,4 +48,4 @@ The MJPEG path reuses an MPP input buffer and a preallocated, hardware-aligned o
 - RGA (`librga`, Rockchip hardware acceleration)
 - iceoryx2 (publish-subscribe)
 
-The repository's Conan 2 recipe for `rockchip-mpp/1.0.11` fetches pinned source from Rockchip's official GitHub repository and builds only the JPEG decoding capability required by this project. The target device must provide compatible MPP and RGA kernel drivers.
+The repository's Conan 2 recipe for `rockchip-mpp/1.0.12` fetches a pinned source commit from Rockchip's official GitHub repository and builds the MPP shared library with the official AArch64 CMake flow; this project uses its JPEG decoding capability. The target device must provide compatible MPP and RGA kernel drivers.
