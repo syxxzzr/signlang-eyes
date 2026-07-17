@@ -1,0 +1,11 @@
+version: "1.0.11"
+sources:
+  "1.0.11":
+    url: "https://github.com/rockchip-linux/mpp.git"
+    tag: "1.0.11"
+    commit: "aa16300bc41e713432b3c97edfc334d7ae9a50ba"
+patches:
+  "1.0.11":
+    - patch_file: "patches/0001-honor-disabled-codecs.patch"
+      patch_description: "Honor disabled codec flags in HAL subdirectories"
+      strip: 1
