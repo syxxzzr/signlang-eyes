@@ -39,6 +39,7 @@ conan profile detect --force
 conan export conan/recipes/cpp-pinyin
 conan export conan/recipes/iceoryx2
 conan export conan/recipes/librga
+conan export conan/recipes/rockchip-mpp
 conan export conan/recipes/rknn-runtime
 ```
 
@@ -52,18 +53,6 @@ conan install . \
   --build=missing
 ```
 
-如果在 WSL 或内存较小的机器上构建，可以限制 Conan 构建并行度：
-
-```bash
-conan install . \
-  -of build-aarch64 \
-  -pr:h conan/profiles/linux-aarch64-gcc \
-  -pr:b default \
-  --build=missing \
-  -c:b tools.build:jobs=4 \
-  -c:h tools.build:jobs=4
-```
-
 ## 配置、构建和安装
 
 ```bash
@@ -73,12 +62,6 @@ cmake -S . -B build-aarch64 \
   -DCMAKE_INSTALL_PREFIX=install
 
 cmake --build build-aarch64 --target install -j"$(nproc)"
-```
-
-如果构建机器资源有限，可以降低 CMake 构建并行度：
-
-```bash
-cmake --build build-aarch64 --target install -j4
 ```
 
 安装完成后，主程序位于：

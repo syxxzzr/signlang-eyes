@@ -39,6 +39,7 @@ Export the Conan recipes maintained in this repository:
 conan export conan/recipes/cpp-pinyin
 conan export conan/recipes/iceoryx2
 conan export conan/recipes/librga
+conan export conan/recipes/rockchip-mpp
 conan export conan/recipes/rknn-runtime
 ```
 
@@ -52,18 +53,6 @@ conan install . \
   --build=missing
 ```
 
-When building inside WSL or on a machine with limited memory, constrain the Conan build parallelism:
-
-```bash
-conan install . \
-  -of build-aarch64 \
-  -pr:h conan/profiles/linux-aarch64-gcc \
-  -pr:b default \
-  --build=missing \
-  -c:b tools.build:jobs=4 \
-  -c:h tools.build:jobs=4
-```
-
 ## Configure, Build, and Install
 
 ```bash
@@ -73,12 +62,6 @@ cmake -S . -B build-aarch64 \
   -DCMAKE_INSTALL_PREFIX=install
 
 cmake --build build-aarch64 --target install -j"$(nproc)"
-```
-
-On resource-constrained build machines, lower the CMake build parallelism:
-
-```bash
-cmake --build build-aarch64 --target install -j4
 ```
 
 After installation, the main entry point is located at:

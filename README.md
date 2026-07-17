@@ -12,7 +12,7 @@
 
 ## 项目简介
 
-SignLang Eyes 将摄像头、麦克风、扬声器、显示屏和通信模块组织成一组独立进程，通过 iceoryx2 共享内存 IPC 传递音视频帧和识别结果。计算密集型模型尽量使用 RK3588 NPU，图像转换与缩放使用 RGA，业务流程则由状态机统一控制。
+SignLang Eyes 将摄像头、麦克风、扬声器、显示屏和通信模块组织成一组独立进程，通过 iceoryx2 共享内存 IPC 传递音视频帧和识别结果。计算密集型模型尽量使用 RK3588 NPU，MJPEG 解码使用 Rockchip MPP，图像转换与缩放使用 RGA，业务流程则由状态机统一控制。
 
 系统围绕四类场景构建：
 
@@ -31,7 +31,7 @@ SignLang Eyes 将摄像头、麦克风、扬声器、显示屏和通信模块组
 | 语音交互 | 中英文语音识别、中文语音合成 | Whisper、Piper、cpp-pinyin |
 | 环境安全 | 环境声音分类、危险状态、振动与远程告警 | YAMNet、状态机、MQTT |
 | 端侧推理 | 多 NPU 核选择、模型级核心分配 | RKNN Runtime |
-| 音视频前端 | ALSA 采集与声源定位、V4L2 采集、硬件图像处理 | ALSA、FFTW3、V4L2、RGA、libjpeg-turbo |
+| 音视频前端 | ALSA 采集与声源定位、V4L2 采集、硬件图像处理 | ALSA、FFTW3、V4L2、Rockchip MPP、RGA |
 | 设备交互 | OLED 文本显示、串口按键、BLE GATT、GNSS | 串口协议、BlueZ、GLib/GIO、minmea |
 | 进程协作 | 零拷贝数据传输、事件通知、黑板和请求响应 | iceoryx2 |
 
@@ -75,7 +75,7 @@ GNSS ─────────────────────────
 - Rockchip RK3588 或兼容的 aarch64 Linux 设备
 - 支持 V4L2 的摄像头
 - 支持 ALSA 的麦克风和播放设备
-- 可用的 RKNN Runtime 与 RGA 驱动
+- 可用的 RKNN Runtime、MPP 与 RGA 驱动
 - 完整系统默认还会使用 BlueZ BLE 适配器、OLED/按键外设串口和 GNSS 串口
 - 使用手语 AI 或遥测时，需要可访问的 OpenAI 兼容服务或 MQTT Broker
 
@@ -105,6 +105,7 @@ conan profile detect --force
 conan export conan/recipes/cpp-pinyin
 conan export conan/recipes/iceoryx2
 conan export conan/recipes/librga
+conan export conan/recipes/rockchip-mpp
 conan export conan/recipes/rknn-runtime
 ```
 
@@ -236,7 +237,7 @@ signlang-eyes/
 感谢以下开源项目及其维护者。本项目能够在端侧完成音视频采集、模型推理、进程通信和设备交互，离不开这些基础工作：
 
 - **进程通信与异步基础设施**：[iceoryx2](https://github.com/eclipse-iceoryx/iceoryx2)、[Boost](https://www.boost.org/)（JSON、Container、Asio、Beast、MQTT5）、[OpenSSL](https://www.openssl.org/)。
-- **AI 推理与硬件加速**：[ONNX Runtime](https://onnxruntime.ai/)、[RKNN Runtime](https://github.com/airockchip/rknn-toolkit2)、[Rockchip RGA](https://github.com/airockchip/librga)、[libjpeg-turbo](https://libjpeg-turbo.org/)。
+- **AI 推理与硬件加速**：[ONNX Runtime](https://onnxruntime.ai/)、[RKNN Runtime](https://github.com/airockchip/rknn-toolkit2)、[Rockchip MPP](https://github.com/rockchip-linux/mpp)、[Rockchip RGA](https://github.com/airockchip/librga)。
 - **音频、数据与设备支持**：[ALSA](https://www.alsa-project.org/)、[FFTW](https://www.fftw.org/)、[SQLite](https://www.sqlite.org/)、[SQLiteCpp](https://github.com/SRombauts/SQLiteCpp)、[GLib](https://docs.gtk.org/glib/) / [GIO](https://docs.gtk.org/gio/)、[BlueZ](https://www.bluez.org/)、[minmea](https://github.com/kosma/minmea)。
 - **工程与通用组件**：[CMake](https://cmake.org/)、[Conan](https://conan.io/)、[spdlog](https://github.com/gabime/spdlog)、[fmt](https://github.com/fmtlib/fmt)、[toml++](https://github.com/marzer/tomlplusplus)、[cxxopts](https://github.com/jarro2783/cxxopts)、[cpp-pinyin](https://github.com/wolfgitpr/cpp-pinyin)。
 - **模型与算法生态**：[OpenAI Whisper](https://github.com/openai/whisper)、[Google YAMNet](https://github.com/tensorflow/models/tree/master/research/audioset/yamnet)、[Google MediaPipe](https://github.com/google-ai-edge/mediapipe)、[Piper](https://github.com/rhasspy/piper)。

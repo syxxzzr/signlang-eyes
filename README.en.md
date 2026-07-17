@@ -12,7 +12,7 @@ This project also includes an open-source sign language vocabulary management to
 
 ## Overview
 
-SignLang Eyes organizes a camera, microphone, speaker, display, and communication modules into a set of independent processes. Audio/video frames and recognition results are exchanged through iceoryx2 shared-memory IPC. Compute-intensive models leverage the RK3588 NPU whenever possible; image transformation and scaling use the RGA hardware engine; and business logic is coordinated by a central state machine.
+SignLang Eyes organizes a camera, microphone, speaker, display, and communication modules into a set of independent processes. Audio/video frames and recognition results are exchanged through iceoryx2 shared-memory IPC. Compute-intensive models leverage the RK3588 NPU whenever possible; MJPEG decoding uses Rockchip MPP; image transformation and scaling use the RGA hardware engine; and business logic is coordinated by a central state machine.
 
 The system is built around four usage scenarios:
 
@@ -31,7 +31,7 @@ Beyond these core scenarios, the project also provides device-side capabilities 
 | Speech Interaction | Chinese/English speech recognition, Chinese speech synthesis | Whisper, Piper, cpp-pinyin |
 | Environmental Safety | Environmental sound classification, danger states, vibration and remote alerts | YAMNet, state machine, MQTT |
 | On-Device Inference | Multi-NPU core selection, per-model core assignment | RKNN Runtime |
-| Audio/Video Frontend | ALSA capture with sound source localization, V4L2 capture, hardware image processing | ALSA, FFTW3, V4L2, RGA, libjpeg-turbo |
+| Audio/Video Frontend | ALSA capture with sound source localization, V4L2 capture, hardware image processing | ALSA, FFTW3, V4L2, Rockchip MPP, RGA |
 | Device Interaction | OLED text display, serial-port buttons, BLE GATT, GNSS | Serial protocol, BlueZ, GLib/GIO, minmea |
 | Inter-Process Communication | Zero-copy data transfer, event notifications, blackboard, and request-response patterns | iceoryx2 |
 
@@ -75,7 +75,7 @@ The system starts in `Normal` by default. The base states toggle among `Normal`,
 - Rockchip RK3588 or a compatible aarch64 Linux device
 - V4L2-compatible camera
 - ALSA-compatible microphone and playback device
-- Working RKNN Runtime and RGA driver
+- Working RKNN Runtime, MPP, and RGA drivers
 - A full deployment also expects a BlueZ BLE adapter, OLED/button peripheral serial port, and a GNSS serial port
 - Sign language AI and telemetry features require access to an OpenAI-compatible service or an MQTT broker, respectively
 
@@ -105,6 +105,7 @@ conan profile detect --force
 conan export conan/recipes/cpp-pinyin
 conan export conan/recipes/iceoryx2
 conan export conan/recipes/librga
+conan export conan/recipes/rockchip-mpp
 conan export conan/recipes/rknn-runtime
 ```
 
@@ -236,7 +237,7 @@ signlang-eyes/
 We are grateful to the following open-source projects and their maintainers. The on-device audio/video capture, model inference, inter-process communication, and device interaction capabilities of this project would not be possible without their foundational work:
 
 - **IPC & Async Infrastructure** — [iceoryx2](https://github.com/eclipse-iceoryx/iceoryx2), [Boost](https://www.boost.org/) (JSON, Container, Asio, Beast, MQTT5), [OpenSSL](https://www.openssl.org/)
-- **AI Inference & Hardware Acceleration** — [ONNX Runtime](https://onnxruntime.ai/), [RKNN Runtime](https://github.com/airockchip/rknn-toolkit2), [Rockchip RGA](https://github.com/airockchip/librga), [libjpeg-turbo](https://libjpeg-turbo.org/)
+- **AI Inference & Hardware Acceleration** — [ONNX Runtime](https://onnxruntime.ai/), [RKNN Runtime](https://github.com/airockchip/rknn-toolkit2), [Rockchip MPP](https://github.com/rockchip-linux/mpp), [Rockchip RGA](https://github.com/airockchip/librga)
 - **Audio, Data & Device Support** — [ALSA](https://www.alsa-project.org/), [FFTW](https://www.fftw.org/), [SQLite](https://www.sqlite.org/), [SQLiteCpp](https://github.com/SRombauts/SQLiteCpp), [GLib](https://docs.gtk.org/glib/) / [GIO](https://docs.gtk.org/gio/), [BlueZ](https://www.bluez.org/), [minmea](https://github.com/kosma/minmea)
 - **Build & General-Purpose Libraries** — [CMake](https://cmake.org/), [Conan](https://conan.io/), [spdlog](https://github.com/gabime/spdlog), [fmt](https://github.com/fmtlib/fmt), [toml++](https://github.com/marzer/tomlplusplus), [cxxopts](https://github.com/jarro2783/cxxopts), [cpp-pinyin](https://github.com/wolfgitpr/cpp-pinyin)
 - **Models & Algorithm Ecosystem** — [OpenAI Whisper](https://github.com/openai/whisper), [Google YAMNet](https://github.com/tensorflow/models/tree/master/research/audioset/yamnet), [Google MediaPipe](https://github.com/google-ai-edge/mediapipe), [Piper](https://github.com/rhasspy/piper)

@@ -7,20 +7,24 @@ V4L2 video capture and processing module. Captures video frames from a camera, p
 ## Features
 
 - Captures video frames through the V4L2 MMAP interface (supports YUYV and MJPEG formats)
+- Decodes MJPEG in hardware with Rockchip MPP into DMA-backed RGB888 frames
 - Uses RGA (Rockchip Graphics Accelerator) for hardware scaling, cropping, rotation, and mirroring
-- Decodes MJPEG frames to RGB via libjpeg-turbo
+- Passes the MPP output DMA fd directly to RGA without a CPU-side RGB staging buffer
 - Publishes processed RGB24 frames over iceoryx2 publish-subscribe
 - Automatically pauses capture when no downstream subscribers are connected
 
 ## Processing Pipeline
 
 ```text
-V4L2 device → Capture → MJPEG decode (libjpeg-turbo) / YUYV conversion
-                           ↓
-                     RGA hardware processing (scale/rotate/mirror)
-                           ↓
-                     VideoPublisher → iceoryx2
+V4L2 device → Capture ─┬─ MJPEG → MPP hardware decode → RGB888 DMA ─┐
+                      └─ YUYV MMAP ─────────────────────────────────┤
+                                                                   ↓
+                               RGA hardware processing (convert/scale/rotate/mirror)
+                                                                   ↓
+                                                VideoPublisher → iceoryx2
 ```
+
+The MJPEG path reuses an MPP input buffer and a preallocated, hardware-aligned output frame and buffer, requires `MPP_FMT_RGB888` decoder output, and passes MPP's pixel stride and DMA fd to RGA. Its downstream contract remains synchronous, tightly packed RGB24 output.
 
 ## CLI Arguments
 
@@ -40,6 +44,8 @@ V4L2 device → Capture → MJPEG decode (libjpeg-turbo) / YUYV conversion
 ## Dependencies
 
 - V4L2 (Linux Kernel)
+- Rockchip MPP (MJPEG hardware decoding and DMA buffers)
 - RGA (`librga`, Rockchip hardware acceleration)
-- libjpeg-turbo (MJPEG decoding)
 - iceoryx2 (publish-subscribe)
+
+The repository's Conan 2 recipe for `rockchip-mpp/1.0.11` fetches pinned source from Rockchip's official GitHub repository and builds only the JPEG decoding capability required by this project. The target device must provide compatible MPP and RGA kernel drivers.
